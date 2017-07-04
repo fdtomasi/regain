@@ -2,7 +2,7 @@ import numpy as np
 import time
 
 
-def lasso(A, b, lamda=1.0, rho=1.0, alpha=1.0, max_iter=1000, tol=0.0001):
+def lasso(A, b, lamda=1.0, rho=1.0, alpha=1.0, max_iter=1000, tol=1e-4):
     # % lasso  Solve lasso problem via ADMM
     # %
     # % [z, history] = lasso(A, b, lambda, rho, alpha);
@@ -64,14 +64,16 @@ def lasso(A, b, lamda=1.0, rho=1.0, alpha=1.0, max_iter=1000, tol=0.0001):
         u += (x_hat - z)
 
         # % diagnostics, reporting, termination checks
-        history = []
-        history.append(objective(A, b, lamda, x, z))  # obj
+        history = (
+            objective(A, b, lamda, x, z),  # obj
 
-        history.append(np.linalg.norm(x - z))  # r norm
-        history.append(np.linalg.norm(-rho*(z - zold)))  # s norm
+            np.linalg.norm(x - z),  # r norm
+            np.linalg.norm(-rho * (z - zold)),  # s norm
 
-        history.append(np.sqrt(n)*tol + RELTOL*max(np.linalg.norm(x), np.linalg.norm(-z)))  # eps pri
-        history.append(np.sqrt(n)*tol + RELTOL*np.linalg.norm(rho*u))  # eps dual
+            np.sqrt(n) * tol + RELTOL * max(
+                np.linalg.norm(x), np.linalg.norm(-z)),  # eps pri
+            np.sqrt(n) * tol + RELTOL * np.linalg.norm(rho * u)  # eps dual
+        )
 
         hist.append(history)
         if history[1] < history[3] and history[2] < history[4]:

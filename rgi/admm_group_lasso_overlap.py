@@ -40,18 +40,20 @@ def group_lasso_overlap(A, b, lamda=1.0, groups=None, rho=1.0,
             y[i] += rho * (x[i] - z[g])
 
         # diagnostics, reporting, termination checks
-        history = []
-        history.append(objective(A, b, lamda, x, z))
-        history.append(np.linalg.norm(x_consensus - z))
-        history.append(np.linalg.norm(-rho * (z - zold)))
+        history = (
+            objective(A, b, lamda, x, z),  # objective
+            np.linalg.norm(x_consensus - z),  # rnorm
+            np.linalg.norm(-rho * (z - zold)),  # snorm
 
-        history.append(np.sqrt(d) * tol + rtol * max(
-            np.linalg.norm(x_consensus), np.linalg.norm(-z)))
-        history.append(np.sqrt(d) * tol + rtol * np.linalg.norm(rho * y_consensus))
+            np.sqrt(d) * tol + rtol * max(np.linalg.norm(x_consensus),
+                                          np.linalg.norm(-z)),  # eps primal
+            np.sqrt(d) * tol + rtol * np.linalg.norm(rho * y_consensus)
+            # eps dual
+        )
 
         if verbose:
             print("obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                  "eps_pri: %.4f, eps_dual: %.4f" % tuple(history))
+                  "eps_pri: %.4f, eps_dual: %.4f" % history)
 
         hist.append(history)
         if history[1] < history[3] and history[2] < history[4]:
