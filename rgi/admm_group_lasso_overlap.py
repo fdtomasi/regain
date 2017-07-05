@@ -1,6 +1,15 @@
 from __future__ import division
 import numpy as np
+import six
+import warnings
 
+from scipy import sparse
+
+from sklearn.base import RegressorMixin
+from sklearn.linear_model.base import LinearModel, _pre_fit
+from sklearn.utils.extmath import safe_sparse_dot
+from sklearn.utils.validation import check_is_fitted
+from sklearn.utils import check_array, check_X_y, deprecated
 
 def D_function(d, groups):
     D = np.zeros(d)
@@ -64,7 +73,169 @@ def group_lasso_overlap(A, b, lamda=1.0, groups=None, rho=1.0,
         else:
             count = 0
 
-    return z, hist
+    return z, hist, k
+
+
+class GroupLassoOverlap(LinearModel, RegressorMixin):
+
+    def __init__(self, alpha=1.0, fit_intercept=True,
+                 groups=None, rho=1.0,
+                 tol=1e-4, verbose=False, rtol=1e-2,
+                 normalize=False, precompute=False, max_iter=1000,
+                 copy_X=True, warm_start=False, positive=False,
+                 random_state=None, selection='cyclic'):
+        self.alpha = alpha
+        self.coef_ = None
+        self.fit_intercept = fit_intercept
+        self.groups = groups
+        self.rho = rho
+        self.verbose = verbose
+        self.normalize = normalize
+        self.precompute = precompute
+        self.max_iter = max_iter
+        self.copy_X = copy_X
+        self.tol = tol
+        self.rtol = rtol
+        self.warm_start = warm_start
+        self.positive = positive
+        self.intercept_ = 0.0
+        self.random_state = random_state
+        self.selection = selection
+
+    def fit(self, X, y, check_input=True):
+        """Fit model with coordinate descent.
+
+        Parameters
+        -----------
+        X : ndarray or scipy.sparse matrix, (n_samples, n_features)
+            Data
+
+        y : ndarray, shape (n_samples,) or (n_samples, n_targets)
+            Target
+
+        check_input : boolean, (default=True)
+            Allow to bypass several input checking.
+            Don't use this parameter unless you know what you do.
+
+        Notes
+        -----
+
+        Coordinate descent is an algorithm that considers each column of
+        data at a time hence it will automatically convert the X input
+        as a Fortran-contiguous numpy array if necessary.
+
+        To avoid memory re-allocation it is advised to allocate the
+        initial data in memory directly using that format.
+        """
+
+        if self.alpha == 0:
+            warnings.warn("With alpha=0, this algorithm does not converge "
+                          "well. You are advised to use the LinearRegression "
+                          "estimator", stacklevel=2)
+
+        if isinstance(self.precompute, six.string_types):
+            raise ValueError('precompute should be one of True, False or'
+                             ' array-like. Got %r' % self.precompute)
+
+        # We expect X and y to be float64 or float32 Fortran ordered arrays
+        # when bypassing checks
+        if check_input:
+            X, y = check_X_y(X, y, accept_sparse='csc',
+                             order='F', dtype=[np.float64, np.float32],
+                             copy=self.copy_X and self.fit_intercept,
+                             multi_output=True, y_numeric=True)
+            y = check_array(y, order='F', copy=False, dtype=X.dtype.type,
+                            ensure_2d=False)
+
+        X, y, X_offset, y_offset, X_scale, precompute, Xy = \
+            _pre_fit(X, y, None, self.precompute, self.normalize,
+                     self.fit_intercept, copy=False)
+
+        if y.ndim == 1:
+            y = y[:, np.newaxis]
+        if Xy is not None and Xy.ndim == 1:
+            Xy = Xy[:, np.newaxis]
+
+        n_samples, n_features = X.shape
+        n_targets = y.shape[1]
+
+        if self.selection not in ['cyclic', 'random']:
+            raise ValueError("selection should be either random or cyclic.")
+
+        if not self.warm_start or self.coef_ is None:
+            coef_ = np.zeros((n_targets, n_features), dtype=X.dtype,
+                             order='F')
+        else:
+            coef_ = self.coef_
+            if coef_.ndim == 1:
+                coef_ = coef_[np.newaxis, :]
+
+        dual_gaps_ = np.zeros(n_targets, dtype=X.dtype)
+        self.n_iter_ = []
+        history = []
+
+        for k in xrange(n_targets):
+            this_coef, hist, this_iter = \
+                group_lasso_overlap(
+                    X, y[:, k], lamda=self.alpha, groups=self.groups,
+                    rho=self.rho, max_iter=self.max_iter, tol=self.tol,
+                    verbose=self.verbose, rtol=self.rtol)
+            coef_[k] = this_coef.ravel()
+            history.append(hist)
+            self.n_iter_.append(this_iter)
+
+        if n_targets == 1:
+            self.n_iter_ = self.n_iter_[0]
+
+        self.coef_, self.dual_gap_ = map(np.squeeze, [coef_, dual_gaps_])
+        self._set_intercept(X_offset, y_offset, X_scale)
+
+        # workaround since _set_intercept will cast self.coef_ into float64
+        self.coef_ = np.asarray(self.coef_, dtype=X.dtype)
+
+        self.history_ = history
+
+        # return self for chaining fit and predict calls
+        return self
+
+    @property
+    def sparse_coef_(self):
+        """ sparse representation of the fitted ``coef_`` """
+        return sparse.csr_matrix(self.coef_)
+
+    @deprecated(" and will be removed in 0.19")
+    def decision_function(self, X):
+        """Decision function of the linear model
+
+        Parameters
+        ----------
+        X : numpy array or scipy.sparse matrix of shape (n_samples, n_features)
+
+        Returns
+        -------
+        T : array, shape (n_samples,)
+            The predicted decision function
+        """
+        return self._decision_function(X)
+
+    def _decision_function(self, X):
+        """Decision function of the linear model
+
+        Parameters
+        ----------
+        X : numpy array or scipy.sparse matrix of shape (n_samples, n_features)
+
+        Returns
+        -------
+        T : array, shape (n_samples,)
+            The predicted decision function
+        """
+        check_is_fitted(self, 'n_iter_')
+        if sparse.isspmatrix(X):
+            return safe_sparse_dot(X, self.coef_.T,
+                                   dense_output=True) + self.intercept_
+        else:
+            return super(GroupLassoOverlap, self)._decision_function(X)
 
 
 
