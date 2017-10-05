@@ -11,6 +11,8 @@ from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.utils.validation import check_is_fitted
 from sklearn.utils import check_array, check_X_y, deprecated
 
+from prox import soft_thresholding
+
 def D_function(d, groups):
     D = np.zeros(d)
     for dimension in range(d):
@@ -19,6 +21,22 @@ def D_function(d, groups):
             if dimension in group:
                 D[dimension] += 1
     return D
+
+
+def P_star_x_bar_function(x, d, groups):
+    P_star_x_bar = np.zeros(d)
+    for dim in range(d):
+        ss = 0
+        count = 0
+        for g, group in enumerate(groups):
+            if dim in group:
+                idx = np.argwhere(np.array(group) == dim)[0]
+                ss += x[g][idx]
+                count += 1
+        if count > 0:
+            ss /= count
+        P_star_x_bar[dim] = ss
+    return P_star_x_bar
 
 
 def group_lasso_overlap(A, b, lamda=1.0, groups=None, rho=1.0,
@@ -238,23 +256,6 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
             return super(GroupLassoOverlap, self)._decision_function(X)
 
 
-
-def P_star_x_bar_function(x, d, groups):
-    P_star_x_bar = np.zeros(d)
-    for dim in range(d):
-        ss = 0
-        count = 0
-        for g, group in enumerate(groups):
-            if dim in group:
-                idx = np.argwhere(np.array(group) == dim)[0]
-                ss += x[g][idx]
-                count += 1
-        if count > 0:
-            ss /= count
-        P_star_x_bar[dim] = ss
-    return P_star_x_bar
-
-
 def overlapping_group_lasso(A, b, lamda=1.0, groups=None, rho=1.0, alpha=1.0,
                         max_iter=100, tol=1e-4):
     # % solves the following problem via ADMM:
@@ -328,15 +329,6 @@ def overlapping_group_lasso(A, b, lamda=1.0, groups=None, rho=1.0, alpha=1.0,
 
 def fi(xi):
     return np.linalg.norm(xi)
-
-
-def soft_thresholding(z, lamda):
-    norm = np.linalg.norm(z)
-    return z - lamda * z / norm if norm > lamda else np.zeros(z.size)
-
-
-def prox(x, kappa):
-    return np.maximum(0, x - kappa) - np.maximum(0, -x - kappa)
 
 
 def objective(A, b, alpha, x, z):
