@@ -23,8 +23,8 @@ setup(
     author_email='federico.tomasi@dibris.unige.it',
     maintainer='Federico Tomasi',
     maintainer_email='federico.tomasi@dibris.unige.it',
-    url='https://github.com/fdtomasi/rgi',
-    download_url='https://github.com/fdtomasi/rgi/archive/'+version+'.tar.gz',
+    url='https://github.com/fdtomasi/regain',
+    download_url='https://github.com/fdtomasi/regain/archive/'+version+'.tar.gz',
     keywords=['graph', 'inference'],
     classifiers=[
         'Development Status :: 4 - Beta',
