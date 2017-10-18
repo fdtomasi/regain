@@ -6,9 +6,9 @@ http://www.stanford.edu/~boyd/papers/distr_opt_stat_learning_admm.html
 import numpy as np
 from six.moves import range
 
-from rgi.admm_lasso import lu_factor
-from rgi.prox import soft_thresholding
-from rgi.utils import flatten
+from regain.admm_lasso import lu_factor
+from regain.prox import soft_thresholding
+from regain.utils import flatten
 
 def group_lasso(A, b, lamda=1.0, groups=None, rho=1.0, alpha=1.0, max_iter=1000,
                 tol=1e-4, rtol=1e-2, return_history=False):

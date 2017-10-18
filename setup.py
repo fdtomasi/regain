@@ -10,14 +10,14 @@ from setuptools import setup, Extension
 import numpy as np
 
 # Package Version
-from rgi import __version__ as version
+from regain import __version__ as version
 # alignment_module = Extension('icing.align.align',
 #                              sources=['icing/align/alignment.c'])
 setup(
-    name='rgi',
+    name='regain',
     version=version,
 
-    description=('RGI (Regularised Graph Inference)'),
+    description=('REGAIN (Regularised Graph Inference)'),
     long_description=open('README.md').read(),
     author='Federico Tomasi',
     author_email='federico.tomasi@dibris.unige.it',
@@ -40,7 +40,7 @@ setup(
         'Operating System :: MacOS'
     ],
     license='FreeBSD',
-    packages=['rgi'],
+    packages=['regain'],
     requires=['numpy (>=1.10.1)',
               'scipy (>=0.16.1)',
               'sklearn (>=0.17)',

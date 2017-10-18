@@ -1,2 +1,2 @@
-# rgi
-RGI (Regularised Graph Inference)
+# regain
+REGAIN (Regularised Graph Inference)
