@@ -56,10 +56,6 @@ def covsel(D, lamda=1, rho=1, alpha=1, max_iter=1000, verbose=False, tol=1e-4,
     Z = zeros((n, n))
     U = zeros((n, n))
 
-    # if ~QUIET
-    #     fprintf('%3s\t%10s\t%10s\t%10s\t%10s\t%10s\n', 'iter', ...
-    #       'r norm', 'eps pri', 's norm', 'eps dual', 'objective');
-    # end
     hist = []
     count = 0
     for _ in range(max_iter):
@@ -104,4 +100,4 @@ def covsel(D, lamda=1, rho=1, alpha=1, max_iter=1000, verbose=False, tol=1e-4,
 
 
 def objective(S, X, Z, lamda):
-    return np.trace(S.dot(X)) - fast_logdet(X) + lamda * np.linalg.norm(Z, 1)
+    return np.sum(S * X) - fast_logdet(X) + lamda * np.linalg.norm(Z, 1)
