@@ -33,9 +33,24 @@ def prox_l1_od(A, lamda):
 
 
 def prox_logdet(A, lamda):
+    """Time-varying graphical lasso prox."""
     es, Q = np.linalg.eigh(A)
     xi = es + np.sqrt(np.square(es) + 4. / lamda)
     return lamda / 2. * np.linalg.multi_dot((Q, np.diag(xi), Q.T))
+
+
+def prox_logdet_alt(A, lamda):
+    """Time-varying latent variable graphical lasso prox."""
+    es, Q = np.linalg.eigh(A)
+    xi = (- es + np.sqrt(np.square(es) + 4. / lamda)) * lamda / 2.
+    return np.linalg.multi_dot((Q, np.diag(xi), Q.T))
+
+
+def prox_trace_indicator(A, lamda):
+    """Time-varying latent variable graphical lasso prox."""
+    es, Q = np.linalg.eigh(A)
+    xi = np.maximum(es - lamda, 0)
+    return np.linalg.multi_dot((Q, np.diag(xi), Q.T))
 
 
 def prox_laplacian(A, beta):
