@@ -15,7 +15,7 @@ def generate(n_dim_obs=3, n_dim_lat=2, epsilon=1e-3):
     assert is_pos_def(theta_tot)
     assert np.linalg.matrix_rank(theta_tot[:n_dim_lat, :n_dim_lat]) == n_dim_lat
 
-    Thetas = [theta_tot]
+    thetas = [theta_tot]
 
     threshold = epsilon / np.sqrt(n_dim_lat + n_dim_obs)
 
@@ -25,7 +25,9 @@ def generate(n_dim_obs=3, n_dim_lat=2, epsilon=1e-3):
             n_dim_lat + n_dim_obs, alpha=.95, norm_diag=1)
         theta_tot_i /= np.linalg.norm(theta_tot_i, 'fro')
         theta_tot_i *= epsilon
-        theta_tot_i[-threshold < theta_tot_i & theta_tot_i < threshold] = 0
+        idx = (-threshold < theta_tot_i) & (theta_tot_i < threshold)
+        theta_tot_i[idx] = 0
         assert is_pos_def(theta_tot)
+        thetas.append(theta_tot_i)
 
-generate()
+    return thetas
