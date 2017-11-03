@@ -11,7 +11,7 @@ from sklearn.utils.extmath import fast_logdet, squared_norm
 
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet_alt, prox_laplacian, soft_thresholding_sign
-from regain.prox import prox_trace_indicator, soft_thresholding_od
+from regain.prox import prox_trace_indicator
 from regain.time_graph_lasso_admm import log_likelihood
 from regain.utils import convergence
 
@@ -74,18 +74,18 @@ def time_latent_graph_lasso(
     K = np.zeros_like(S)
     L = np.zeros_like(S)
     X = np.zeros_like(S)
-    # Z_0 = np.zeros_like(K)
-    # Z_1 = np.zeros_like(K)[:-1]
-    # Z_2 = np.zeros_like(K)[1:]
-    # W_0 = np.zeros_like(K)
-    # W_1 = np.zeros_like(K)[:-1]
-    # W_2 = np.zeros_like(K)[1:]
+    Z_0 = np.zeros_like(K)
+    Z_1 = np.zeros_like(K)[:-1]
+    Z_2 = np.zeros_like(K)[1:]
+    W_0 = np.zeros_like(K)
+    W_1 = np.zeros_like(K)[:-1]
+    W_2 = np.zeros_like(K)[1:]
     U_0 = np.zeros_like(S)
     U_1 = np.zeros_like(S)[:-1]
     U_2 = np.zeros_like(S)[1:]
-    Y_0 = np.zeros_like(S)
-    Y_1 = np.zeros_like(S)[:-1]
-    Y_2 = np.zeros_like(S)[1:]
+    X_0 = np.zeros_like(S)
+    X_1 = np.zeros_like(S)[:-1]
+    X_2 = np.zeros_like(S)[1:]
 
     U_consensus = np.zeros_like(S)
     Y_consensus = np.zeros_like(S)
@@ -93,7 +93,6 @@ def time_latent_graph_lasso(
     Z_consensus_old = np.zeros_like(S)
     W_consensus = np.zeros_like(S)
     W_consensus_old = np.zeros_like(S)
-    R_old = np.zeros_like(S)
 
     # divisor for consensus variables, accounting for two less matrices
     divisor = np.zeros(S.shape[0]) + 3
@@ -105,101 +104,74 @@ def time_latent_graph_lasso(
     for _ in range(max_iter):
         # update R
         # A = Z_consensus - U_consensus
-        A = K - L - X
-        # A += np.array(map(np.transpose, A))
-        # A /= 2.
-        A *= - rho / n_samples[:, np.newaxis, np.newaxis]
+        A = - Z_0 + W_0 + X_0
+        A[:-1] += - Z_1 + W_1 + X_1
+        A[1:] += - Z_2 + W_2 + X_2
+
+        A += np.array(map(np.transpose, A))
+        A /= 2.
+
+        A *= rho / n_samples[:, np.newaxis, np.newaxis]
         A += S
-        R = np.array(map(prox_logdet_alt, A, n_samples / rho))
+
+        R = np.array(map(prox_logdet_alt, A, n_samples / (rho * divisor)))
 
         # update Z_0
         # Zold = Z
         # X_hat = alpha * X + (1 - alpha) * Zold
-        soft_thresholding = partial(soft_thresholding_od, lamda=alpha / rho)
-        Z_0 = np.array(map(soft_thresholding, K + U_0))
+        soft_thresholding = partial(soft_thresholding_sign, lamda=alpha / rho)
+        Z_0 = np.array(map(soft_thresholding, R + W_0 + X_0))
 
         # update Z_1, Z_2
         # prox_l = partial(prox_laplacian, beta=2. * beta / rho)
         # prox_e = np.array(map(prox_l, K[1:] - K[:-1] + U_2 - U_1))
-        prox_e = prox_laplacian(-(K[1:] - K[:-1] + U_2 - U_1),
+        prox_e = prox_laplacian(R[1:] - R[:-1] + W_2 - W_1 + X_2 - X_1,
                                 beta=2. * beta / rho)
-        Z_1 = .5 * (K[:-1] + K[1:] + U_1 + U_2 - prox_e)
-        Z_2 = .5 * (K[:-1] + K[1:] + U_1 + U_2 + prox_e)
+        Z_1 = .5 * (R[:-1] + R[1:] + W_1 + W_2 + X_1 + X_2 - prox_e)
+        Z_2 = .5 * (R[:-1] + R[1:] + W_1 + W_2 + X_1 + X_2 + prox_e)
 
         # update W_0
-        A = L + Y_0
+        A = Z_0 - R - X_0
         W_0 = np.array(map(partial(prox_trace_indicator, lamda=tau / rho), A))
 
         # update W_1, W_2
-        prox_e = prox_laplacian(-(L[1:] - L[:-1] + Y_2 - Y_1),
+        prox_e = prox_laplacian(R[1:] - R[:-1] - Z_2 + Z_1 + X_2 - X_1,
                                 beta=2. * eta / rho)
-        W_1 = .5 * (L[:-1] + L[1:] + Y_1 + Y_2 - prox_e)
-        W_2 = .5 * (L[:-1] + L[1:] + Y_1 + Y_2 + prox_e)
-
-        # update K, L
-        K = L + R + X + Z_0 - U_0
-        K[:-1] += Z_1 - U_1
-        K[1:] += Z_2 - U_2
-        K /= divisor[:, np.newaxis, np.newaxis] + 1
-
-        L = - R + K - X + W_0 - Y_0
-        L[:-1] += W_1 - Y_1
-        L[1:] += W_2 - Y_2
-        L /= divisor[:, np.newaxis, np.newaxis] + 1
+        W_1 = .5 * (R[:-1] + R[1:] - Z_1 + Z_2 + X_1 + X_2 - prox_e)
+        W_2 = .5 * (R[:-1] + R[1:] - Z_1 + Z_2 + X_1 + X_2 + prox_e)
 
         # update residuals
-        X += R - K + L
-
-        U_0 += (K - Z_0)
-        U_1 += (K[:-1] - Z_1)
-        U_2 += (K[1:] - Z_2)
-
-        Y_0 += (L - W_0)
-        Y_1 += (L[:-1] - W_1)
-        Y_2 += (L[1:] - W_2)
+        X_0 += R - Z_0 + W_0
+        X_1 += R[:-1] - Z_1 + W_1
+        X_2 += R[1:] - Z_2 + W_2
 
         # diagnostics, reporting, termination checks
+        X_consensus = X_0.copy()
+        X_consensus[:-1] += X_1
+        X_consensus[1:] += X_2
         Z_consensus = Z_0.copy()
         Z_consensus[:-1] += Z_1
         Z_consensus[1:] += Z_2
-
-        U_consensus = U_0.copy()
-        U_consensus[:-1] += U_1
-        U_consensus[1:] += U_2
-
         W_consensus = W_0.copy()
         W_consensus[:-1] += W_1
         W_consensus[1:] += W_2
 
-        Y_consensus = Y_0.copy()
-        Y_consensus[:-1] += Y_1
-        Y_consensus[1:] += Y_2
-
-        np.divide(Z_consensus, divisor[:, np.newaxis, np.newaxis], out=Z_consensus)
-        np.divide(U_consensus, divisor[:, np.newaxis, np.newaxis], out=U_consensus)
-        np.divide(W_consensus, divisor[:, np.newaxis, np.newaxis], out=W_consensus)
-        np.divide(Y_consensus, divisor[:, np.newaxis, np.newaxis], out=Y_consensus)
+        np.divide(X_consensus, divisor[:, np.newaxis, np.newaxis], out=X_consensus)
 
         check = convergence(
             obj=objective(n_samples, S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
                           alpha, tau, beta, eta, squared_norm, squared_norm),
-            rnorm=np.sqrt(squared_norm(K - Z_consensus) +
-                          squared_norm(L - W_consensus) +
-                          squared_norm(K - L - R)),
+            rnorm=np.sqrt(squared_norm(R - Z_consensus + W_consensus)),
             snorm=np.sqrt(squared_norm(rho * (Z_consensus - Z_consensus_old)) +
-                          squared_norm(rho * (W_consensus - W_consensus_old)) +
-                          squared_norm(rho * (R - R_old))),
+                          squared_norm(rho * (W_consensus - W_consensus_old))),
             e_pri=np.sqrt(np.prod(K.shape) * 2) * tol + rtol * max(
-                np.sqrt(squared_norm(K) + squared_norm(L) + squared_norm(K - L)),
-                np.sqrt(squared_norm(Z_consensus) + squared_norm(W_consensus) + squared_norm(R))),
+                np.linalg.norm(R),
+                np.sqrt(squared_norm(Z_consensus) - squared_norm(W_consensus))),
             e_dual=np.sqrt(np.prod(K.shape) * 2) * tol +
-                rtol * np.sqrt(squared_norm(rho * (U_consensus)) +
-                               squared_norm(rho * (Y_consensus)) +
-                               squared_norm(rho * (X)))
+                rtol * np.linalg.norm(rho * (X_consensus))
         )
         Z_consensus_old = Z_consensus.copy()
         W_consensus_old = W_consensus.copy()
-        R_old = R.copy()
 
         if verbose:
             print("obj: %.4f, rnorm: %.4f, snorm: %.4f,"
