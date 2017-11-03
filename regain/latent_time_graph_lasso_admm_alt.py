@@ -11,7 +11,7 @@ from sklearn.utils.extmath import fast_logdet, squared_norm
 
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet_alt, prox_laplacian, soft_thresholding_sign
-from regain.prox import prox_trace_indicator
+from regain.prox import prox_trace_indicator, soft_thresholding_od
 from regain.time_graph_lasso_admm import log_likelihood
 from regain.utils import convergence
 
@@ -104,14 +104,14 @@ def time_latent_graph_lasso(
     for _ in range(max_iter):
         # update R
         # A = Z_consensus - U_consensus
-        A = - Z_0 + W_0 + X_0
-        A[:-1] += - Z_1 + W_1 + X_1
-        A[1:] += - Z_2 + W_2 + X_2
+        A = Z_0 - W_0 - X_0
+        A[:-1] += Z_1 - W_1 - X_1
+        A[1:] += Z_2 - W_2 - X_2
 
         A += np.array(map(np.transpose, A))
         A /= 2.
 
-        A *= rho / n_samples[:, np.newaxis, np.newaxis]
+        A *= - rho / n_samples[:, np.newaxis, np.newaxis]
         A += S
 
         R = np.array(map(prox_logdet_alt, A, n_samples / (rho * divisor)))
@@ -119,13 +119,13 @@ def time_latent_graph_lasso(
         # update Z_0
         # Zold = Z
         # X_hat = alpha * X + (1 - alpha) * Zold
-        soft_thresholding = partial(soft_thresholding_sign, lamda=alpha / rho)
+        soft_thresholding = partial(soft_thresholding_od, lamda=alpha / rho)
         Z_0 = np.array(map(soft_thresholding, R + W_0 + X_0))
 
         # update Z_1, Z_2
         # prox_l = partial(prox_laplacian, beta=2. * beta / rho)
         # prox_e = np.array(map(prox_l, K[1:] - K[:-1] + U_2 - U_1))
-        prox_e = prox_laplacian(R[1:] - R[:-1] + W_2 - W_1 + X_2 - X_1,
+        prox_e = prox_laplacian(-(R[1:] - R[:-1] + W_2 - W_1 + X_2 - X_1),
                                 beta=2. * beta / rho)
         Z_1 = .5 * (R[:-1] + R[1:] + W_1 + W_2 + X_1 + X_2 - prox_e)
         Z_2 = .5 * (R[:-1] + R[1:] + W_1 + W_2 + X_1 + X_2 + prox_e)
@@ -135,7 +135,7 @@ def time_latent_graph_lasso(
         W_0 = np.array(map(partial(prox_trace_indicator, lamda=tau / rho), A))
 
         # update W_1, W_2
-        prox_e = prox_laplacian(R[1:] - R[:-1] - Z_2 + Z_1 + X_2 - X_1,
+        prox_e = prox_laplacian(-(R[1:] - R[:-1] - Z_2 + Z_1 + X_2 - X_1),
                                 beta=2. * eta / rho)
         W_1 = .5 * (R[:-1] + R[1:] - Z_1 + Z_2 + X_1 + X_2 - prox_e)
         W_2 = .5 * (R[:-1] + R[1:] - Z_1 + Z_2 + X_1 + X_2 + prox_e)
@@ -149,14 +149,17 @@ def time_latent_graph_lasso(
         X_consensus = X_0.copy()
         X_consensus[:-1] += X_1
         X_consensus[1:] += X_2
+        X_consensus /= divisor[:, np.newaxis, np.newaxis]
+
         Z_consensus = Z_0.copy()
         Z_consensus[:-1] += Z_1
         Z_consensus[1:] += Z_2
+        Z_consensus /= divisor[:, np.newaxis, np.newaxis]
+
         W_consensus = W_0.copy()
         W_consensus[:-1] += W_1
         W_consensus[1:] += W_2
-
-        np.divide(X_consensus, divisor[:, np.newaxis, np.newaxis], out=X_consensus)
+        W_consensus /= divisor[:, np.newaxis, np.newaxis]
 
         check = convergence(
             obj=objective(n_samples, S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
@@ -167,8 +170,8 @@ def time_latent_graph_lasso(
             e_pri=np.sqrt(np.prod(K.shape) * 2) * tol + rtol * max(
                 np.linalg.norm(R),
                 np.sqrt(squared_norm(Z_consensus) - squared_norm(W_consensus))),
-            e_dual=np.sqrt(np.prod(K.shape) * 2) * tol +
-                rtol * np.linalg.norm(rho * (X_consensus))
+            e_dual=np.sqrt(np.prod(K.shape) * 2) * tol + rtol * np.linalg.norm(
+                rho * X_consensus)
         )
         Z_consensus_old = Z_consensus.copy()
         W_consensus_old = W_consensus.copy()
@@ -184,5 +187,5 @@ def time_latent_graph_lasso(
         warnings.warn("Objective did not converge.")
 
     if return_history:
-        return K, L, S, checks
-    return K, L, S
+        return Z_consensus, W_consensus, S, checks
+    return Z_consensus, W_consensus, S

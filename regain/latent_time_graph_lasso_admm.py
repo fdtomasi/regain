@@ -121,7 +121,7 @@ def time_latent_graph_lasso(
         # update Z_1, Z_2
         # prox_l = partial(prox_laplacian, beta=2. * beta / rho)
         # prox_e = np.array(map(prox_l, K[1:] - K[:-1] + U_2 - U_1))
-        prox_e = prox_laplacian(-(K[1:] - K[:-1] + U_2 - U_1),
+        prox_e = prox_laplacian((K[1:] - K[:-1] + U_2 - U_1),
                                 beta=2. * beta / rho)
         Z_1 = .5 * (K[:-1] + K[1:] + U_1 + U_2 - prox_e)
         Z_2 = .5 * (K[:-1] + K[1:] + U_1 + U_2 + prox_e)
@@ -131,7 +131,7 @@ def time_latent_graph_lasso(
         W_0 = np.array(map(partial(prox_trace_indicator, lamda=tau / rho), A))
 
         # update W_1, W_2
-        prox_e = prox_laplacian(-(L[1:] - L[:-1] + Y_2 - Y_1),
+        prox_e = prox_laplacian((L[1:] - L[:-1] + Y_2 - Y_1),
                                 beta=2. * eta / rho)
         W_1 = .5 * (L[:-1] + L[1:] + Y_1 + Y_2 - prox_e)
         W_2 = .5 * (L[:-1] + L[1:] + Y_1 + Y_2 + prox_e)
@@ -162,23 +162,26 @@ def time_latent_graph_lasso(
         Z_consensus = Z_0.copy()
         Z_consensus[:-1] += Z_1
         Z_consensus[1:] += Z_2
+        Z_consensus /= divisor[:, np.newaxis, np.newaxis]
 
         U_consensus = U_0.copy()
         U_consensus[:-1] += U_1
         U_consensus[1:] += U_2
+        U_consensus /= divisor[:, np.newaxis, np.newaxis]
 
         W_consensus = W_0.copy()
         W_consensus[:-1] += W_1
         W_consensus[1:] += W_2
+        W_consensus /= divisor[:, np.newaxis, np.newaxis]
 
         Y_consensus = Y_0.copy()
         Y_consensus[:-1] += Y_1
         Y_consensus[1:] += Y_2
+        Y_consensus /= divisor[:, np.newaxis, np.newaxis]
 
-        np.divide(Z_consensus, divisor[:, np.newaxis, np.newaxis], out=Z_consensus)
-        np.divide(U_consensus, divisor[:, np.newaxis, np.newaxis], out=U_consensus)
-        np.divide(W_consensus, divisor[:, np.newaxis, np.newaxis], out=W_consensus)
-        np.divide(Y_consensus, divisor[:, np.newaxis, np.newaxis], out=Y_consensus)
+        # print "K-L", K-L
+        # # print "L", L
+        # print "R", R
 
         check = convergence(
             obj=objective(n_samples, S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
