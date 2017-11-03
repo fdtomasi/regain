@@ -1,8 +1,12 @@
-from sklearn.datasets import make_sparse_spd_matrix
+"""Dataset generation module."""
 import numpy as np
 import sys
 
+from sklearn.datasets import make_sparse_spd_matrix
+
+
 def is_pos_def(x):
+    """Check if x is positive-definite."""
     return np.all(np.linalg.eigvals(x) > 0)
 
 
@@ -29,23 +33,22 @@ def generate(n_dim_obs=3, n_dim_lat=2, epsilon=1e-3, T=10):
         theta.flat[::n_dim_lat + n_dim_obs + 1] = 0
         theta /= np.amax(np.abs(theta))
         # min((np.linalg.norm(theta2, 'fro')/((n_dim_lat + n_dim_obs)**2)), 0.99)
-        threshold =epsilon/((n_dim_lat + n_dim_obs)**2)
+        threshold = epsilon / np.power(n_dim_lat + n_dim_obs, 2)
         theta[np.logical_and(theta < threshold, -threshold < theta)] = 0
         theta.flat[::n_dim_lat + n_dim_obs + 1] = 1
-        thetas.append(theta)
         assert is_pos_def(theta)
+        thetas.append(theta)
     return thetas
 
 
 def generate_dataset(n_dim_obs=3, n_dim_lat=2, epsilon=1e-3, T=10,
-                     n_samples = 50):
+                     n_samples=50):
     thetas = generate(n_dim_obs, n_dim_lat, epsilon, T)
     sigmas = np.array(map(np.linalg.inv, thetas))
     data_list = []
     for sigma in sigmas:
-        data_list.append(np.random.multivariate_normal(np.zeros(sigma.shape[0]),
-                                                       sigma,
-                                                       n_samples)))
+        data_list.append(np.random.multivariate_normal(
+            np.zeros(sigma.shape[0]), sigma, n_samples))
     return data_list
 
 
