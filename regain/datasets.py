@@ -33,6 +33,7 @@ def generate(n_dim_obs=3, n_dim_lat=2, epsilon=1e-3, T=10):
         theta[np.logical_and(theta < threshold, -threshold < theta)] = 0
         theta.flat[::n_dim_lat + n_dim_obs + 1] = 1
         thetas.append(theta)
+        assert is_pos_def(theta)
     return thetas
 
 
