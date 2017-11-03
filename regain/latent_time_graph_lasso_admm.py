@@ -74,12 +74,12 @@ def time_latent_graph_lasso(
     K = np.zeros_like(S)
     L = np.zeros_like(S)
     X = np.zeros_like(S)
-    # Z_0 = np.zeros_like(K)
-    # Z_1 = np.zeros_like(K)[:-1]
-    # Z_2 = np.zeros_like(K)[1:]
-    # W_0 = np.zeros_like(K)
-    # W_1 = np.zeros_like(K)[:-1]
-    # W_2 = np.zeros_like(K)[1:]
+    Z_0 = np.zeros_like(K)
+    Z_1 = np.zeros_like(K)[:-1]
+    Z_2 = np.zeros_like(K)[1:]
+    W_0 = np.zeros_like(K)
+    W_1 = np.zeros_like(K)[:-1]
+    W_2 = np.zeros_like(K)[1:]
     U_0 = np.zeros_like(S)
     U_1 = np.zeros_like(S)[:-1]
     U_2 = np.zeros_like(S)[1:]
@@ -104,13 +104,23 @@ def time_latent_graph_lasso(
     checks = []
     for _ in range(max_iter):
         # update R
-        # A = Z_consensus - U_consensus
         A = K - L - X
         # A += np.array(map(np.transpose, A))
         # A /= 2.
         A *= - rho / n_samples[:, np.newaxis, np.newaxis]
         A += S
         R = np.array(map(prox_logdet_alt, A, n_samples / rho))
+
+        # update K, L
+        K = L + R + X + Z_0 - U_0
+        K[:-1] += Z_1 - U_1
+        K[1:] += Z_2 - U_2
+        K /= divisor[:, np.newaxis, np.newaxis] + 1
+
+        L = K - R - X + W_0 - Y_0
+        L[:-1] += W_1 - Y_1
+        L[1:] += W_2 - Y_2
+        L /= divisor[:, np.newaxis, np.newaxis] + 1
 
         # update Z_0
         # Zold = Z
@@ -120,7 +130,6 @@ def time_latent_graph_lasso(
 
         # update Z_1, Z_2
         # prox_l = partial(prox_laplacian, beta=2. * beta / rho)
-        # prox_e = np.array(map(prox_l, K[1:] - K[:-1] + U_2 - U_1))
         prox_e = prox_laplacian((K[1:] - K[:-1] + U_2 - U_1),
                                 beta=2. * beta / rho)
         Z_1 = .5 * (K[:-1] + K[1:] + U_1 + U_2 - prox_e)
@@ -135,17 +144,6 @@ def time_latent_graph_lasso(
                                 beta=2. * eta / rho)
         W_1 = .5 * (L[:-1] + L[1:] + Y_1 + Y_2 - prox_e)
         W_2 = .5 * (L[:-1] + L[1:] + Y_1 + Y_2 + prox_e)
-
-        # update K, L
-        K = L + R + X + Z_0 - U_0
-        K[:-1] += Z_1 - U_1
-        K[1:] += Z_2 - U_2
-        K /= divisor[:, np.newaxis, np.newaxis] + 1
-
-        L = - R + K - X + W_0 - Y_0
-        L[:-1] += W_1 - Y_1
-        L[1:] += W_2 - Y_2
-        L /= divisor[:, np.newaxis, np.newaxis] + 1
 
         # update residuals
         X += R - K + L
@@ -178,10 +176,6 @@ def time_latent_graph_lasso(
         Y_consensus[:-1] += Y_1
         Y_consensus[1:] += Y_2
         Y_consensus /= divisor[:, np.newaxis, np.newaxis]
-
-        # print "K-L", K-L
-        # # print "L", L
-        # print "R", R
 
         check = convergence(
             obj=objective(n_samples, S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
