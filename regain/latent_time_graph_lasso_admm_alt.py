@@ -10,7 +10,7 @@ from sklearn.covariance import empirical_covariance
 from sklearn.utils.extmath import fast_logdet, squared_norm
 
 from regain.norm import l1_od_norm
-from regain.prox import prox_logdet_alt, prox_laplacian, soft_thresholding_sign
+from regain.prox import prox_logdet, prox_laplacian, soft_thresholding_sign
 from regain.prox import prox_trace_indicator, soft_thresholding_od
 from regain.time_graph_lasso_admm import log_likelihood
 from regain.utils import convergence
@@ -114,7 +114,7 @@ def time_latent_graph_lasso(
         A *= - rho / n_samples[:, np.newaxis, np.newaxis]
         A += S
 
-        R = np.array(map(prox_logdet_alt, A, n_samples / (rho * divisor)))
+        R = np.array(map(prox_logdet, A, n_samples / (rho * divisor)))
 
         # update Z_0
         # Zold = Z
