@@ -11,11 +11,25 @@ import warnings
 from functools import partial
 from six.moves import range
 from sklearn.covariance import empirical_covariance
-from sklearn.utils.extmath import fast_logdet
+from sklearn.utils.extmath import fast_logdet, squared_norm
 
-from regain.norm import l2_square_norm, l1_od_norm
+from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, prox_laplacian, soft_thresholding_sign
 from regain.utils import convergence
+
+
+def log_likelihood(emp_cov, precision):
+    """Gaussian log-likelihood without constant term."""
+    return fast_logdet(precision) - np.sum(emp_cov * precision)
+
+
+def objective(n_samples, S, K, Z_0, Z_1, Z_2, lamda, beta, psi):
+    """Objective function for time-varying graphical lasso."""
+    obj = np.sum(-n * log_likelihood(emp_cov, precision)
+                 for emp_cov, precision, n in zip(S, K, n_samples))
+    obj += lamda * np.sum(map(l1_od_norm, Z_0))
+    obj += beta * np.sum(psi(z2 - z1) for z1, z2 in zip(Z_1, Z_2))
+    return obj
 
 
 def covseltime(
@@ -118,8 +132,8 @@ def covseltime(
         np.divide(U_consensus, divisor[:, np.newaxis, np.newaxis], out=U_consensus)
 
         check = convergence(
-            obj=objective(S, Theta, Z_0, Z_1, Z_2, lamda,
-                          beta, l2_square_norm),
+            obj=objective(n_samples, S, Theta, Z_0, Z_1, Z_2, lamda,
+                          beta, squared_norm),
             rnorm=np.linalg.norm(Theta - Z_consensus),
             snorm=np.linalg.norm(
                 rho * (Z_consensus - Z_consensus_old)),
@@ -144,12 +158,3 @@ def covseltime(
     if return_history:
         return Theta, S, checks
     return Theta, S
-
-
-def objective(S, Theta, Z_0, Z_1, Z_2, lamda, beta, psi):
-    """Objective function for time-varying graphical lasso."""
-    obj = np.sum(np.sum(emp_cov * precision) - fast_logdet(precision)
-                 for emp_cov, precision in zip(S, Theta))
-    obj += lamda * np.sum(map(l1_od_norm, Z_0))
-    obj += beta * np.sum(psi(z2 - z1) for z1, z2 in zip(Z_1, Z_2))
-    return obj
