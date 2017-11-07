@@ -2,8 +2,6 @@
 import numpy as np
 import warnings
 
-from sklearn.utils import deprecated
-
 
 def soft_thresholding(a, lamda):
     """Soft-thresholding for vectors."""

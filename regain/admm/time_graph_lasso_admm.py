@@ -14,7 +14,7 @@ from sklearn.covariance import empirical_covariance
 from sklearn.utils.extmath import fast_logdet, squared_norm
 
 from regain.norm import l1_od_norm
-from regain.prox import prox_logdet, prox_laplacian, soft_thresholding_sign
+from regain.prox import prox_logdet, prox_laplacian
 from regain.prox import soft_thresholding_od
 from regain.utils import convergence
 

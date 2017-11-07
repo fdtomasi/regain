@@ -6,16 +6,22 @@ http://www.stanford.edu/~boyd/papers/distr_opt_stat_learning_admm.html
 from __future__ import division
 
 import numpy as np
-from numpy import zeros
 from sklearn.covariance import empirical_covariance
 from sklearn.utils.extmath import fast_logdet
 
 from prox import soft_thresholding
 
 
-def covsel(D, lamda=1, rho=1, alpha=1, max_iter=1000, verbose=False, tol=1e-4,
-           rtol=1e-2, return_history=False):
-    """Solves the following problem via ADMM:
+def objective(S, X, Z, lamda):
+    """Graph lasso objective."""
+    return np.sum(S * X) - fast_logdet(X) + lamda * np.linalg.norm(Z, 1)
+
+
+def graph_lasso(D, lamda=1, rho=1, alpha=1, max_iter=1000, verbose=False,
+                tol=1e-4, rtol=1e-2, return_history=False):
+    """Graph lasso solver via ADMM.
+
+    Solves the following problem via ADMM:
         minimize  trace(S*X) - log det X + lambda*||X||_1
 
     where S is the empirical covariance of the data
@@ -53,15 +59,15 @@ def covsel(D, lamda=1, rho=1, alpha=1, max_iter=1000, verbose=False, tol=1e-4,
     n = S.shape[0]
 
     # X = zeros(n)
-    Z = zeros((n, n))
-    U = zeros((n, n))
+    Z = np.zeros((n, n))
+    U = np.zeros((n, n))
 
     hist = []
     count = 0
     for _ in range(max_iter):
         # x-update
         es, Q = np.linalg.eigh(rho * (Z - U) - S)
-        xi = (es + np.sqrt(es ** 2 + 4 * rho)) / (2. * rho)
+        xi = (es + np.sqrt(np.square(es) + 4 * rho)) / (2. * rho)
         X = np.dot(Q.dot(np.diag(xi)), Q.T)
 
         # z-update with relaxation
@@ -97,7 +103,3 @@ def covsel(D, lamda=1, rho=1, alpha=1, max_iter=1000, verbose=False, tol=1e-4,
             count = 0
 
     return X, Z, hist
-
-
-def objective(S, X, Z, lamda):
-    return np.sum(S * X) - fast_logdet(X) + lamda * np.linalg.norm(Z, 1)
