@@ -2,6 +2,12 @@
 import numpy as np
 import warnings
 
+try:
+    from prox_tv import tv1_1d
+except:
+    # fused lasso prox cannot be used
+    pass
+
 
 def soft_thresholding(a, lamda):
     """Soft-thresholding for vectors."""
@@ -39,3 +45,19 @@ def prox_trace_indicator(A, lamda):
 def prox_laplacian(A, beta):
     """Prox for l_2 square norm, Laplacian regularisation."""
     return A / (1 + 2. * beta)
+
+
+def prox_FL(X, beta, lamda):
+    """Fused Lasso prox.
+
+    It is calculated as the Total variation prox + soft thresholding
+    on the solution, as in
+    http://ieeexplore.ieee.org/abstract/document/6579659/
+    """
+    Y = np.empty_like(X)
+    for i in range(np.power(X.shape[1], 2)):
+        solution = tv1_1d(X.flat[i::np.power(X.shape[1], 2)], beta)
+        # fused-lasso (soft-thresholding on the solution)
+        solution = soft_thresholding_sign(solution, lamda)
+        Y.flat[i::np.power(X.shape[1], 2)] = solution
+    return Y
