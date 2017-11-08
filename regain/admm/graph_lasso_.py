@@ -9,12 +9,13 @@ import numpy as np
 from sklearn.covariance import empirical_covariance
 from sklearn.utils.extmath import fast_logdet
 
-from prox import soft_thresholding
+from regain.norm import l1_od_norm
+from regain.prox import soft_thresholding_od
 
 
 def objective(S, X, Z, lamda):
     """Graph lasso objective."""
-    return np.sum(S * X) - fast_logdet(X) + lamda * np.linalg.norm(Z, 1)
+    return np.sum(S * X) - fast_logdet(X) + lamda * l1_od_norm(Z)
 
 
 def graph_lasso(D, lamda=1, rho=1, alpha=1, max_iter=1000, verbose=False,
@@ -73,7 +74,7 @@ def graph_lasso(D, lamda=1, rho=1, alpha=1, max_iter=1000, verbose=False,
         # z-update with relaxation
         Zold = Z
         X_hat = alpha * X + (1 - alpha) * Zold
-        Z = soft_thresholding(X_hat + U, lamda / rho)
+        Z = soft_thresholding_od(X_hat + U, lamda / rho)
 
         U = U + (X_hat - Z)
 

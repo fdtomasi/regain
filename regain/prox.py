@@ -1,6 +1,9 @@
 """Useful proximal functions."""
 import numpy as np
+import scipy
 import warnings
+
+from scipy.optimize import minimize
 
 try:
     from prox_tv import tv1_1d
@@ -26,6 +29,23 @@ def soft_thresholding_od(a, lamda):
     soft = np.sign(a) * np.maximum(np.abs(a) - lamda, 0)
     soft.flat[::a.shape[1] + 1] = np.diag(a)
     return soft
+
+
+def blockwise_soft_thresholding(a, lamda):
+    """Proximal operator for l2 norm."""
+    return np.array([soft_thresholding(a[:, j], lamda) for j in range(
+        a.shape[1])]).T
+
+
+def prox_linf(a, lamda):
+    """Proximal operator for the l-inf norm.
+
+    Since there is no closed-form, we can minimize it with scipy.
+    """
+    def _f(x):
+        return lamda * np.linalg.norm(x, np.inf) + \
+            .5 * np.power(np.linalg.norm(a - x), 2)
+    return minimize(_f, a).x
 
 
 def prox_logdet(A, lamda):
