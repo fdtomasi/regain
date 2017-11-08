@@ -10,9 +10,11 @@ from sklearn.covariance import empirical_covariance
 from sklearn.utils.extmath import squared_norm
 
 from regain.admm.time_graph_lasso_admm_ import log_likelihood
-from regain.norm import l1_od_norm
+from regain.norm import l1_od_norm, l1_norm
+from regain.prox import soft_thresholding_od, soft_thresholding_sign
+from regain.prox import blockwise_soft_thresholding, prox_linf
 from regain.prox import prox_logdet, prox_laplacian
-from regain.prox import prox_trace_indicator, soft_thresholding_od
+from regain.prox import prox_trace_indicator
 from regain.utils import convergence
 
 
@@ -22,14 +24,14 @@ def objective(n_samples, S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
     obj = np.sum(-n * log_likelihood(s, r) for s, r, n in zip(S, R, n_samples))
     obj += alpha * np.sum(map(l1_od_norm, Z_0))
     obj += tau * np.sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
-    obj += beta * np.sum(psi(z2 - z1) for z1, z2 in zip(Z_1, Z_2))
-    obj += eta * np.sum(phi(w2 - w1) for w1, w2 in zip(W_1, W_2))
+    obj += beta * np.sum(map(psi, Z_2 - Z_1))
+    obj += eta * np.sum(map(phi, W_2 - W_1))
     return obj
 
 
 def time_latent_graph_lasso(
         data_list, alpha=1, tau=1, rho=1, beta=1., eta=1., max_iter=1000,
-        verbose=False,
+        verbose=False, psi='laplacian', phi='laplacian',
         tol=1e-4, rtol=1e-2, return_history=False):
     r"""Time-varying latent variable graphical lasso solver.
 
@@ -68,6 +70,35 @@ def time_latent_graph_lasso(
         objective value, the primal and dual residual norms, and tolerances
         for the primal and dual residual norms at each iteration.
     """
+    if psi == 'laplacian':
+        prox_psi = prox_laplacian
+        psi = squared_norm
+    elif psi == 'l1':
+        prox_psi = soft_thresholding_sign
+        psi = l1_norm
+    elif psi == 'l2':
+        prox_psi = blockwise_soft_thresholding
+        psi = np.linalg.norm
+    elif psi == 'linf':
+        prox_psi = prox_linf
+        psi = partial(np.linalg.norm, ord=np.inf)
+    else:
+        raise ValueError("Value of `psi` not understood.")
+    if phi == 'laplacian':
+        prox_phi = prox_laplacian
+        phi = squared_norm
+    elif phi == 'l1':
+        prox_phi = soft_thresholding_sign
+        phi = l1_norm
+    elif phi == 'l2':
+        prox_phi = blockwise_soft_thresholding
+        phi = np.linalg.norm
+    elif phi == 'linf':
+        prox_phi = prox_linf
+        phi = partial(np.linalg.norm, ord=np.inf)
+    else:
+        raise ValueError("Value of `phi` not understood.")
+
     S = np.array(map(empirical_covariance, data_list))
     n_samples = np.array([s.shape[0] for s in data_list])
 
@@ -130,8 +161,8 @@ def time_latent_graph_lasso(
 
         # update Z_1, Z_2
         # prox_l = partial(prox_laplacian, beta=2. * beta / rho)
-        prox_e = prox_laplacian((K[1:] - K[:-1] + U_2 - U_1),
-                                beta=2. * beta / rho)
+        prox_e = prox_psi((K[1:] - K[:-1] + U_2 - U_1),
+                          lamda=2. * beta / rho)
         Z_1 = .5 * (K[:-1] + K[1:] + U_1 + U_2 - prox_e)
         Z_2 = .5 * (K[:-1] + K[1:] + U_1 + U_2 + prox_e)
 
@@ -140,8 +171,8 @@ def time_latent_graph_lasso(
         W_0 = np.array(map(partial(prox_trace_indicator, lamda=tau / rho), A))
 
         # update W_1, W_2
-        prox_e = prox_laplacian((L[1:] - L[:-1] + Y_2 - Y_1),
-                                beta=2. * eta / rho)
+        prox_e = prox_phi((L[1:] - L[:-1] + Y_2 - Y_1),
+                          lamda=2. * eta / rho)
         W_1 = .5 * (L[:-1] + L[1:] + Y_1 + Y_2 - prox_e)
         W_2 = .5 * (L[:-1] + L[1:] + Y_1 + Y_2 + prox_e)
 
@@ -179,7 +210,7 @@ def time_latent_graph_lasso(
 
         check = convergence(
             obj=objective(n_samples, S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
-                          alpha, tau, beta, eta, squared_norm, squared_norm),
+                          alpha, tau, beta, eta, psi, phi),
             rnorm=np.sqrt(squared_norm(K - Z_consensus) +
                           squared_norm(L - W_consensus) +
                           squared_norm(K - L - R)),
@@ -215,7 +246,7 @@ def time_latent_graph_lasso(
 
 def time_latent_graph_lasso_alternative(
         data_list, alpha=1, tau=1, rho=1, beta=1., eta=1., max_iter=1000,
-        verbose=False,
+        verbose=False, psi='laplacian', phi='laplacian',
         tol=1e-4, rtol=1e-2, return_history=False):
     r"""Time-varying latent variable graphical lasso solver.
 
@@ -254,6 +285,35 @@ def time_latent_graph_lasso_alternative(
         objective value, the primal and dual residual norms, and tolerances
         for the primal and dual residual norms at each iteration.
     """
+    if psi == 'laplacian':
+        prox_psi = prox_laplacian
+        psi = squared_norm
+    elif psi == 'l1':
+        prox_psi = soft_thresholding_sign
+        psi = l1_norm
+    elif psi == 'l2':
+        prox_psi = blockwise_soft_thresholding
+        psi = np.linalg.norm
+    elif psi == 'linf':
+        prox_psi = prox_linf
+        psi = partial(np.linalg.norm, ord=np.inf)
+    else:
+        raise ValueError("Value of `psi` not understood.")
+    if phi == 'laplacian':
+        prox_phi = prox_laplacian
+        phi = squared_norm
+    elif phi == 'l1':
+        prox_phi = soft_thresholding_sign
+        phi = l1_norm
+    elif phi == 'l2':
+        prox_phi = blockwise_soft_thresholding
+        phi = np.linalg.norm
+    elif phi == 'linf':
+        prox_phi = prox_linf
+        phi = partial(np.linalg.norm, ord=np.inf)
+    else:
+        raise ValueError("Value of `phi` not understood.")
+
     S = np.array(map(empirical_covariance, data_list))
     n_samples = np.array([s.shape[0] for s in data_list])
 
@@ -311,8 +371,8 @@ def time_latent_graph_lasso_alternative(
         # update Z_1, Z_2
         # prox_l = partial(prox_laplacian, beta=2. * beta / rho)
         # prox_e = np.array(map(prox_l, K[1:] - K[:-1] + U_2 - U_1))
-        prox_e = prox_laplacian(-(R[1:] - R[:-1] + W_2 - W_1 + X_2 - X_1),
-                                beta=2. * beta / rho)
+        prox_e = prox_psi(-(R[1:] - R[:-1] + W_2 - W_1 + X_2 - X_1),
+                          lamda=2. * beta / rho)
         Z_1 = .5 * (R[:-1] + R[1:] + W_1 + W_2 + X_1 + X_2 - prox_e)
         Z_2 = .5 * (R[:-1] + R[1:] + W_1 + W_2 + X_1 + X_2 + prox_e)
 
@@ -321,8 +381,8 @@ def time_latent_graph_lasso_alternative(
         W_0 = np.array(map(partial(prox_trace_indicator, lamda=tau / rho), A))
 
         # update W_1, W_2
-        prox_e = prox_laplacian(-(R[1:] - R[:-1] - Z_2 + Z_1 + X_2 - X_1),
-                                beta=2. * eta / rho)
+        prox_e = prox_phi(-(R[1:] - R[:-1] - Z_2 + Z_1 + X_2 - X_1),
+                          lamda=2. * eta / rho)
         W_1 = .5 * (R[:-1] + R[1:] - Z_1 + Z_2 + X_1 + X_2 - prox_e)
         W_2 = .5 * (R[:-1] + R[1:] - Z_1 + Z_2 + X_1 + X_2 + prox_e)
 
@@ -349,7 +409,7 @@ def time_latent_graph_lasso_alternative(
 
         check = convergence(
             obj=objective(n_samples, S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
-                          alpha, tau, beta, eta, squared_norm, squared_norm),
+                          alpha, tau, beta, eta, psi, phi),
             rnorm=np.sqrt(squared_norm(R - Z_consensus + W_consensus)),
             snorm=np.sqrt(squared_norm(rho * (Z_consensus - Z_consensus_old)) +
                           squared_norm(rho * (W_consensus - W_consensus_old))),
