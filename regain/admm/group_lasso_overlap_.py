@@ -170,9 +170,9 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
                      self.fit_intercept, copy=False)
 
         if y.ndim == 1:
-            y = y[:, np.newaxis]
+            y = y[:, None]
         if Xy is not None and Xy.ndim == 1:
-            Xy = Xy[:, np.newaxis]
+            Xy = Xy[:, None]
 
         n_samples, n_features = X.shape
         n_targets = y.shape[1]
@@ -186,7 +186,7 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
         else:
             coef_ = self.coef_
             if coef_.ndim == 1:
-                coef_ = coef_[np.newaxis, :]
+                coef_ = coef_[None, :]
 
         dual_gaps_ = np.zeros(n_targets, dtype=X.dtype)
         self.n_iter_ = []
