@@ -134,7 +134,7 @@ def time_graph_lasso(
 
         # other Zs
         prox_e = prox_psi(K[1:] - K[:-1] + U_2 - U_1,
-                          beta=2. * beta / rho)
+                          lamda=2. * beta / rho)
         Z_1 = .5 * (K[:-1] + K[1:] + U_1 + U_2 - prox_e)
         Z_2 = .5 * (K[:-1] + K[1:] + U_1 + U_2 + prox_e)
 
