@@ -9,7 +9,7 @@ from six.moves import range
 from sklearn.covariance import empirical_covariance
 from sklearn.utils.extmath import fast_logdet, squared_norm
 
-from regain.norm import l1_od_norm
+from regain.norm import l1_od_norm, l1_norm
 from regain.prox import prox_FL
 from regain.utils import convergence
 
@@ -35,12 +35,14 @@ def choose_alpha(alpha, x, S, n_samples, beta, lamda, gamma, theta=.99, max_iter
     partial_J = partial(_J, x, beta=beta, lamda=lamda,
                         gamma=gamma, S=S, n_samples=n_samples)
     partial_f = partial(_f, n_samples=n_samples, S=S)
+    gradient_ = _gradient(x, S, n_samples)
     for i in range(max_iter):
-        alpha *= eps
         iter_diff = partial_J(alpha=alpha) - x
         obj_diff = partial_f(K=partial_J(alpha=alpha)) - partial_f(K=x)
-        if obj_diff - _scalar_product_3d(iter_diff, _gradient(x, S, n_samples)) <= theta / (gamma * alpha) * squared_norm(iter_diff) + 1e-16:
+        if obj_diff - _scalar_product_3d(iter_diff, gradient_) <= theta / (gamma * alpha) * squared_norm(iter_diff) + 1e-16:
             return alpha
+
+        alpha *= eps
     return alpha
 
 
@@ -63,7 +65,7 @@ def objective(n_samples, S, K, lamda, beta, psi):
     obj = np.sum(-n * log_likelihood(emp_cov, precision)
                  for emp_cov, precision, n in zip(S, K, n_samples))
     obj += lamda * np.sum(map(l1_od_norm, K))
-    obj += beta * np.sum(psi(z2 - z1) for z1, z2 in zip(K[:-1], K[1:]))
+    obj += beta * np.sum(map(psi, K[1:] - K[:-1]))
     return obj
 
 
@@ -110,7 +112,7 @@ def time_graph_lasso(
     S = np.array(map(empirical_covariance, data_list))
     n_samples = np.array([s.shape[0] for s in data_list])
 
-    K = np.array([np.eye(S.shape[1]) for _ in range(S.shape[0])])
+    K = np.zeros_like(S)
     # divisor for consensus variables, accounting for two less matrices
     divisor = np.zeros(S.shape[0]) + 3
     divisor[0] -= 1
@@ -118,23 +120,23 @@ def time_graph_lasso(
 
     checks = []
     alpha = 1
+    Kold = np.ones_like(S) + 5000
     for _ in range(max_iter):
-        Kold = K.copy()
         for k in range(S.shape[0]):
             K[k].flat[::K.shape[1] + 1] = 1
         alpha_old = alpha
 
         # choose a gamma
-        gamma = 1
+        gamma = .75
 
         # total variation
-        Y = _J(K, beta, lamda, gamma, 1., S, n_samples)
-
+        Y = _J(K, beta, lamda, gamma, 1, S, n_samples)
         alpha = choose_alpha(alpha_old, K, S, n_samples, beta, lamda, gamma)
+        alpha = 1
         K = Kold + alpha * (Y - Kold)
 
         check = convergence(
-            obj=objective(n_samples, S, K, lamda, beta, squared_norm),
+            obj=objective(n_samples, S, K, lamda, beta, l1_norm),
             rnorm=np.linalg.norm(K - Kold),
             snorm=20, # np.linalg.norm(
                 # rho * (Z_consensus - Z_consensus_old)),
@@ -152,8 +154,9 @@ def time_graph_lasso(
         checks.append(check)
         # if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
         #     break
-        if False and check.rnorm <= tol:#check.e_pri and check.snorm <= check.e_dual:
+        if check.rnorm <= tol:
             break
+        Kold = K.copy()
     else:
         warnings.warn("Objective did not converge.")
 
