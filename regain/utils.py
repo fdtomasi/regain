@@ -1,4 +1,5 @@
 """Utils for REGAIN package."""
+import functools
 import numpy as np
 from collections import namedtuple
 
@@ -19,3 +20,10 @@ def upper_to_full(a):
     idx = np.triu_indices(n)
     A[idx] = A[idx[::-1]] = a
     return A
+
+
+def compose(*functions):
+    """Compose two or more functions."""
+    def compose2(f, g):
+        return lambda x: f(g(x))
+    return functools.reduce(compose2, functions, lambda x: x)

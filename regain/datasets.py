@@ -24,24 +24,29 @@ def generate(n_dim_obs=3, n_dim_lat=2, eps=1e-3, T=10, tol=1e-3):
     assert np.linalg.matrix_rank(theta[:n_dim_lat, :n_dim_lat]) == n_dim_lat
 
     thetas = [theta]
-    for i in range(T):
-        theta_tot_i = make_sparse_spd_matrix(
-            n_dim_lat + n_dim_obs, alpha=.5, norm_diag=1)
-        theta_tot_i.flat[::n_dim_lat + n_dim_obs + 1] = 1e-16
-        theta_tot_i /= np.linalg.norm(theta_tot_i, 'fro')
-        theta_tot_i *= eps
+    es, Q = np.linalg.eigh(theta[n_dim_lat:, n_dim_lat:])
 
-        theta = thetas[-1].copy()
-        theta += theta_tot_i
-        theta.flat[::n_dim_lat + n_dim_obs + 1] = 0
-        theta /= np.amax(np.abs(theta))
-        # min((np.linalg.norm(theta2, 'fro')/((n_dim_lat + n_dim_obs)**2)), 0.99)
-        threshold = eps / np.power(n_dim_lat + n_dim_obs, 2)
-        theta[np.abs(theta) < threshold] = 0
-        theta[np.abs(theta) < tol] = 0
-        theta.flat[::n_dim_lat + n_dim_obs + 1] = 1
+    for i in range(T):
+        # theta_tot_i = make_sparse_spd_matrix(
+        #     n_dim_lat + n_dim_obs, alpha=.5, norm_diag=1)
+        # theta_tot_i.flat[::n_dim_lat + n_dim_obs + 1] = 1e-16
+        # theta_tot_i /= np.linalg.norm(theta_tot_i, 'fro')
+        # theta_tot_i *= eps
+        es += (np.random.randn(es.shape[0]) + 1) / 2.
+        theta_i = np.linalg.multi_dot((Q, np.diag(es), Q.T))
+
+        theta_c = theta.copy()
+        theta_c[n_dim_lat:, n_dim_lat:] = theta_i
+        # theta += theta_tot_i
+        # theta.flat[::n_dim_lat + n_dim_obs + 1] = 0
+        # theta /= np.amax(np.abs(theta))
+        # # min((np.linalg.norm(theta2, 'fro')/((n_dim_lat + n_dim_obs)**2)), 0.99)
+        # threshold = eps / np.power(n_dim_lat + n_dim_obs, 2)
+        # theta[np.abs(theta) < threshold] = 0
+        # theta[np.abs(theta) < tol] = 0
+        # theta.flat[::n_dim_lat + n_dim_obs + 1] = 1
         # assert is_pos_def(theta)
-        thetas.append(theta)
+        thetas.append(theta_c)
     return np.array(thetas)
 
 

@@ -2,7 +2,10 @@
 import numpy as np
 import warnings
 
+from functools import partial
 from scipy.optimize import minimize
+
+from regain.utils import compose
 
 try:
     from prox_tv import tv1_1d
@@ -78,17 +81,26 @@ def prox_laplacian(a, lamda):
     return a / (1 + 2. * lamda)
 
 
-def prox_FL(X, beta, lamda):
+def prox_FL(a, beta, lamda):
     """Fused Lasso prox.
 
     It is calculated as the Total variation prox + soft thresholding
     on the solution, as in
     http://ieeexplore.ieee.org/abstract/document/6579659/
     """
-    Y = np.empty_like(X)
-    for i in range(np.power(X.shape[1], 2)):
-        solution = tv1_1d(X.flat[i::np.power(X.shape[1], 2)], beta)
+    Y = np.empty_like(a)
+    for i in range(np.power(a.shape[1], 2)):
+        solution = tv1_1d(a.flat[i::np.power(a.shape[1], 2)], beta)
         # fused-lasso (soft-thresholding on the solution)
         solution = soft_thresholding_sign(solution, lamda)
-        Y.flat[i::np.power(X.shape[1], 2)] = solution
+        Y.flat[i::np.power(a.shape[1], 2)] = solution
     return Y
+
+    # not work
+    # x = np.vstack(a.transpose((2, 1, 0)))  # each row is the time evolution
+    # assert np.allclose(np.array(xx), x)
+    # x = np.apply_along_axis(
+    #     compose(partial(soft_thresholding_sign, lamda=lamda),
+    #             partial(tv1_1d, w=beta)), 1, x)
+    # # return np.array(np.vsplit(x, x.shape[1])).transpose((2, 1, 0))
+    # Z = np.array(np.vsplit(x, a.shape[1]))#.transpose((2, 1, 0))
