@@ -9,7 +9,7 @@ from six.moves import range
 from sklearn.covariance import empirical_covariance
 from sklearn.utils.extmath import squared_norm
 
-from regain.admm.time_graph_lasso_admm_ import log_likelihood
+from regain.admm.time_graph_lasso_ import log_likelihood
 from regain.norm import l1_od_norm, l1_norm
 from regain.prox import soft_thresholding_od, soft_thresholding_sign
 from regain.prox import blockwise_soft_thresholding, prox_linf
