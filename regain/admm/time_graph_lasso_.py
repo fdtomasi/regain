@@ -13,9 +13,10 @@ from six.moves import range
 from sklearn.covariance import empirical_covariance
 from sklearn.utils.extmath import fast_logdet, squared_norm
 
-from regain.norm import l1_od_norm
-from regain.prox import prox_logdet, prox_laplacian, soft_thresholding_sign
-from regain.prox import soft_thresholding_od
+from regain.norm import l1_od_norm, l1_norm
+from regain.prox import prox_logdet, prox_laplacian
+from regain.prox import soft_thresholding_od, soft_thresholding_sign
+from regain.prox import blockwise_soft_thresholding, prox_linf
 from regain.utils import convergence
 
 
@@ -29,14 +30,15 @@ def objective(n_samples, S, K, Z_0, Z_1, Z_2, lamda, beta, psi):
     obj = np.sum(-n * log_likelihood(emp_cov, precision)
                  for emp_cov, precision, n in zip(S, K, n_samples))
     obj += lamda * np.sum(map(l1_od_norm, Z_0))
-    obj += beta * np.sum(psi(z2 - z1) for z1, z2 in zip(Z_1, Z_2))
+    obj += beta * np.sum(map(psi, Z_2 - Z_1))
     return obj
 
 
 def time_graph_lasso(
         data_list, lamda=1, rho=1, beta=1,
         max_iter=1000, verbose=False,
-        tol=1e-4, rtol=1e-2, return_history=False):
+        tol=1e-4, rtol=1e-2, return_history=False,
+        psi='laplacian'):
     """Time-varying graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -73,8 +75,23 @@ def time_graph_lasso(
         objective value, the primal and dual residual norms, and tolerances
         for the primal and dual residual norms at each iteration.
     """
+    if psi == 'laplacian':
+        prox_psi = prox_laplacian
+        psi = squared_norm
+    elif psi == 'l1':
+        prox_psi = soft_thresholding_sign
+        psi = l1_norm
+    elif psi == 'l2':
+        prox_psi = blockwise_soft_thresholding
+        psi = np.linalg.norm
+    elif psi == 'linf':
+        prox_psi = prox_linf
+        psi = partial(np.linalg.norm, ord=np.inf)
+    else:
+        raise ValueError("Value of `psi` not understood.")
+
     S = np.array(map(empirical_covariance, data_list))
-    n_samples = np.array([s.shape[0] for s in data_list])
+    n_samples = np.array([data.shape[0] for data in data_list])
 
     # K = np.zeros_like(S)
     Z_0 = np.zeros_like(S)
@@ -92,7 +109,6 @@ def time_graph_lasso(
     divisor = np.zeros(S.shape[0]) + 3
     divisor[0] -= 1
     divisor[-1] -= 1
-    # eta = np.divide(n_samples, divisor * rho)
 
     checks = []
     for _ in range(max_iter):
@@ -105,8 +121,7 @@ def time_graph_lasso(
         A += np.array(map(np.transpose, A))
         A /= 2.
 
-        # A /= eta[:, np.newaxis, np.newaxis]
-        A *= - rho / n_samples[:, np.newaxis, np.newaxis]
+        A *= - rho / n_samples[:, None, None]
         A += S
 
         K = np.array(map(prox_logdet, A, n_samples / (rho * divisor)))
@@ -118,10 +133,8 @@ def time_graph_lasso(
         Z_0 = np.array(map(soft_thresholding, K + U_0))
 
         # other Zs
-        # prox_l = partial(prox_laplacian, beta=2. * beta / rho)
-        # prox_e = np.array(map(prox_l, Theta[1:] - Theta[:-1] + U_2 - U_1))
-        prox_e = prox_laplacian(K[1:] - K[:-1] + U_2 - U_1,
-                                beta=2. * beta / rho)
+        prox_e = prox_psi(K[1:] - K[:-1] + U_2 - U_1,
+                          lamda=2. * beta / rho)
         Z_1 = .5 * (K[:-1] + K[1:] + U_1 + U_2 - prox_e)
         Z_2 = .5 * (K[:-1] + K[1:] + U_1 + U_2 + prox_e)
 
@@ -133,16 +146,16 @@ def time_graph_lasso(
         Z_consensus = Z_0.copy()
         Z_consensus[:-1] += Z_1
         Z_consensus[1:] += Z_2
-        Z_consensus /= divisor[:, np.newaxis, np.newaxis]
+        Z_consensus /= divisor[:, None, None]
 
         U_consensus = U_0.copy()
         U_consensus[:-1] += U_1
         U_consensus[1:] += U_2
-        U_consensus /= divisor[:, np.newaxis, np.newaxis]
+        U_consensus /= divisor[:, None, None]
 
         check = convergence(
             obj=objective(n_samples, S, K, Z_0, Z_1, Z_2, lamda,
-                          beta, squared_norm),
+                          beta, psi),
             rnorm=np.linalg.norm(K - Z_consensus),
             snorm=np.linalg.norm(
                 rho * (Z_consensus - Z_consensus_old)),
