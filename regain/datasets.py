@@ -73,7 +73,9 @@ def generate2(n_dim_obs=3, n_dim_lat=2, epsilon=1e-3, T=10, degree=2):
         K_HO[i, indices] = np.random.rand(percentage)  # *0.12
 
     eigs, U = np.linalg.eigh(K_HO.T.dot(K_HO))
-    L = np.linalg.multi_dot((U, np.diag(1.0 + np.random.rand(n_dim_obs)), U.T))
+    eigs = np.zeros(n_dim_obs)
+    eigs[np.random.randint(0, n_dim_obs, size=n_dim_lat)] = np.random.rand(n_dim_lat)
+    L = np.linalg.multi_dot((U, np.diag(eigs), U.T))
 
     theta = np.eye(n_dim_obs)
     for i in range(n_dim_obs - 1):
