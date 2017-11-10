@@ -6,11 +6,26 @@ import scipy.sparse as ss
 from sklearn.datasets import make_sparse_spd_matrix
 
 
-def is_pos_def(x):
-    """Check if x is positive-definite."""
-    return np.all(np.linalg.eigvals(x) > 0)
-def is_pos_semidef(x):
-    return np.all(np.linalg.eigvals(x) >= 0)
+def normalize_matrix(x):
+    """Normalize a matrix so to have 1 on the diagonal, in-place."""
+    d = np.diag(x).reshape(1, x.shape[0])
+    d = 1. / np.sqrt(d)
+    x *= d
+    x *= d.T
+
+
+def is_pos_def(x, tol=1e-15):
+    """Check if x is positive definite."""
+    eigs = np.linalg.eigvalsh(x)
+    eigs[np.abs(eigs) < tol] = 0
+    return np.all(eigs > 0)
+
+
+def is_pos_semidef(x, tol=1e-15):
+    """Check if x is positive semi-definite."""
+    eigs = np.linalg.eigvalsh(x)
+    eigs[np.abs(eigs) < tol] = 0
+    return np.all(eigs >= 0)
 
 
 def generate(n_dim_obs=3, n_dim_lat=2, eps=1e-3, T=10, tol=1e-3):
@@ -50,74 +65,69 @@ def generate(n_dim_obs=3, n_dim_lat=2, eps=1e-3, T=10, tol=1e-3):
     return np.array(thetas)
 
 
-def generate2(n_dim_obs=3, n_dim_lat=2, epsilon=1e-3, T=10):
-    theta_tot = make_sparse_spd_matrix(n_dim_lat + n_dim_obs, alpha=.3, norm_diag=1)
-    theta_tot[0:n_dim_lat, 0:n_dim_lat] = np.diag(np.ones(n_dim_lat))
-    theta_tot[n_dim_lat:, n_dim_lat:] = make_sparse_spd_matrix(
-        n_dim_obs, alpha=.5, norm_diag=1)
-    #print(theta_tot)
-#     theta_tot = theta_tot.dot(theta_tot.T)
-#     assert is_pos_def(theta_tot)
-    assert np.linalg.matrix_rank(theta_tot[:n_dim_lat, :n_dim_lat]) == n_dim_lat
+def generate2(n_dim_obs=3, n_dim_lat=2, epsilon=1e-3, T=10, degree=2):
+    K_HO = np.zeros((n_dim_lat, n_dim_obs))
+    for i in range(n_dim_lat):
+        percentage = int(n_dim_obs * 0.8)
+        indices = np.random.randint(0, high=n_dim_obs, size=percentage)
+        K_HO[i, indices] = np.random.rand(percentage)  # *0.12
 
-    L = theta_tot[n_dim_lat:, 0:n_dim_lat].dot(
-          theta_tot[0:n_dim_lat, n_dim_lat:])
-    assert (is_pos_semidef(L))
-    thetas = [theta_tot]
-    thetas_true = [theta_tot[n_dim_lat:, n_dim_lat:]]
-    thetas_observed = [thetas_true[-1] - L]
-    assert (is_pos_def(thetas_observed[-1]))
+    eigs, U = np.linalg.eigh(K_HO.T.dot(K_HO))
+    L = np.linalg.multi_dot((U, np.diag(1.0 + np.random.rand(n_dim_obs)), U.T))
 
-    if(not is_pos_def(thetas_observed[-1])):
-        sys.exit(0)
-    i = 0
-    while i < T:
-      u, s, v = np.linalg.svd(thetas[-1][n_dim_lat:, n_dim_lat:])
-      addition = ss.rand(s.shape[0],1, density=0.5).A
-      addition =  addition / (np.linalg.norm(addition) * np.sqrt(epsilon))
+    theta = np.eye(n_dim_obs)
+    for i in range(n_dim_obs - 1):
+        l = list(np.arange(i + 1, n_dim_obs))
+        indices = np.random.choice(l, degree)
+        theta[i, indices] = theta[indices, i] = .5 / degree
 
-      theta = np.zeros_like(thetas[-1])
-      s_new = (s + addition.T)[0]
-      print(s_new)
-      s_new = np.maximum(s_new, 0)
-      theta[n_dim_lat:, n_dim_lat:] = u.dot(np.diag(s_new)).dot(v.T)
+    theta += np.diag(np.sum(L, axis=1))
+    theta_observed = theta - L
 
-      print(thetas[-1][n_dim_lat:, 0:n_dim_lat].shape)
-      u, s, v = np.linalg.svd(thetas[-1][n_dim_lat:, 0:n_dim_lat])
+    thetas = [theta]
+    thetas_obs = [theta_observed]
+    ells = [L]
 
-      addition = ss.rand(s.shape[0], 1, density=0.5).A
-      addition =  addition / (np.linalg.norm(addition) * np.sqrt(epsilon))
-      print(s.shape)
-      print(addition.shape)
-      s_new = (np.square(s) + addition.T)[0]
-      s_new = np.maximum(s_new, 0)
+    for i in range(T):
+        eigs, Q = np.linalg.eigh(thetas[-1])
+        addition = ss.rand(eigs.shape[0], 1, density=0.5).A
+        addition /= np.linalg.norm(addition) * np.sqrt(epsilon)
+        s_new = (eigs + addition.T)[0]
+        s_new = np.maximum(s_new, 0)
 
-      print("s_new shape", s_new.shape)
-      print("u shape", u.shape)
-      print("v shape", v.shape)
+        theta = np.linalg.multi_dot((Q, np.diag(s_new), Q.T))
+        d = np.diag(theta).reshape(1, theta.shape[0])
+        d = 1. / np.sqrt(d)
+        theta *= d
+        theta *= d.T
+        # print "theta before\n", theta
 
-      theta[n_dim_lat:, 0:n_dim_lat] = u.dot(
-        np.concatenate((np.diag(np.sqrt(s_new)), np.zeros((1,3))), axis=0)).dot(v.T)
-      theta[0:n_dim_lat, n_dim_lat:] = theta[n_dim_lat:, 0:n_dim_lat].T
-      L = theta_tot[n_dim_lat:, 0:n_dim_lat].dot(
-          theta_tot[0:n_dim_lat, n_dim_lat:])
+        eigs, Q = np.linalg.eigh(ells[-1])
+        addition = ss.rand(eigs.shape[0], 1, density=0.5).A
+        addition /= np.linalg.norm(addition) * np.sqrt(epsilon)
+        s_new = (eigs + addition.T)[0]
+        s_new = np.maximum(s_new, 0)
 
-      thetas.append(theta)
-      thetas_true.append(theta[n_dim_lat:, n_dim_lat:])
-      thetas_observed.append(thetas_true[-1] - L)
+        L = np.linalg.multi_dot((Q, np.diag(s_new), Q.T))
+        d = np.diag(L).reshape(1, L.shape[0])
+        d = 1. / np.sqrt(d)
+        L *= d
+        L *= d.T
 
-      assert(is_pos_semidef(L))
-      assert(is_pos_def(thetas_observed[-1]))
-      print(theta)
-      i+=1
-    return thetas, thetas_true, thetas_observed
+        theta += np.diag(np.sum(np.abs(L), axis=1))
+        theta_observed = theta - L
 
+        # print "theta after\n", theta
 
+        assert is_pos_semidef(L)
+        assert is_pos_def(theta_observed)
+        thetas.append(theta)
+        thetas_obs.append(theta_observed)
+        ells.append(L)
+
+    return thetas, thetas_obs, ells
 
 
-def generate_dataset(n_dim_obs=3, n_dim_lat=2, epsilon=1e-3, T=10,
-                     n_samples = 50):
-    thetas = generate(n_dim_obs, n_dim_lat, epsilon, T)
 def generate_dataset(n_dim_obs=3, n_dim_lat=2, eps=1e-3, T=10,
                      n_samples=50):
     thetas = generate(n_dim_obs, n_dim_lat, eps, T)
@@ -127,6 +137,49 @@ def generate_dataset(n_dim_obs=3, n_dim_lat=2, eps=1e-3, T=10,
         data_list.append(np.random.multivariate_normal(
             np.zeros(n_dim_obs), sigma[n_dim_lat:, n_dim_lat:], n_samples))
     return data_list, thetas, np.array([t[n_dim_lat:, n_dim_lat:] for t in thetas])
+
+
+def generate_dataset_fede(
+        n_dim_obs=3, n_dim_lat=2, eps=1e-3, T=10, n_samples=50):
+    """Generate dataset (new version)."""
+    b = np.random.rand(1, n_dim_obs)
+    es, Q = np.linalg.eigh(b.T.dot(b))  # Q random
+
+    b = np.random.rand(1, n_dim_obs)
+    es, R = np.linalg.eigh(b.T.dot(b))  # R random
+
+    start_sigma = np.random.rand(n_dim_obs) + 1
+    start_lamda = np.zeros(n_dim_obs)
+    idx = np.random.randint(n_dim_obs, size=n_dim_lat)
+    start_lamda[idx] = np.random.rand(2)
+
+    Ks = []
+    Ls = []
+    Kobs = []
+
+    for i in range(T):
+        K = np.linalg.multi_dot((Q, np.diag(start_sigma), Q.T))
+        L = np.linalg.multi_dot((R, np.diag(start_lamda), R.T))
+
+        K[np.abs(K) < eps] = 0  # enforce sparsity on K
+
+        assert is_pos_def(K - L)
+        assert is_pos_semidef(L)
+
+        start_sigma += 1 + np.random.rand(n_dim_obs)
+        start_lamda[idx] += np.random.rand(n_dim_lat) * 2 - 1
+        start_lamda = np.maximum(start_lamda, 0)
+
+        Ks.append(K)
+        Ls.append(L)
+        Kobs.append(K - L)
+
+    ll = map(np.linalg.inv, Kobs)
+    map(normalize_matrix, ll)  # in place
+
+    data_list = [np.random.multivariate_normal(
+        np.zeros(n_dim_obs), l, size=n_samples) for l in ll]
+    return data_list, Kobs, Ks, Ls
 
 
 def generate_ma_xue_zou(n_dim_obs=12, n_dim_lat=2, epsilon=1e-3):
