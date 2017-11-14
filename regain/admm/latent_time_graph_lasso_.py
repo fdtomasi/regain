@@ -7,6 +7,7 @@ import warnings
 from functools import partial
 from six.moves import range
 from sklearn.covariance import empirical_covariance
+from sklearn.covariance import EmpiricalCovariance
 from sklearn.utils.extmath import squared_norm
 
 from regain.admm.time_graph_lasso_ import log_likelihood
@@ -30,9 +31,10 @@ def objective(n_samples, S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
 
 
 def time_latent_graph_lasso(
-        data_list, alpha=1, tau=1, rho=1, beta=1., eta=1., max_iter=1000,
-        verbose=False, psi='laplacian', phi='laplacian',
-        tol=1e-4, rtol=1e-2, return_history=False):
+        data_list, alpha=1., tau=1., rho=1., beta=1., eta=1., max_iter=1000,
+        verbose=False, psi='laplacian', phi='laplacian', assume_centered=False,
+        tol=1e-4, rtol=1e-2, return_history=False, return_n_iter=True,
+        mode=None):
     r"""Time-varying latent variable graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -99,47 +101,49 @@ def time_latent_graph_lasso(
     else:
         raise ValueError("Value of `phi` not understood.")
 
-    S = np.array(map(empirical_covariance, data_list))
+    emp_cov = np.array([empirical_covariance(
+        x, assume_centered=assume_centered) for x in data_list])
+
     n_samples = np.array([s.shape[0] for s in data_list])
 
-    K = np.zeros_like(S)
-    L = np.zeros_like(S)
-    X = np.zeros_like(S)
+    K = np.zeros_like(emp_cov)
+    L = np.zeros_like(emp_cov)
+    X = np.zeros_like(emp_cov)
     Z_0 = np.zeros_like(K)
     Z_1 = np.zeros_like(K)[:-1]
     Z_2 = np.zeros_like(K)[1:]
     W_0 = np.zeros_like(K)
     W_1 = np.zeros_like(K)[:-1]
     W_2 = np.zeros_like(K)[1:]
-    U_0 = np.zeros_like(S)
-    U_1 = np.zeros_like(S)[:-1]
-    U_2 = np.zeros_like(S)[1:]
-    Y_0 = np.zeros_like(S)
-    Y_1 = np.zeros_like(S)[:-1]
-    Y_2 = np.zeros_like(S)[1:]
+    U_0 = np.zeros_like(emp_cov)
+    U_1 = np.zeros_like(emp_cov)[:-1]
+    U_2 = np.zeros_like(emp_cov)[1:]
+    Y_0 = np.zeros_like(emp_cov)
+    Y_1 = np.zeros_like(emp_cov)[:-1]
+    Y_2 = np.zeros_like(emp_cov)[1:]
 
-    U_consensus = np.zeros_like(S)
-    Y_consensus = np.zeros_like(S)
-    Z_consensus = np.zeros_like(S)
-    Z_consensus_old = np.zeros_like(S)
-    W_consensus = np.zeros_like(S)
-    W_consensus_old = np.zeros_like(S)
-    R_old = np.zeros_like(S)
+    U_consensus = np.zeros_like(emp_cov)
+    Y_consensus = np.zeros_like(emp_cov)
+    Z_consensus = np.zeros_like(emp_cov)
+    Z_consensus_old = np.zeros_like(emp_cov)
+    W_consensus = np.zeros_like(emp_cov)
+    W_consensus_old = np.zeros_like(emp_cov)
+    R_old = np.zeros_like(emp_cov)
 
     # divisor for consensus variables, accounting for two less matrices
-    divisor = np.zeros(S.shape[0]) + 3
+    divisor = np.zeros(emp_cov.shape[0]) + 3
     divisor[0] -= 1
     divisor[-1] -= 1
     # eta = np.divide(n_samples, divisor * rho)
 
     checks = []
-    for _ in range(max_iter):
+    for iteration_ in range(max_iter):
         # update R
         A = K - L - X
         # A += np.array(map(np.transpose, A))
         # A /= 2.
         A *= - rho / n_samples[:, None, None]
-        A += S
+        A += emp_cov
         R = np.array(map(prox_logdet, A, n_samples / rho))
 
         # update K, L
@@ -209,7 +213,7 @@ def time_latent_graph_lasso(
         Y_consensus /= divisor[:, None, None]
 
         check = convergence(
-            obj=objective(n_samples, S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
+            obj=objective(n_samples, emp_cov, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
                           alpha, tau, beta, eta, psi, phi),
             rnorm=np.sqrt(squared_norm(K - Z_consensus) +
                           squared_norm(L - W_consensus) +
@@ -239,9 +243,12 @@ def time_latent_graph_lasso(
     else:
         warnings.warn("Objective did not converge.")
 
+    return_list = [K, L, emp_cov]
     if return_history:
-        return K, L, S, checks
-    return K, L, S
+        return_list.append(checks)
+    if return_n_iter:
+        return_list.append(iteration_)
+    return return_list
 
 
 def time_latent_graph_lasso_alternative(
@@ -435,3 +442,112 @@ def time_latent_graph_lasso_alternative(
     if return_history:
         return Z_consensus, W_consensus, S, checks
     return Z_consensus, W_consensus, S
+
+
+class LatentTimeGraphLasso(EmpiricalCovariance):
+    """Sparse inverse covariance estimation with an l1-penalized estimator.
+
+    Read more in the :ref:`User Guide <sparse_inverse_covariance>`.
+
+    Parameters
+    ----------
+    alpha : positive float, default 0.01
+        The regularization parameter: the higher alpha, the more
+        regularization, the sparser the inverse covariance.
+
+    mode : {'cd', 'lars'}, default 'cd'
+        The Lasso solver to use: coordinate descent or LARS. Use LARS for
+        very sparse underlying graphs, where p > n. Elsewhere prefer cd
+        which is more numerically stable.
+
+    tol : positive float, default 1e-4
+        The tolerance to declare convergence: if the dual gap goes below
+        this value, iterations are stopped.
+
+    enet_tol : positive float, optional
+        The tolerance for the elastic net solver used to calculate the descent
+        direction. This parameter controls the accuracy of the search direction
+        for a given column update, not of the overall parameter estimate. Only
+        used for mode='cd'.
+
+    max_iter : integer, default 100
+        The maximum number of iterations.
+
+    verbose : boolean, default False
+        If verbose is True, the objective function and dual gap are
+        plotted at each iteration.
+
+    assume_centered : boolean, default False
+        If True, data are not centered before computation.
+        Useful when working with data whose mean is almost, but not exactly
+        zero.
+        If False, data are centered before computation.
+
+    Attributes
+    ----------
+    covariance_ : array-like, shape (n_features, n_features)
+        Estimated covariance matrix
+
+    precision_ : array-like, shape (n_features, n_features)
+        Estimated pseudo inverse matrix.
+
+    n_iter_ : int
+        Number of iterations run.
+
+    See Also
+    --------
+    graph_lasso, GraphLassoCV
+    """
+
+    def __init__(self, alpha=1., tau=1., beta=1., eta=1., mode='cd', rho=1.,
+                 bypass_transpose=True, tol=1e-4, rtol=1e-4,
+                 psi='laplacian', phi='laplacian', max_iter=100,
+                 verbose=False, assume_centered=False):
+        super(LatentTimeGraphLasso, self).__init__(assume_centered=assume_centered)
+        self.alpha = alpha
+        self.tau = tau
+        self.beta = beta
+        self.eta = eta
+        self.rho = rho
+        self.mode = mode
+        self.tol = tol
+        self.rtol = rtol
+        self.psi = psi
+        self.phi = phi
+        self.max_iter = max_iter
+        self.verbose = verbose
+        # for splitting purposes, data may come transposed, with time in the
+        # last index. Set bypass_transpose=True if X comes with time in the
+        # first dimension already
+        self.bypass_transpose = bypass_transpose
+
+    def fit(self, X, y=None):
+        """Fits the GraphLasso model to X.
+
+        Parameters
+        ----------
+        X : ndarray, shape (n_samples, n_features)
+            Data from which to compute the covariance estimate
+        y : (ignored)
+        """
+        # Covariance does not make sense for a single feature
+        # X = check_array(X, ensure_min_features=2, ensure_min_samples=2,
+        #                 estimator=self)
+        if not self.bypass_transpose:
+            X = X.transpose(2, 0, 1)  # put time as first dimension
+
+        if self.assume_centered:
+            self.location_ = np.zeros((X.shape[0], X.shape[2]))
+        else:
+            self.location_ = X.mean(1)
+        # emp_cov = np.array([empirical_covariance(
+        #     x, assume_centered=self.assume_centered) for x in X])
+
+        self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
+            time_latent_graph_lasso(
+                X, alpha=self.alpha, tau=self.tau, beta=self.beta, rho=self.rho,
+                eta=self.eta, mode=self.mode, tol=self.tol, rtol=self.rtol,
+                max_iter=self.max_iter, verbose=self.verbose,
+                return_n_iter=True, psi=self.psi, phi=self.phi,
+                return_history=False, assume_centered=self.assume_centered)
+        return self

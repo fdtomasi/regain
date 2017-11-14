@@ -98,11 +98,7 @@ def generate2(n_dim_obs=3, n_dim_lat=2, epsilon=1e-3, T=10, degree=2):
         s_new = np.maximum(s_new, 0)
 
         theta = np.linalg.multi_dot((Q, np.diag(s_new), Q.T))
-        d = np.diag(theta).reshape(1, theta.shape[0])
-        d = 1. / np.sqrt(d)
-        theta *= d
-        theta *= d.T
-        # print "theta before\n", theta
+        normalize_matrix(theta)
 
         eigs, Q = np.linalg.eigh(ells[-1])
         addition = ss.rand(eigs.shape[0], 1, density=0.5).A
@@ -111,15 +107,10 @@ def generate2(n_dim_obs=3, n_dim_lat=2, epsilon=1e-3, T=10, degree=2):
         s_new = np.maximum(s_new, 0)
 
         L = np.linalg.multi_dot((Q, np.diag(s_new), Q.T))
-        d = np.diag(L).reshape(1, L.shape[0])
-        d = 1. / np.sqrt(d)
-        L *= d
-        L *= d.T
+        normalize_matrix(L)
 
         theta += np.diag(np.sum(np.abs(L), axis=1))
         theta_observed = theta - L
-
-        # print "theta after\n", theta
 
         assert is_pos_semidef(L)
         assert is_pos_def(theta_observed)
