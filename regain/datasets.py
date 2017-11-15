@@ -13,13 +13,11 @@ def normalize_matrix(x):
     x *= d
     x *= d.T
 
-
 def is_pos_def(x, tol=1e-15):
     """Check if x is positive definite."""
     eigs = np.linalg.eigvalsh(x)
     eigs[np.abs(eigs) < tol] = 0
     return np.all(eigs > 0)
-
 
 def is_pos_semidef(x, tol=1e-15):
     """Check if x is positive semi-definite."""
@@ -28,44 +26,9 @@ def is_pos_semidef(x, tol=1e-15):
     return np.all(eigs >= 0)
 
 
-def generate(n_dim_obs=3, n_dim_lat=2, eps=1e-3, T=10, tol=1e-3):
-    theta = make_sparse_spd_matrix(n_dim_lat + n_dim_obs, alpha=.3, norm_diag=1)
 
-    theta[n_dim_lat:, n_dim_lat:] = make_sparse_spd_matrix(
-        n_dim_obs, alpha=.5, norm_diag=1)
-
-#     theta_tot = theta_tot.dot(theta_tot.T)
-#     assert is_pos_def(theta_tot)
-    assert np.linalg.matrix_rank(theta[:n_dim_lat, :n_dim_lat]) == n_dim_lat
-
-    thetas = [theta]
-    es, Q = np.linalg.eigh(theta[n_dim_lat:, n_dim_lat:])
-
-    for i in range(T):
-        # theta_tot_i = make_sparse_spd_matrix(
-        #     n_dim_lat + n_dim_obs, alpha=.5, norm_diag=1)
-        # theta_tot_i.flat[::n_dim_lat + n_dim_obs + 1] = 1e-16
-        # theta_tot_i /= np.linalg.norm(theta_tot_i, 'fro')
-        # theta_tot_i *= eps
-        es += (np.random.randn(es.shape[0]) + 1) / 2.
-        theta_i = np.linalg.multi_dot((Q, np.diag(es), Q.T))
-
-        theta_c = theta.copy()
-        theta_c[n_dim_lat:, n_dim_lat:] = theta_i
-        # theta += theta_tot_i
-        # theta.flat[::n_dim_lat + n_dim_obs + 1] = 0
-        # theta /= np.amax(np.abs(theta))
-        # # min((np.linalg.norm(theta2, 'fro')/((n_dim_lat + n_dim_obs)**2)), 0.99)
-        # threshold = eps / np.power(n_dim_lat + n_dim_obs, 2)
-        # theta[np.abs(theta) < threshold] = 0
-        # theta[np.abs(theta) < tol] = 0
-        # theta.flat[::n_dim_lat + n_dim_obs + 1] = 1
-        # assert is_pos_def(theta)
-        thetas.append(theta_c)
-    return np.array(thetas)
-
-
-def generate_dataset(n_dim_obs=10, n_dim_lat=2, epsilon=1e-3, T=10, degree=2):
+def generate_dataset_with_evolving_L(n_dim_obs=10, n_dim_lat=2, epsilon=1e-3,
+                                     T=10, degree=2):
 
     K_HO = np.zeros((n_dim_lat, n_dim_obs))
     for i in range(n_dim_lat):
@@ -76,11 +39,13 @@ def generate_dataset(n_dim_obs=10, n_dim_lat=2, epsilon=1e-3, T=10, degree=2):
     assert(is_pos_semidef(L))
 
     theta = np.eye(n_dim_obs)
-    for i in range(n_dim_obs - 1):
-        l = list(np.arange(i + 1, n_dim_obs))
-        indices = np.random.choice(l, degree)
+    for i in range(n_dim_obs):
+        l = list(set(np.arange(0, n_dim_obs)) -
+                set().union(list(np.nonzero(theta[i,:])[0]),
+                            list(np.where(np.count_nonzero(theta, axis=1)>=3)[0])))
+        if len(l)==0: continue
+        indices = np.random.choice(l, degree-(np.count_nonzero(theta[i,:])-1))
         theta[i, indices] = theta[indices, i] = .5 / degree
-    plot_graph_with_latent_variables(theta, 0, theta.shape[0], "Theta init")
     assert(is_pos_def(theta))
     theta_observed = theta - L
     assert(is_pos_def(theta_observed))
@@ -90,17 +55,24 @@ def generate_dataset(n_dim_obs=10, n_dim_lat=2, epsilon=1e-3, T=10, degree=2):
     ells = [L]
     K_HOs = [K_HO]
 
-    for i in range(i,T):
+    for i in range(1,T):
         addition = np.zeros(thetas[-1].shape)
-        for j in range(theta.shape[0]):
-            addition[j, np.random.randint(0, theta.shape[0], size=degree)] = np.random.randn(degree)
+
+        for i in range(theta.shape[0]):
+            addition[i, np.random.randint(0, theta.shape[0], size=degree)] = np.random.randn(degree)
         addition[np.triu_indices(theta.shape[0])[::-1]] = addition[np.triu_indices(theta.shape[0])]
         addition *= (epsilon/np.linalg.norm(addition))
         np.fill_diagonal(addition, 0)
         theta = thetas[-1] + addition
-        theta[np.abs(theta)<4*epsilon/(theta.shape[0])] = 0
-
-        plot_graph_with_latent_variables(theta, 0, theta.shape[0], "Theta" + str(i))
+        theta[np.abs(theta)<2*epsilon/(theta.shape[0])] = 0
+        for j in range(n_dim_obs):
+            indices = list(np.where(theta[j,:]!=0)[0])
+            indices.remove(j)
+            if(len(indices)>degree):
+                choice = np.random.choice(indices, len(indices)-degree)
+                theta[j,choice] = 0
+                theta[choice,j] = 0
+        # plot_graph_with_latent_variables(theta, 0, theta.shape[0], "Theta" + str(i))
         assert(is_pos_def(theta))
 
         K_HO = K_HOs[-1]
@@ -109,8 +81,8 @@ def generate_dataset(n_dim_obs=10, n_dim_lat=2, epsilon=1e-3, T=10, degree=2):
         K_HO += addition
         K_HO = K_HO / np.sum(K_HO, axis=1)[:, None]
         K_HO *=0.12
-        K_HO[np.abs(K_HO)<4*epsilon/(theta.shape[0])] = 0
-
+        K_HO[np.abs(K_HO)<epsilon/(theta.shape[0])] = 0
+        K_HOs.append(K_HO)
         L = K_HO.T.dot(K_HO)
         assert(is_pos_semidef(L))
         assert(is_pos_def(theta-L))
@@ -122,8 +94,7 @@ def generate_dataset(n_dim_obs=10, n_dim_lat=2, epsilon=1e-3, T=10, degree=2):
 
 
 def generate_dataset_with_fixed_L(n_dim_obs=10, n_dim_lat=2, epsilon=1e-3,
-                                  T=10, degree=2):
-
+                          T=10, degree=2):
     K_HO = np.zeros((n_dim_lat, n_dim_obs))
     for i in range(n_dim_lat):
         percentage = int(n_dim_obs * 0.8)
@@ -133,11 +104,13 @@ def generate_dataset_with_fixed_L(n_dim_obs=10, n_dim_lat=2, epsilon=1e-3,
     assert(is_pos_semidef(L))
 
     theta = np.eye(n_dim_obs)
-    for i in range(n_dim_obs - 1):
-        l = list(np.arange(i + 1, n_dim_obs))
-        indices = np.random.choice(l, degree)
+    for i in range(n_dim_obs):
+        l = list(set(np.arange(0, n_dim_obs)) -
+                set().union(list(np.nonzero(theta[i,:])[0]),
+                            list(np.where(np.count_nonzero(theta, axis=1)>=3)[0])))
+        if len(l)==0: continue
+        indices = np.random.choice(l, degree-(np.count_nonzero(theta[i,:])-1))
         theta[i, indices] = theta[indices, i] = .5 / degree
-
     assert(is_pos_def(theta))
     theta_observed = theta - L
     assert(is_pos_def(theta_observed))
@@ -153,9 +126,16 @@ def generate_dataset_with_fixed_L(n_dim_obs=10, n_dim_lat=2, epsilon=1e-3,
         addition *= (epsilon/np.linalg.norm(addition))
         np.fill_diagonal(addition, 0)
         theta = thetas[-1] + addition
-        theta[np.abs(theta)<4*epsilon/(theta.shape[0])] = 0
-        #plot_graph_with_latent_variables(theta, 0, theta.shape[0],
-        #                                 "Theta" + str(i))
+        theta[np.abs(theta)<2*epsilon/(theta.shape[0])] = 0
+        for j in range(n_dim_obs):
+            indices = list(np.where(theta[j,:]!=0)[0])
+            indices.remove(j)
+            if(len(indices)>degree):
+                choice = np.random.choice(indices, len(indices)-degree)
+                theta[j,choice] = 0
+                theta[choice,j] = 0
+
+        #plot_graph_with_latent_variables(theta, 0, theta.shape[0], "Theta"+str(i))
         assert(is_pos_def(theta))
         assert(is_pos_def(theta-L))
         thetas.append(theta)
@@ -163,15 +143,27 @@ def generate_dataset_with_fixed_L(n_dim_obs=10, n_dim_lat=2, epsilon=1e-3,
 
     return thetas, thetas_obs, L
 
-def generate_dataset(n_dim_obs=3, n_dim_lat=2, eps=1e-3, T=10,
-                     n_samples=50):
-    thetas = generate(n_dim_obs, n_dim_lat, eps, T)
-    sigmas = np.array(map(np.linalg.inv, thetas))
+def generate_dataset(n_dim_obs=3, n_dim_lat=2, eps=1e-3, T=10, degree=2,
+                     n_samples=50, type="evolving"):
+    if type=="evolving":
+        thetas, thetas_obs, ells = generate_dataset_with_evolving_L(n_dim_obs,
+                                                                    n_dim_lat,
+                                                                    eps, T,
+                                                                    degree)
+    elif type=="fixed":
+        thetas, thetas_obs, ells = generate_dataset_with_fixed_L(n_dim_obs,
+                                                                    n_dim_lat,
+                                                                    eps, T,
+                                                                    degree)
+    else:
+        return generate_dataset_fede(n_dim_obs, n_dim_lat, eps, T, n_samples)
+
+    sigmas = np.array(map(np.linalg.inv, thetas_obs))
     data_list = []
     for sigma in sigmas:
         data_list.append(np.random.multivariate_normal(
-            np.zeros(n_dim_obs), sigma[n_dim_lat:, n_dim_lat:], n_samples))
-    return data_list, thetas, np.array([t[n_dim_lat:, n_dim_lat:] for t in thetas])
+            np.zeros(n_dim_obs), sigma, n_samples))
+    return data_list, thetas, thetas_obs, ells
 
 
 def generate_dataset_fede(
