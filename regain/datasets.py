@@ -83,9 +83,9 @@ def generate2(n_dim_obs=3, n_dim_lat=2, epsilon=1e-3, T=10, degree=2):
         indices = np.random.choice(l, degree)
         theta[i, indices] = theta[indices, i] = .5 / degree
 
-    theta += np.diag(np.sum(L, axis=1))
+    #theta += np.diag(np.sum(L, axis=1))
     theta_observed = theta - L
-
+    #print(theta_ob)
     thetas = [theta]
     thetas_obs = [theta_observed]
     ells = [L]
@@ -96,9 +96,13 @@ def generate2(n_dim_obs=3, n_dim_lat=2, epsilon=1e-3, T=10, degree=2):
         addition /= np.linalg.norm(addition) * np.sqrt(epsilon)
         s_new = (eigs + addition.T)[0]
         s_new = np.maximum(s_new, 0)
+        #
 
         theta = np.linalg.multi_dot((Q, np.diag(s_new), Q.T))
         normalize_matrix(theta)
+        theta[np.where(np.abs(theta) <1e-2)] = 0
+        print(theta)
+        #
 
         eigs, Q = np.linalg.eigh(ells[-1])
         addition = ss.rand(eigs.shape[0], 1, density=0.5).A
@@ -111,7 +115,7 @@ def generate2(n_dim_obs=3, n_dim_lat=2, epsilon=1e-3, T=10, degree=2):
 
         theta += np.diag(np.sum(np.abs(L), axis=1))
         theta_observed = theta - L
-
+        #theta_observed[np.where(np.abs(theta_observed) <1e-2)] = 0
         assert is_pos_semidef(L)
         assert is_pos_def(theta_observed)
         thetas.append(theta)
@@ -120,6 +124,47 @@ def generate2(n_dim_obs=3, n_dim_lat=2, epsilon=1e-3, T=10, degree=2):
 
     return thetas, thetas_obs, ells
 
+def generate_dataset_with_fixed_L(n_dim_obs=10, n_dim_lat=2, epsilon=1e-3,
+                                  T=10, degree=2):
+
+    K_HO = np.zeros((n_dim_lat, n_dim_obs))
+    for i in range(n_dim_lat):
+        percentage = int(n_dim_obs * 0.8)
+        indices = np.random.randint(0, high=n_dim_obs, size=percentage)
+        K_HO[i, indices] = np.random.rand(percentage)*0.12
+    L = K_HO.T.dot(K_HO)
+    assert(is_pos_semidef(L))
+
+    theta = np.eye(n_dim_obs)
+    for i in range(n_dim_obs - 1):
+        l = list(np.arange(i + 1, n_dim_obs))
+        indices = np.random.choice(l, degree)
+        theta[i, indices] = theta[indices, i] = .5 / degree
+
+    assert(is_pos_def(theta))
+    theta_observed = theta - L
+    assert(is_pos_def(theta_observed))
+
+    thetas = [theta]
+    thetas_obs = [theta_observed]
+
+    for i in range(1,T):
+        addition = np.zeros(thetas[-1].shape)
+        for i in range(theta.shape[0]):
+            addition[i, np.random.randint(0, theta.shape[0], size=degree)] = np.random.randn(degree)
+        addition[np.triu_indices(theta.shape[0])[::-1]] = addition[np.triu_indices(theta.shape[0])]
+        addition *= (epsilon/np.linalg.norm(addition))
+        np.fill_diagonal(addition, 0)
+        theta = thetas[-1] + addition
+        theta[np.abs(theta)<2*epsilon/(theta.shape[0])] = 0
+        #plot_graph_with_latent_variables(theta, 0, theta.shape[0],
+        #                                 "Theta" + str(i))
+        assert(is_pos_def(theta))
+        assert(is_pos_def(theta-L))
+        thetas.append(theta)
+        thetas_obs.append(theta-L)
+
+    return thetas, thetas_obs, L
 
 def generate_dataset(n_dim_obs=3, n_dim_lat=2, eps=1e-3, T=10,
                      n_samples=50):
