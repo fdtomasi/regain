@@ -5,6 +5,8 @@ import scipy.sparse as ss
 
 from sklearn.datasets import make_sparse_spd_matrix
 
+from regain.plot import plot_graph_with_latent_variables
+
 
 def normalize_matrix(x):
     """Normalize a matrix so to have 1 on the diagonal, in-place."""
@@ -34,9 +36,10 @@ def generate_dataset_with_evolving_L(n_dim_obs=10, n_dim_lat=2, epsilon=1e-3,
     for i in range(n_dim_lat):
         percentage = int(n_dim_obs * 0.8)
         indices = np.random.randint(0, high=n_dim_obs, size=percentage)
-        K_HO[i, indices] = np.random.rand(percentage)*0.12
+        K_HO[i, indices] = np.random.rand(percentage) * 0.12
     L = K_HO.T.dot(K_HO)
     assert(is_pos_semidef(L))
+    assert np.linalg.matrix_rank(L) == n_dim_lat
 
     theta = np.eye(n_dim_obs)
     for i in range(n_dim_obs):
@@ -63,6 +66,7 @@ def generate_dataset_with_evolving_L(n_dim_obs=10, n_dim_lat=2, epsilon=1e-3,
         addition[np.triu_indices(theta.shape[0])[::-1]] = addition[np.triu_indices(theta.shape[0])]
         addition *= (epsilon/np.linalg.norm(addition))
         np.fill_diagonal(addition, 0)
+        addition *= epsilon / np.linalg.norm(addition)
         theta = thetas[-1] + addition
         theta[np.abs(theta)<2*epsilon/(theta.shape[0])] = 0
         for j in range(n_dim_obs):
@@ -77,18 +81,20 @@ def generate_dataset_with_evolving_L(n_dim_obs=10, n_dim_lat=2, epsilon=1e-3,
 
         K_HO = K_HOs[-1]
         addition = np.random.rand(*K_HO.shape)
-        addition *= (epsilon/np.linalg.norm(addition))
+        addition *= (epsilon / np.linalg.norm(addition))
         K_HO += addition
         K_HO = K_HO / np.sum(K_HO, axis=1)[:, None]
         K_HO *=0.12
         K_HO[np.abs(K_HO)<epsilon/(theta.shape[0])] = 0
         K_HOs.append(K_HO)
         L = K_HO.T.dot(K_HO)
+        assert np.linalg.matrix_rank(L) == n_dim_lat
         assert(is_pos_semidef(L))
-        assert(is_pos_def(theta-L))
+        assert(is_pos_def(theta - L))
         thetas.append(theta)
-        thetas_obs.append(theta-L)
+        thetas_obs.append(theta - L)
         ells.append(L)
+        K_HOs.append(K_HO)
 
     return thetas, thetas_obs, ells
 
@@ -102,6 +108,7 @@ def generate_dataset_with_fixed_L(n_dim_obs=10, n_dim_lat=2, epsilon=1e-3,
         K_HO[i, indices] = np.random.rand(percentage)*0.12
     L = K_HO.T.dot(K_HO)
     assert(is_pos_semidef(L))
+    assert np.linalg.matrix_rank(L) == n_dim_lat
 
     theta = np.eye(n_dim_obs)
     for i in range(n_dim_obs):
@@ -120,9 +127,9 @@ def generate_dataset_with_fixed_L(n_dim_obs=10, n_dim_lat=2, epsilon=1e-3,
 
     for i in range(1,T):
         addition = np.zeros(thetas[-1].shape)
-        for i in range(theta.shape[0]):
-            addition[i, np.random.randint(0, theta.shape[0], size=degree)] = np.random.randn(degree)
-        addition[np.triu_indices(theta.shape[0])[::-1]] = addition[np.triu_indices(theta.shape[0])]
+        for i in range(n_dim_obs):
+            addition[i, np.random.randint(0, n_dim_obs, size=degree)] = np.random.randn(degree)
+        addition[np.triu_indices(n_dim_obs)[::-1]] = addition[np.triu_indices(n_dim_obs)]
         addition *= (epsilon/np.linalg.norm(addition))
         np.fill_diagonal(addition, 0)
         theta = thetas[-1] + addition
