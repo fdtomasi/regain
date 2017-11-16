@@ -10,6 +10,7 @@ from regain.admm.lasso_ import lu_factor
 from regain.prox import soft_thresholding
 from regain.utils import flatten
 
+
 def group_lasso(A, b, lamda=1.0, groups=None, rho=1.0, alpha=1.0, max_iter=1000,
                 tol=1e-4, rtol=1e-2, return_history=False):
     r"""Solves the following problem via ADMM:
