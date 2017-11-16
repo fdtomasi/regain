@@ -22,7 +22,7 @@ from regain.utils import convergence
 def objective(n_samples, S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
               alpha, tau, beta, eta, psi, phi):
     """Objective function for time-varying graphical lasso."""
-    obj = np.sum(-n * log_likelihood(s, r) for s, r, n in zip(S, R, n_samples))
+    obj = np.sum(- log_likelihood(s, r) for s, r, n in zip(S, R, n_samples))
     obj += alpha * np.sum(map(l1_od_norm, Z_0))
     obj += tau * np.sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
     obj += beta * np.sum(map(psi, Z_2 - Z_1))
@@ -31,7 +31,7 @@ def objective(n_samples, S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
 
 
 def time_latent_graph_lasso(
-        data_list, alpha=1., tau=1., rho=1., beta=1., eta=1., max_iter=1000,
+        emp_cov, alpha=1., tau=1., rho=1., beta=1., eta=1., max_iter=1000,
         verbose=False, psi='laplacian', phi='laplacian', assume_centered=False,
         tol=1e-4, rtol=1e-2, return_history=False, return_n_iter=True,
         mode=None):
@@ -101,10 +101,10 @@ def time_latent_graph_lasso(
     else:
         raise ValueError("Value of `phi` not understood.")
 
-    emp_cov = np.array([empirical_covariance(
-        x, assume_centered=assume_centered) for x in data_list])
+    # emp_cov = np.array([empirical_covariance(
+    #     x, assume_centered=assume_centered) for x in data_list])
 
-    n_samples = np.array([s.shape[0] for s in data_list])
+    n_samples = np.array([s for s in [1.]])
 
     K = np.zeros_like(emp_cov)
     L = np.zeros_like(emp_cov)
@@ -160,25 +160,26 @@ def time_latent_graph_lasso(
         # update Z_0
         # Zold = Z
         # X_hat = alpha * X + (1 - alpha) * Zold
-        soft_thresholding = partial(soft_thresholding_od, lamda=alpha / rho)
+        soft_thresholding = partial(soft_thresholding_sign, lamda=alpha / rho)
         Z_0 = np.array(map(soft_thresholding, K + U_0))
 
         # update Z_1, Z_2
-        # prox_l = partial(prox_laplacian, beta=2. * beta / rho)
-        prox_e = prox_psi((K[1:] - K[:-1] + U_2 - U_1),
-                          lamda=2. * beta / rho)
-        Z_1 = .5 * (K[:-1] + K[1:] + U_1 + U_2 - prox_e)
-        Z_2 = .5 * (K[:-1] + K[1:] + U_1 + U_2 + prox_e)
+        A_1 = K[:-1] + U_1
+        A_2 = K[1:] + U_2
+        prox_e = prox_psi(A_2 - A_1, lamda=2. * beta / rho)
+        Z_1 = .5 * (A_1 + A_2 - prox_e)
+        Z_2 = .5 * (A_1 + A_2 + prox_e)
 
         # update W_0
         A = L + Y_0
         W_0 = np.array(map(partial(prox_trace_indicator, lamda=tau / rho), A))
 
         # update W_1, W_2
-        prox_e = prox_phi((L[1:] - L[:-1] + Y_2 - Y_1),
-                          lamda=2. * eta / rho)
-        W_1 = .5 * (L[:-1] + L[1:] + Y_1 + Y_2 - prox_e)
-        W_2 = .5 * (L[:-1] + L[1:] + Y_1 + Y_2 + prox_e)
+        A_1 = L[:-1] + Y_1
+        A_2 = L[1:] + Y_2
+        prox_e = prox_phi(A_2 - A_1, lamda=2. * eta / rho)
+        W_1 = .5 * (A_1 + A_2 - prox_e)
+        W_2 = .5 * (A_1 + A_2 + prox_e)
 
         # update residuals
         X += R - K + L
@@ -252,9 +253,9 @@ def time_latent_graph_lasso(
 
 
 def time_latent_graph_lasso_alternative(
-        data_list, alpha=1, tau=1, rho=1, beta=1., eta=1., max_iter=1000,
+        emp_cov, alpha=1, tau=1, rho=1, beta=1., eta=1., max_iter=1000,
         verbose=False, psi='laplacian', phi='laplacian',
-        tol=1e-4, rtol=1e-2, return_history=False):
+        tol=1e-4, rtol=1e-2, return_history=False, return_n_iter=True):
     r"""Time-varying latent variable graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -321,77 +322,80 @@ def time_latent_graph_lasso_alternative(
     else:
         raise ValueError("Value of `phi` not understood.")
 
-    S = np.array(map(empirical_covariance, data_list))
-    n_samples = np.array([s.shape[0] for s in data_list])
+    # S = np.array(map(empirical_covariance, data_list))
+    n_samples = np.array([s for s in [1.]])
 
-    K = np.zeros_like(S)
-    # L = np.zeros_like(S)
-    # X = np.zeros_like(S)
+    K = np.zeros_like(emp_cov)
+    # L = np.zeros_like(emp_cov)
+    # X = np.zeros_like(emp_cov)
     Z_0 = np.zeros_like(K)
     Z_1 = np.zeros_like(K)[:-1]
     Z_2 = np.zeros_like(K)[1:]
     W_0 = np.zeros_like(K)
     W_1 = np.zeros_like(K)[:-1]
     W_2 = np.zeros_like(K)[1:]
-    # U_0 = np.zeros_like(S)
-    # U_1 = np.zeros_like(S)[:-1]
-    # U_2 = np.zeros_like(S)[1:]
-    X_0 = np.zeros_like(S)
-    X_1 = np.zeros_like(S)[:-1]
-    X_2 = np.zeros_like(S)[1:]
+    # U_0 = np.zeros_like(emp_cov)
+    # U_1 = np.zeros_like(emp_cov)[:-1]
+    # U_2 = np.zeros_like(emp_cov)[1:]
+    X_0 = np.zeros_like(emp_cov)
+    X_1 = np.zeros_like(emp_cov)[:-1]
+    X_2 = np.zeros_like(emp_cov)[1:]
 
-    # U_consensus = np.zeros_like(S)
-    # Y_consensus = np.zeros_like(S)
-    Z_consensus = np.zeros_like(S)
-    Z_consensus_old = np.zeros_like(S)
-    W_consensus = np.zeros_like(S)
-    W_consensus_old = np.zeros_like(S)
+    # U_consensus = np.zeros_like(emp_cov)
+    # Y_consensus = np.zeros_like(emp_cov)
+    Z_consensus = np.zeros_like(emp_cov)
+    Z_consensus_old = np.zeros_like(emp_cov)
+    W_consensus = np.zeros_like(emp_cov)
+    W_consensus_old = np.zeros_like(emp_cov)
 
     # divisor for consensus variables, accounting for two less matrices
-    divisor = np.zeros(S.shape[0]) + 3
+    divisor = np.zeros(emp_cov.shape[0]) + 3
     divisor[0] -= 1
     divisor[-1] -= 1
     # eta = np.divide(n_samples, divisor * rho)
 
     checks = []
-    for _ in range(max_iter):
+    for iteration_ in range(max_iter):
         # update R
         # A = Z_consensus - U_consensus
         A = Z_0 - W_0 - X_0
         A[:-1] += Z_1 - W_1 - X_1
         A[1:] += Z_2 - W_2 - X_2
+        A /= divisor[:, None, None]
 
-        A += np.array(map(np.transpose, A))
-        A /= 2.
+        # A += np.array(map(np.transpose, A))
+        # A /= 2.
 
         A *= - rho / n_samples[:, None, None]
-        A += S
+        A += emp_cov
 
-        R = np.array(map(prox_logdet, A, n_samples / (rho * divisor)))
+        R = np.array(map(prox_logdet, A, n_samples / (rho)))
 
         # update Z_0
         # Zold = Z
         # X_hat = alpha * X + (1 - alpha) * Zold
-        soft_thresholding = partial(soft_thresholding_od, lamda=alpha / rho)
+        soft_thresholding = partial(soft_thresholding_sign, lamda=alpha / rho)
         Z_0 = np.array(map(soft_thresholding, R + W_0 + X_0))
 
         # update Z_1, Z_2
         # prox_l = partial(prox_laplacian, beta=2. * beta / rho)
         # prox_e = np.array(map(prox_l, K[1:] - K[:-1] + U_2 - U_1))
-        prox_e = prox_psi(-(R[1:] - R[:-1] + W_2 - W_1 + X_2 - X_1),
-                          lamda=2. * beta / rho)
-        Z_1 = .5 * (R[:-1] + R[1:] + W_1 + W_2 + X_1 + X_2 - prox_e)
-        Z_2 = .5 * (R[:-1] + R[1:] + W_1 + W_2 + X_1 + X_2 + prox_e)
+        A_1 = R[:-1] + W_1 + X_1
+        A_2 = R[1:] + W_2 + X_2
+        prox_e = prox_psi((A_2 - A_1), lamda=2. * beta / rho)
+        Z_1 = .5 * (A_1 + A_2 - prox_e)
+        Z_2 = .5 * (A_1 + A_2 + prox_e)
 
         # update W_0
         A = Z_0 - R - X_0
         W_0 = np.array(map(partial(prox_trace_indicator, lamda=tau / rho), A))
 
         # update W_1, W_2
-        prox_e = prox_phi(-(R[1:] - R[:-1] - Z_2 + Z_1 + X_2 - X_1),
-                          lamda=2. * eta / rho)
-        W_1 = .5 * (R[:-1] + R[1:] - Z_1 + Z_2 + X_1 + X_2 - prox_e)
-        W_2 = .5 * (R[:-1] + R[1:] - Z_1 + Z_2 + X_1 + X_2 + prox_e)
+        A_1 = Z_1 - R[:-1] - X_1
+        A_2 = Z_2 - R[1:] - X_2
+        prox_e = prox_phi((A_2 - A_1), lamda=2. * eta / rho)
+        W_1 = .5 * (A_1 + A_2 - prox_e)
+        W_2 = .5 * (A_1 + A_2 + prox_e)
 
         # update residuals
         X_0 += R - Z_0 + W_0
@@ -415,7 +419,7 @@ def time_latent_graph_lasso_alternative(
         W_consensus /= divisor[:, None, None]
 
         check = convergence(
-            obj=objective(n_samples, S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
+            obj=objective(n_samples, emp_cov, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
                           alpha, tau, beta, eta, psi, phi),
             rnorm=np.sqrt(squared_norm(R - Z_consensus + W_consensus)),
             snorm=np.sqrt(squared_norm(rho * (Z_consensus - Z_consensus_old)) +
@@ -439,9 +443,12 @@ def time_latent_graph_lasso_alternative(
     else:
         warnings.warn("Objective did not converge.")
 
+    return_list = [Z_consensus, W_consensus, emp_cov]
     if return_history:
-        return Z_consensus, W_consensus, S, checks
-    return Z_consensus, W_consensus, S
+        return_list.append(checks)
+    if return_n_iter:
+        return_list.append(iteration_)
+    return return_list
 
 
 class LatentTimeGraphLasso(EmpiricalCovariance):
