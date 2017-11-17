@@ -80,3 +80,10 @@ def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
         result = np.sqrt(squared_norm)
 
     return result
+
+
+def error_norm_time(cov, comp_cov, norm='frobenius', scaling=True,
+                    squared=True):
+    return np.mean([error_norm(
+        x, y, norm=norm, scaling=scaling, squared=squared) for x, y in zip(
+            cov, comp_cov)])
