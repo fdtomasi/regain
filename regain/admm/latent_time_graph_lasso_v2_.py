@@ -211,10 +211,10 @@ def time_latent_graph_lasso(
             snorm=np.sqrt(squared_norm(rho * (Z_consensus - Z_consensus_old)) +
                           squared_norm(rho * (W_consensus - W_consensus_old)) +
                           squared_norm(rho * (R - R_old))),
-            e_pri=np.sqrt(np.prod(K.shape) * 2) * tol + rtol * max(
+            e_pri=np.sqrt(np.prod(K.shape) * 3) * tol + rtol * max(
                 np.sqrt(squared_norm(K) + squared_norm(L) + squared_norm(K - L)),
                 np.sqrt(squared_norm(Z_consensus) + squared_norm(W_consensus) + squared_norm(R))),
-            e_dual=np.sqrt(np.prod(K.shape) * 2) * tol +
+            e_dual=np.sqrt(np.prod(K.shape) * 3) * tol +
                 rtol * np.sqrt(squared_norm(rho * (U_consensus)) +
                                squared_norm(rho * (Y_consensus)) +
                                squared_norm(rho * (X)))

@@ -17,13 +17,13 @@ from regain.prox import soft_thresholding_od, soft_thresholding_sign
 from regain.prox import blockwise_soft_thresholding, prox_linf
 from regain.prox import prox_logdet, prox_laplacian
 from regain.prox import prox_trace_indicator
-from regain.utils import convergence
+from regain.utils import convergence, error_norm_time
 
 
-def objective(n_samples, S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
+def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
               alpha, tau, beta, eta, psi, phi):
     """Objective function for time-varying graphical lasso."""
-    obj = np.sum(- log_likelihood(s, r) for s, r, n in zip(S, R, n_samples))
+    obj = np.sum(- log_likelihood(s, r) for s, r in zip(S, R))
     obj += alpha * np.sum(map(l1_od_norm, Z_0))
     obj += tau * np.sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
     obj += beta * np.sum(map(psi, Z_2 - Z_1))
@@ -31,7 +31,7 @@ def objective(n_samples, S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
     return obj
 
 
-def time_latent_graph_lasso(
+def latent_time_graph_lasso(
         emp_cov, alpha=1, tau=1, rho=1, beta=1., eta=1., max_iter=1000,
         verbose=False, psi='laplacian', phi='laplacian', assume_centered=False,
         tol=1e-4, rtol=1e-2, return_history=False, return_n_iter=True,
@@ -103,7 +103,7 @@ def time_latent_graph_lasso(
         raise ValueError("Value of `phi` not understood.")
 
     # S = np.array(map(empirical_covariance, data_list))
-    n_samples = np.array([s for s in [1.]])
+    # n_samples = np.array([s for s in [1.]])
 
     K = np.zeros_like(emp_cov)
     Z_0 = np.zeros_like(K)
@@ -117,9 +117,10 @@ def time_latent_graph_lasso(
     X_2 = np.zeros_like(emp_cov)[1:]
 
     Z_consensus = np.zeros_like(emp_cov)
-    Z_consensus_old = np.zeros_like(emp_cov)
+    # Z_consensus_old = np.zeros_like(emp_cov)
     W_consensus = np.zeros_like(emp_cov)
-    W_consensus_old = np.zeros_like(emp_cov)
+    # W_consensus_old = np.zeros_like(emp_cov)
+    R_old = np.zeros_like(emp_cov)
 
     # divisor for consensus variables, accounting for two less matrices
     divisor = np.zeros(emp_cov.shape[0]) + 3
@@ -137,10 +138,11 @@ def time_latent_graph_lasso(
         # A += np.array(map(np.transpose, A))
         # A /= 2.
 
-        A *= - rho / n_samples[:, None, None]
+        # A *= - rho / n_samples[:, None, None]
+        A *= - rho
         A += emp_cov
 
-        R = np.array(map(prox_logdet, A, n_samples / rho))
+        R = np.array([prox_logdet(a, lamda=1. / rho) for a in A])
 
         # update Z_0
         # Zold = Z
@@ -151,22 +153,34 @@ def time_latent_graph_lasso(
         # update Z_1, Z_2
         # prox_l = partial(prox_laplacian, beta=2. * beta / rho)
         # prox_e = np.array(map(prox_l, K[1:] - K[:-1] + U_2 - U_1))
-        A_1 = R[:-1] + W_1 + X_1
-        A_2 = R[1:] + W_2 + X_2
-        prox_e = prox_psi(A_2 - A_1, lamda=2. * beta / rho)
-        Z_1 = .5 * (A_1 + A_2 - prox_e)
-        Z_2 = .5 * (A_1 + A_2 + prox_e)
+        if beta != 0:
+            A_1 = R[:-1] + W_1 + X_1
+            A_2 = R[1:] + W_2 + X_2
+            prox_e = prox_psi(A_2 - A_1, lamda=2. * beta / rho)
+            Z_1 = .5 * (A_1 + A_2 - prox_e)
+            Z_2 = .5 * (A_1 + A_2 + prox_e)
+        else:
+            Z_1 = Z_0[:-1].copy()
+            Z_2 = Z_0[1:].copy()
+
+        print "Z_0", Z_0
+        print "Z_1", Z_1
+        print "Z_2", Z_2
 
         # update W_0
         A = Z_0 - R - X_0
         W_0 = np.array(map(partial(prox_trace_indicator, lamda=tau / rho), A))
 
         # update W_1, W_2
-        A_1 = Z_1 - R[:-1] - X_1
-        A_2 = Z_2 - R[1:] - X_2
-        prox_e = prox_phi(A_2 - A_1, lamda=2. * eta / rho)
-        W_1 = .5 * (A_1 + A_2 - prox_e)
-        W_2 = .5 * (A_1 + A_2 + prox_e)
+        if eta != 0:
+            A_1 = Z_1 - R[:-1] - X_1
+            A_2 = Z_2 - R[1:] - X_2
+            prox_e = prox_phi(A_2 - A_1, lamda=2. * eta / rho)
+            W_1 = .5 * (A_1 + A_2 - prox_e)
+            W_2 = .5 * (A_1 + A_2 + prox_e)
+        else:
+            W_1 = W_0[:-1].copy()
+            W_2 = W_0[1:].copy()
 
         # update residuals
         X_0 += R - Z_0 + W_0
@@ -190,19 +204,23 @@ def time_latent_graph_lasso(
         W_consensus /= divisor[:, None, None]
 
         check = convergence(
-            obj=objective(n_samples, emp_cov, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
+            obj=objective(emp_cov, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
                           alpha, tau, beta, eta, psi, phi),
-            rnorm=np.sqrt(squared_norm(R - Z_consensus + W_consensus)),
-            snorm=np.sqrt(squared_norm(rho * (Z_consensus - Z_consensus_old)) +
-                          squared_norm(rho * (W_consensus - W_consensus_old))),
-            e_pri=np.sqrt(np.prod(K.shape) * 2) * tol + rtol * max(
+            rnorm=np.linalg.norm(R - Z_consensus + W_consensus),
+            # snorm=np.sqrt(squared_norm(rho * (Z_consensus - Z_consensus_old)) +
+            #               squared_norm(rho * (W_consensus - W_consensus_old))),
+            snorm=np.linalg.norm(rho * (R - R_old)),
+            e_pri=np.sqrt(np.prod(K.shape)) * tol + rtol * max(
                 np.linalg.norm(R),
                 np.sqrt(squared_norm(Z_consensus) - squared_norm(W_consensus))),
-            e_dual=np.sqrt(np.prod(K.shape) * 2) * tol + rtol * np.linalg.norm(
+            # e_dual=np.sqrt(np.prod(K.shape) * 2) * tol + rtol * np.linalg.norm(
+            #     rho * X_consensus)
+            e_dual=np.sqrt(np.prod(K.shape)) * tol + rtol * np.linalg.norm(
                 rho * X_consensus)
         )
-        Z_consensus_old = Z_consensus.copy()
-        W_consensus_old = W_consensus.copy()
+        # Z_consensus_old = Z_consensus.copy()
+        # W_consensus_old = W_consensus.copy()
+        R_old = R.copy()
 
         if verbose:
             print("obj: %.4f, rnorm: %.4f, snorm: %.4f,"
@@ -315,17 +333,21 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
             X = X.transpose(2, 0, 1)  # put time as first dimension
 
         # Covariance does not make sense for a single feature
+        # X = check_array(X, allow_nd=True, estimator=self)
+        # if X.ndim != 3:
+        #     raise ValueError("Found array with dim %d. %s expected <= 2."
+        #                      % (X.ndim, self.__class__.__name__))
         X = np.array([check_array(x, ensure_min_features=2,
                       ensure_min_samples=2, estimator=self) for x in X])
 
         if self.assume_centered:
-            self.location_ = np.zeros((X.shape[0], X.shape[2]))
+            self.location_ = np.zeros((X.shape[0], 1, X.shape[2]))
         else:
-            self.location_ = X.mean(1)
+            self.location_ = X.mean(1).reshape(X.shape[0], 1, X.shape[2])
         emp_cov = np.array([empirical_covariance(
             x, assume_centered=self.assume_centered) for x in X])
         self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
-            time_latent_graph_lasso(
+            latent_time_graph_lasso(
                 emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
                 beta=self.beta, eta=self.eta, mode=self.mode,
                 tol=self.tol, rtol=self.rtol, psi=self.psi, phi=self.phi,
@@ -333,3 +355,100 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
                 return_n_iter=True, return_history=False,
                 assume_centered=self.assume_centered)
         return self
+
+    def score(self, X_test, y=None):
+        """Computes the log-likelihood of a Gaussian data set with
+        `self.covariance_` as an estimator of its covariance matrix.
+
+        Parameters
+        ----------
+        X_test : array-like, shape = [n_samples, n_features]
+            Test data of which we compute the likelihood, where n_samples is
+            the number of samples and n_features is the number of features.
+            X_test is assumed to be drawn from the same distribution than
+            the data used in fit (including centering).
+
+        y : not used, present for API consistence purpose.
+
+        Returns
+        -------
+        res : float
+            The likelihood of the data set with `self.covariance_` as an
+            estimator of its covariance matrix.
+
+        """
+        if not self.bypass_transpose:
+            X_test = X_test.transpose(2, 0, 1)  # put time as first dimension
+        # compute empirical covariance of the test set
+        test_cov = np.array([empirical_covariance(
+            x, assume_centered=True) for x in X_test - self.location_])
+
+        # compute log likelihood
+        res = np.mean([log_likelihood(S, K) for S, K in zip(
+            test_cov, self.get_precision())])
+
+        return res
+
+    def error_norm(self, comp_cov, norm='frobenius', scaling=True,
+                   squared=True):
+        """Compute the Mean Squared Error between two covariance estimators.
+        (In the sense of the Frobenius norm).
+
+        Parameters
+        ----------
+        comp_cov : array-like, shape = [n_features, n_features]
+            The covariance to compare with.
+
+        norm : str
+            The type of norm used to compute the error. Available error types:
+            - 'frobenius' (default): sqrt(tr(A^t.A))
+            - 'spectral': sqrt(max(eigenvalues(A^t.A))
+            where A is the error ``(comp_cov - self.covariance_)``.
+
+        scaling : bool
+            If True (default), the squared error norm is divided by n_features.
+            If False, the squared error norm is not rescaled.
+
+        squared : bool
+            Whether to compute the squared error norm or the error norm.
+            If True (default), the squared error norm is returned.
+            If False, the error norm is returned.
+
+        Returns
+        -------
+        The Mean Squared Error (in the sense of the Frobenius norm) between
+        `self` and `comp_cov` covariance estimators.
+
+        """
+        return error_norm_time(self.covariance_, comp_cov, norm=norm,
+                               scaling=scaling, squared=squared)
+
+    def mahalanobis(self, observations):
+        """Computes the squared Mahalanobis distances of given observations.
+
+        Parameters
+        ----------
+        observations : array-like, shape = [n_observations, n_features]
+            The observations, the Mahalanobis distances of the which we
+            compute. Observations are assumed to be drawn from the same
+            distribution than the data used in fit.
+
+        Returns
+        -------
+        mahalanobis_distance : array, shape = [n_observations,]
+            Squared Mahalanobis distances of the observations.
+
+        """
+        if not self.bypass_transpose:
+            # put time as first dimension
+            observations = observations.transpose(2, 0, 1)
+        precision = self.get_precision()
+        # compute mahalanobis distances
+        sum_ = 0.
+        for obs, loc in zip(observations, self.location_):
+            centered_obs = observations - self.location_
+            sum_ += np.sum(
+                np.dot(centered_obs, precision) * centered_obs, 1)
+
+        mahalanobis_dist = sum_ / len(observations)
+        return mahalanobis_dist
