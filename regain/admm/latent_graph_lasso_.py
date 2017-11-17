@@ -1,4 +1,4 @@
-"""Graphical latent variable models selection over time via ADMM."""
+"""Graphical latent variable model selection via ADMM."""
 from __future__ import division
 
 import numpy as np
@@ -9,10 +9,9 @@ from sklearn.covariance import EmpiricalCovariance
 from sklearn.utils.extmath import squared_norm
 
 from regain.admm.time_graph_lasso_ import log_likelihood
-from regain.norm import l1_od_norm, l1_norm
-from regain.prox import soft_thresholding_od, soft_thresholding_sign
-from regain.prox import blockwise_soft_thresholding, prox_linf
-from regain.prox import prox_logdet, prox_laplacian
+from regain.norm import l1_od_norm
+from regain.prox import soft_thresholding_sign
+from regain.prox import prox_logdet
 from regain.prox import prox_trace_indicator
 from regain.utils import convergence
 

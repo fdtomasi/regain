@@ -17,6 +17,7 @@ from regain.prox import blockwise_soft_thresholding, prox_linf
 from regain.prox import prox_logdet, prox_laplacian
 from regain.prox import prox_trace_indicator
 from regain.utils import convergence
+from regain.validation import check_norm_prox
 
 
 def time_latent_graph_lasso(
@@ -61,34 +62,8 @@ def time_latent_graph_lasso(
         objective value, the primal and dual residual norms, and tolerances
         for the primal and dual residual norms at each iteration.
     """
-    if psi == 'laplacian':
-        prox_psi = prox_laplacian
-        psi = squared_norm
-    elif psi == 'l1':
-        prox_psi = soft_thresholding_sign
-        psi = l1_norm
-    elif psi == 'l2':
-        prox_psi = blockwise_soft_thresholding
-        psi = np.linalg.norm
-    elif psi == 'linf':
-        prox_psi = prox_linf
-        psi = partial(np.linalg.norm, ord=np.inf)
-    else:
-        raise ValueError("Value of `psi` not understood.")
-    if phi == 'laplacian':
-        prox_phi = prox_laplacian
-        phi = squared_norm
-    elif phi == 'l1':
-        prox_phi = soft_thresholding_sign
-        phi = l1_norm
-    elif phi == 'l2':
-        prox_phi = blockwise_soft_thresholding
-        phi = np.linalg.norm
-    elif phi == 'linf':
-        prox_phi = prox_linf
-        phi = partial(np.linalg.norm, ord=np.inf)
-    else:
-        raise ValueError("Value of `phi` not understood.")
+    psi, prox_psi = check_norm_prox(psi)
+    phi, prox_phi = check_norm_prox(phi)
 
     # emp_cov = np.array([empirical_covariance(
     #     x, assume_centered=assume_centered) for x in data_list])
@@ -98,12 +73,12 @@ def time_latent_graph_lasso(
     K = np.zeros_like(emp_cov)
     L = np.zeros_like(emp_cov)
     X = np.zeros_like(emp_cov)
-    Z_0 = np.zeros_like(K)
-    Z_1 = np.zeros_like(K)[:-1]
-    Z_2 = np.zeros_like(K)[1:]
-    W_0 = np.zeros_like(K)
-    W_1 = np.zeros_like(K)[:-1]
-    W_2 = np.zeros_like(K)[1:]
+    Z_0 = np.zeros_like(emp_cov)
+    Z_1 = np.zeros_like(emp_cov)[:-1]
+    Z_2 = np.zeros_like(emp_cov)[1:]
+    W_0 = np.zeros_like(emp_cov)
+    W_1 = np.zeros_like(emp_cov)[:-1]
+    W_2 = np.zeros_like(emp_cov)[1:]
     U_0 = np.zeros_like(emp_cov)
     U_1 = np.zeros_like(emp_cov)[:-1]
     U_2 = np.zeros_like(emp_cov)[1:]

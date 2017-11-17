@@ -12,12 +12,12 @@ from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_array
 
 from regain.admm.time_graph_lasso_ import log_likelihood
-from regain.norm import l1_od_norm, l1_norm
-from regain.prox import soft_thresholding_od, soft_thresholding_sign
-from regain.prox import blockwise_soft_thresholding, prox_linf
-from regain.prox import prox_logdet, prox_laplacian
+from regain.norm import l1_od_norm
+from regain.prox import soft_thresholding_sign
+from regain.prox import prox_logdet
 from regain.prox import prox_trace_indicator
 from regain.utils import convergence, error_norm_time
+from regain.validation import check_norm_prox
 
 
 def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
@@ -33,9 +33,8 @@ def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
 
 def latent_time_graph_lasso(
         emp_cov, alpha=1, tau=1, rho=1, beta=1., eta=1., max_iter=1000,
-        verbose=False, psi='laplacian', phi='laplacian', assume_centered=False,
-        tol=1e-4, rtol=1e-2, return_history=False, return_n_iter=True,
-        mode=None):
+        verbose=False, psi='laplacian', phi='laplacian', mode=None,
+        tol=1e-4, rtol=1e-2, return_history=False, return_n_iter=True):
     r"""Time-varying latent variable graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -73,34 +72,8 @@ def latent_time_graph_lasso(
         objective value, the primal and dual residual norms, and tolerances
         for the primal and dual residual norms at each iteration.
     """
-    if psi == 'laplacian':
-        prox_psi = prox_laplacian
-        psi = squared_norm
-    elif psi == 'l1':
-        prox_psi = soft_thresholding_sign
-        psi = l1_norm
-    elif psi == 'l2':
-        prox_psi = blockwise_soft_thresholding
-        psi = np.linalg.norm
-    elif psi == 'linf':
-        prox_psi = prox_linf
-        psi = partial(np.linalg.norm, ord=np.inf)
-    else:
-        raise ValueError("Value of `psi` not understood.")
-    if phi == 'laplacian':
-        prox_phi = prox_laplacian
-        phi = squared_norm
-    elif phi == 'l1':
-        prox_phi = soft_thresholding_sign
-        phi = l1_norm
-    elif phi == 'l2':
-        prox_phi = blockwise_soft_thresholding
-        phi = np.linalg.norm
-    elif phi == 'linf':
-        prox_phi = prox_linf
-        phi = partial(np.linalg.norm, ord=np.inf)
-    else:
-        raise ValueError("Value of `phi` not understood.")
+    psi, prox_psi = check_norm_prox(psi)
+    phi, prox_phi = check_norm_prox(phi)
 
     # S = np.array(map(empirical_covariance, data_list))
     # n_samples = np.array([s for s in [1.]])
@@ -112,18 +85,18 @@ def latent_time_graph_lasso(
     W_0 = np.zeros_like(K)
     W_1 = np.zeros_like(K)[:-1]
     W_2 = np.zeros_like(K)[1:]
-    X_0 = np.zeros_like(emp_cov)
-    X_1 = np.zeros_like(emp_cov)[:-1]
-    X_2 = np.zeros_like(emp_cov)[1:]
+    X_0 = np.zeros_like(K)
+    X_1 = np.zeros_like(K)[:-1]
+    X_2 = np.zeros_like(K)[1:]
 
-    Z_consensus = np.zeros_like(emp_cov)
-    # Z_consensus_old = np.zeros_like(emp_cov)
-    W_consensus = np.zeros_like(emp_cov)
-    # W_consensus_old = np.zeros_like(emp_cov)
-    R_old = np.zeros_like(emp_cov)
+    Z_consensus = np.zeros_like(K)
+    # Z_consensus_old = np.zeros_like(K)
+    W_consensus = np.zeros_like(K)
+    # W_consensus_old = np.zeros_like(K)
+    R_old = np.zeros_like(K)
 
     # divisor for consensus variables, accounting for two less matrices
-    divisor = np.zeros(emp_cov.shape[0]) + 3
+    divisor = np.zeros(K.shape[0]) + 3
     divisor[0] -= 1
     divisor[-1] -= 1
 
@@ -162,10 +135,6 @@ def latent_time_graph_lasso(
         else:
             Z_1 = Z_0[:-1].copy()
             Z_2 = Z_0[1:].copy()
-
-        print "Z_0", Z_0
-        print "Z_1", Z_1
-        print "Z_2", Z_2
 
         # update W_0
         A = Z_0 - R - X_0
