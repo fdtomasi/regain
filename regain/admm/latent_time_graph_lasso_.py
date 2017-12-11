@@ -330,8 +330,7 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
                 beta=self.beta, eta=self.eta, mode=self.mode,
                 tol=self.tol, rtol=self.rtol, psi=self.psi, phi=self.phi,
                 max_iter=self.max_iter, verbose=self.verbose,
-                return_n_iter=True, return_history=False,
-                assume_centered=self.assume_centered)
+                return_n_iter=True, return_history=False)
         return self
 
     def score(self, X_test, y=None):
