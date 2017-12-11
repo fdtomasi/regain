@@ -11,7 +11,7 @@ from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.utils.validation import check_is_fitted
 from sklearn.utils import check_array, check_X_y, deprecated
 
-from prox import soft_thresholding
+from regain.prox import soft_thresholding
 
 def D_function(d, groups):
     D = np.zeros(d)

@@ -2,6 +2,7 @@
 import numpy as np
 import sys
 import scipy.sparse as ss
+import math
 
 from sklearn.datasets import make_sparse_spd_matrix
 
@@ -29,6 +30,139 @@ def is_pos_semidef(x, tol=1e-15):
     eigs[np.abs(eigs) < tol] = 0
     return np.all(eigs >= 0)
 
+def generate_dataset_L1L2(n_dim_obs=10, n_dim_lat=2, T=10, degree=2, proportional=False, epsilon=1e-3):
+
+    K_HO = np.zeros((n_dim_lat, n_dim_obs))
+    for i in range(n_dim_lat):
+        percentage = int(n_dim_obs * 0.8)
+        indices = np.random.randint(0, high=n_dim_obs, size=percentage)
+        K_HO[i, indices] = np.random.rand(percentage) * 0.12
+    L = K_HO.T.dot(K_HO)
+    assert(is_pos_semidef(L))
+    assert np.linalg.matrix_rank(L) == n_dim_lat
+
+    theta = np.eye(n_dim_obs)
+    for i in range(n_dim_obs):
+        l = list(set(np.arange(0, n_dim_obs)) -
+                set().union(list(np.nonzero(theta[i,:])[0]),
+                            list(np.where(np.count_nonzero(theta, axis=1)>=3)[0])))
+        if len(l)==0: continue
+        indices = np.random.choice(l, degree-(np.count_nonzero(theta[i,:])-1))
+        theta[i, indices] = theta[indices, i] = .5 / degree
+    assert(is_pos_def(theta))
+    theta_observed = theta - L
+    assert(is_pos_def(theta_observed))
+
+    thetas = [theta]
+    thetas_obs = [theta_observed]
+    ells = [L]
+    K_HOs = [K_HO]
+
+    for i in range(1,T):
+        if proportional:
+            no = int(math.ceil(n_dim_obs/20))
+        else:
+            no=1
+
+        rows = np.zeros(no)
+        cols = np.zeros(no)
+        while (np.any(rows==cols)):
+            rows = np.random.randint(0, n_dim_obs, no)
+            cols = np.random.randint(0, n_dim_obs, no)
+        theta = thetas[-1].copy()
+        for r, c in zip(rows, cols):
+            theta[r,c] = 0.12 if theta[r,c] == 0 else 0;
+            theta[c,r] = theta[r,c]
+       # print(theta)
+        assert(is_pos_def(theta))
+
+        K_HO = K_HOs[-1].copy()
+        addition = np.random.rand(*K_HO.shape)
+        addition *= (epsilon / np.linalg.norm(addition))
+        K_HO += addition
+        K_HO = K_HO / np.sum(K_HO, axis=1)[:, None]
+        K_HO *=0.12
+        K_HO[np.abs(K_HO)<epsilon/(theta.shape[0])] = 0
+        K_HOs.append(K_HO)
+        L = K_HO.T.dot(K_HO)
+        assert np.linalg.matrix_rank(L) == n_dim_lat
+        assert(is_pos_semidef(L))
+        assert(is_pos_def(theta - L))
+        L = K_HO.T.dot(K_HO)
+        assert np.linalg.matrix_rank(L) == n_dim_lat
+        assert(is_pos_semidef(L))
+        assert(is_pos_def(theta - L))
+
+        thetas.append(theta)
+        thetas_obs.append(theta - L)
+        ells.append(L)
+        K_HOs.append(K_HO)
+
+    return thetas, thetas_obs, ells
+
+def generate_dataset_L1(n_dim_obs=10, n_dim_lat=2, T=10, degree=2, proportional=False):
+
+    K_HO = np.zeros((n_dim_lat, n_dim_obs))
+    for i in range(n_dim_lat):
+        percentage = int(n_dim_obs * 0.8)
+        indices = np.random.randint(0, high=n_dim_obs, size=percentage)
+        K_HO[i, indices] = np.random.rand(percentage) * 0.12
+    L = K_HO.T.dot(K_HO)
+    assert(is_pos_semidef(L))
+    assert np.linalg.matrix_rank(L) == n_dim_lat
+
+    theta = np.eye(n_dim_obs)
+    for i in range(n_dim_obs):
+        l = list(set(np.arange(0, n_dim_obs)) -
+                set().union(list(np.nonzero(theta[i,:])[0]),
+                            list(np.where(np.count_nonzero(theta, axis=1)>=3)[0])))
+        if len(l)==0: continue
+        indices = np.random.choice(l, degree-(np.count_nonzero(theta[i,:])-1))
+        theta[i, indices] = theta[indices, i] = .5 / degree
+    assert(is_pos_def(theta))
+    theta_observed = theta - L
+    assert(is_pos_def(theta_observed))
+
+    thetas = [theta]
+    thetas_obs = [theta_observed]
+    ells = [L]
+    K_HOs = [K_HO]
+
+    for i in range(1,T):
+        if proportional:
+            no = int(math.ceil(n_dim_obs/20))
+        else:
+            no=1
+
+        rows = np.zeros(no)
+        cols = np.zeros(no)
+        while (np.any(rows==cols)):
+            rows = np.random.randint(0, n_dim_obs, no)
+            cols = np.random.randint(0, n_dim_obs, no)
+        theta = thetas[-1].copy()
+        for r, c in zip(rows, cols):
+            theta[r,c] = 0.12 if theta[r,c] == 0 else 0;
+            theta[c,r] = theta[r,c]
+       # print(theta)
+        assert(is_pos_def(theta))
+
+        K_HO = K_HOs[-1].copy()
+        c = np.random.randint(0, n_dim_obs, 1)
+        r = np.random.randint(0, n_dim_lat, 1)
+        K_HO[r,c] = 0.12 if K_HO[r,c] == 0 else 0;
+        #K_HO[c,r] = K_HO[r,c]
+
+        L = K_HO.T.dot(K_HO)
+        assert np.linalg.matrix_rank(L) == n_dim_lat
+        assert(is_pos_semidef(L))
+        assert(is_pos_def(theta - L))
+
+        thetas.append(theta)
+        thetas_obs.append(theta - L)
+        ells.append(L)
+        K_HOs.append(K_HO)
+
+    return thetas, thetas_obs, ells
 
 
 def generate_dataset_with_evolving_L(n_dim_obs=10, n_dim_lat=2, epsilon=1e-3,
@@ -81,7 +215,7 @@ def generate_dataset_with_evolving_L(n_dim_obs=10, n_dim_lat=2, epsilon=1e-3,
         # plot_graph_with_latent_variables(theta, 0, theta.shape[0], "Theta" + str(i))
         assert(is_pos_def(theta))
 
-        K_HO = K_HOs[-1]
+        K_HO = K_HOs[-1].copy()
         addition = np.random.rand(*K_HO.shape)
         addition *= (epsilon / np.linalg.norm(addition))
         K_HO += addition
@@ -108,8 +242,9 @@ def generate_dataset_with_fixed_L(
     for i in range(n_dim_lat):
         percentage = int(n_dim_obs * 0.8)
         indices = np.random.randint(0, high=n_dim_obs, size=percentage)
-        K_HO[i, indices] = np.random.rand(percentage)*0.12
+        K_HO[i, indices] = np.random.rand(percentage)
     L = K_HO.T.dot(K_HO)
+    L *= (0.12/np.sqrt(n_dim_obs))/np.max(L)
     assert(is_pos_semidef(L))
     assert np.linalg.matrix_rank(L) == n_dim_lat
 
@@ -161,6 +296,10 @@ def generate_dataset(n_dim_obs=3, n_dim_lat=2, eps=1e-3, T=10, degree=2,
         func = generate_dataset_with_evolving_L
     elif mode == "fixed":
         func = generate_dataset_with_fixed_L
+    elif mode == "l1":
+        func = generate_dataset_L1
+    elif mode == "l1l2":
+        func = generate_dataset_L1L2
     else:
         return generate_dataset_fede(n_dim_obs, n_dim_lat, eps, T, n_samples)
 
@@ -215,26 +354,39 @@ def generate_dataset_fede(
     return data_list, Kobs, Ks, Ls
 
 
-def generate_ma_xue_zou(n_dim_obs=12, n_dim_lat=2, epsilon=1e-3):
+def generate_ma_xue_zou(n_dim_obs=12, epsilon=1e-3, sparsity = 0.1):
     """Generate the dataset as in Ma, Xue, Zou (2012)."""
-    theta = make_sparse_spd_matrix(n_dim_lat + n_dim_obs, alpha=.9, norm_diag=1)
-    theta_flat = theta.flatten()
-    idx = (theta_flat != 0)
+    p = n_dim_obs + int(n_dim_obs+0.05)
+    po = n_dim_obs
+    ph = p - n_dim_obs
+    W = np.zeros((p,p))
+    picks = np.random.permutation(p*p)
+    dim = int(p*p*sparsity)
+    picks = picks[1:dim]
+    W = W.ravel()
+    W[picks] = np.random.randn(dim);
+    W.reshape((p,p))
 
-    proba = np.random.randn(*theta_flat.shape)
-    proba = np.where(proba > 0, 1, -1)
+    C = W.T.dot(W)
+    print(C)
+    C[0:po,po:p] = C[0:po,po:p] + 0.5*np.random.randn((po,ph))
+    C = (C+C.T)/2;
 
-    theta_flat[idx] = proba[idx]
+    d = diag(C)
+    np.clip(C, -1, 1, out=C)
+    eig, Q = np.linalg.eigh(C)
+    K = C + max(-1.2 * np.min(eig), 0.001) * np.eye(p)
+    KO = K[0:po,0:po]
+    KOH = K[0:po,po:p]
+    KHO = K[po:p,0:po]
+    KH = K[po:p,po:p]
+    assert(is_pos_semidef(KH))
+    assert(np.linalg.matrix_rank( np.divide(KOH, KH.dot(KHO))) == ph)
+    KOtilde = KO - np.divide(KOH, KH.dot(KHO))
+    assert(is_pos_def(KOtilde))
+    N = 5*po;
 
-    U = theta_flat.reshape(theta.shape)
-    UTU = U.dot(U.T)
-#     UTU.flat[::theta.shape[0]+1] = 1
-    try:
-        K = np.linalg.inv(UTU)
-        L = K[n_dim_lat:, 0:n_dim_lat].dot(K[0:n_dim_lat, 0:n_dim_lat]).dot(
-            K[0:n_dim_lat, n_dim_lat:])
-        assert (is_pos_semidef(L))
-        assert (is_pos_def(K[n_dim_lat:, n_dim_lat:] - L))
-
-    except:
-        sys.stdout.write("-")
+    EmpCov = np.linalg.inverse(KOtilde)
+    EmpCov = (EmpCov + EmpCov.T)/2
+    data = np.random.multivariate_normal(np.zeros(po), EmpCov, size=N)
+    SigmaO = (1/N)*data.T.dot(data)

@@ -8,10 +8,10 @@ from functools import partial
 from six.moves import range
 from sklearn.covariance import empirical_covariance
 from sklearn.covariance import EmpiricalCovariance
-from sklearn.utils.extmath import squared_norm
+from sklearn.utils.extmath import squared_norm, fast_logdet
 from sklearn.utils.validation import check_array
 
-from regain.admm.time_graph_lasso_ import log_likelihood
+from regain.admm.time_graph_lasso_ import log_likelihood, log_likelihood_trace
 from regain.norm import l1_od_norm
 from regain.prox import soft_thresholding_sign
 from regain.prox import prox_logdet
@@ -30,11 +30,19 @@ def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
     obj += eta * np.sum(map(phi, W_2 - W_1))
     return obj
 
+# def _objective(S, K, L, alpha, tau, beta, eta, psi, phi):
+#     obj = np.sum(- log_likelihood(s, r) for s, r in zip(S, K-L))
+#     obj += alpha * np.sum(map(l1_od_norm, K))
+#     obj += tau * np.sum(map(partial(np.linalg.norm, ord='nuc'), L))
+#     obj += beta * np.sum(map(psi, K[2:] - K[:-1]))
+#     obj += eta * np.sum(map(phi, L[2:] - L[:-1]))
+#     return obj
 
 def latent_time_graph_lasso(
         emp_cov, alpha=1, tau=1, rho=1, beta=1., eta=1., max_iter=1000,
         verbose=False, psi='laplacian', phi='laplacian', mode=None,
-        tol=1e-4, rtol=1e-2, return_history=False, return_n_iter=True):
+        tol=1e-4, rtol=1e-2, assume_centered=False,
+        return_history=False, return_n_iter=True):
     r"""Time-varying latent variable graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -198,6 +206,9 @@ def latent_time_graph_lasso(
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
+
+        # if iteration_ % 10 == 0:
+        #     rho = rho * 0.8
     else:
         warnings.warn("Objective did not converge.")
 
@@ -300,7 +311,6 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
         """
         if not self.bypass_transpose:
             X = X.transpose(2, 0, 1)  # put time as first dimension
-
         # Covariance does not make sense for a single feature
         # X = check_array(X, allow_nd=True, estimator=self)
         # if X.ndim != 3:
@@ -308,16 +318,15 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
         #                      % (X.ndim, self.__class__.__name__))
         X = np.array([check_array(x, ensure_min_features=2,
                       ensure_min_samples=2, estimator=self) for x in X])
-
         if self.assume_centered:
             self.location_ = np.zeros((X.shape[0], 1, X.shape[2]))
         else:
             self.location_ = X.mean(1).reshape(X.shape[0], 1, X.shape[2])
-        emp_cov = np.array([empirical_covariance(
+        self.emp_cov = np.array([empirical_covariance(
             x, assume_centered=self.assume_centered) for x in X])
         self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
             latent_time_graph_lasso(
-                emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
+                self.emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
                 beta=self.beta, eta=self.eta, mode=self.mode,
                 tol=self.tol, rtol=self.rtol, psi=self.psi, phi=self.phi,
                 max_iter=self.max_iter, verbose=self.verbose,
@@ -352,11 +361,40 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
         test_cov = np.array([empirical_covariance(
             x, assume_centered=True) for x in X_test - self.location_])
 
-        # compute log likelihood
-        res = np.mean([log_likelihood(S, K) for S, K in zip(
-            test_cov, self.get_precision())])
+        # ALLA SKLEARN
+        # res = np.sum([log_likelihood(S, K-L) for S, K,L in zip(
+        #     test_cov, self.precision_, self.latent_)])
+        #-----------------------------------------------------------
 
-        return res
+        # ALLA TIBSHIRANI
+        # score_f = lambda x, y : - fast_logdet(np.linalg.inv(x))\
+        #         - np.trace(y.dot(x))
+        # #estimated_cov = np.array(map(np.linalg.inv, self.precision_ - self.latent_))
+        #
+        #
+        # res = 0
+        # for train, test in zip(self.precision_ - self.latent_ ,test_cov):
+        #     res += score_f(train, test)
+        # res /= self.precision_.shape[0]
+        #-------------------------------------------------------------------
+
+        #ALLA  MATLAB1
+        ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
+        print(ranks)
+        scores_ranks = np.square(ranks-np.sqrt(L.shape[0]))
+        #scores_ranks[np.array(ranks)==0] = 1e10
+        res = np.mean([log_likelihood_trace(S, K-L) for S, K,L in zip(
+             test_cov, self.precision_, self.latent_)])
+        #-----------------------------------------------------------------
+
+        #ALLA MATLAB2
+        # chols = [2*np.sum(np.log(np.diag(np.linalg.cholesky(K))))
+        #         for K in self.precision_]
+        # res = np.sum([c - t.ravel(order='F').T.dot(K.ravel(order="F"))
+        #               for c, t, K in
+        #               zip(chols, test_cov, self.precision_ - self.latent_)])
+        print(self.alpha, self.tau, res )#-  np.sum(scores_ranks))
+        return res #-  np.sum(scores_ranks)
 
     def error_norm(self, comp_cov, norm='frobenius', scaling=True,
                    squared=True):
