@@ -61,6 +61,7 @@ def time_latent_graph_lasso(
         If return_history, then also a structure that contains the
         objective value, the primal and dual residual norms, and tolerances
         for the primal and dual residual norms at each iteration.
+
     """
     psi, prox_psi = check_norm_prox(psi)
     phi, prox_phi = check_norm_prox(phi)

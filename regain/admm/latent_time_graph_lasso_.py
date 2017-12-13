@@ -136,7 +136,9 @@ def latent_time_graph_lasso(
         # prox_e = np.array(map(prox_l, K[1:] - K[:-1] + U_2 - U_1))
         if beta != 0:
             A_1 = R[:-1] + W_1 + X_1
+            # A_1 = Z_0[:-1].copy()
             A_2 = R[1:] + W_2 + X_2
+            # A_2 = Z_0[1:].copy()
             prox_e = prox_psi(A_2 - A_1, lamda=2. * beta / rho)
             Z_1 = .5 * (A_1 + A_2 - prox_e)
             Z_2 = .5 * (A_1 + A_2 + prox_e)
@@ -151,7 +153,9 @@ def latent_time_graph_lasso(
         # update W_1, W_2
         if eta != 0:
             A_1 = Z_1 - R[:-1] - X_1
+            # A_1 = W_0[:-1].copy()
             A_2 = Z_2 - R[1:] - X_2
+            # A_2 = W_0[1:].copy()
             prox_e = prox_phi(A_2 - A_1, lamda=2. * eta / rho)
             W_1 = .5 * (A_1 + A_2 - prox_e)
             W_2 = .5 * (A_1 + A_2 + prox_e)
@@ -298,7 +302,7 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
         self.bypass_transpose = bypass_transpose
 
     def fit(self, X, y=None):
-        """Fits the GraphLasso model to X.
+        """Fit the GraphLasso model to X.
 
         Parameters
         ----------
@@ -379,7 +383,7 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
 
         #ALLA  MATLAB1
         ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
-        print(ranks)
+        # print(ranks)
         scores_ranks = np.square(ranks-np.sqrt(L.shape[0]))
         #scores_ranks[np.array(ranks)==0] = 1e10
         res = np.mean([log_likelihood_trace(S, K-L) for S, K,L in zip(
@@ -392,7 +396,7 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
         # res = np.sum([c - t.ravel(order='F').T.dot(K.ravel(order="F"))
         #               for c, t, K in
         #               zip(chols, test_cov, self.precision_ - self.latent_)])
-        print(self.alpha, self.tau, res )#-  np.sum(scores_ranks))
+        # print(self.alpha, self.tau, res )#-  np.sum(scores_ranks))
         return res #-  np.sum(scores_ranks)
 
     def error_norm(self, comp_cov, norm='frobenius', scaling=True,

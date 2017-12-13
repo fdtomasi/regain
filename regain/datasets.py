@@ -287,7 +287,7 @@ def generate_dataset_with_fixed_L(
         thetas.append(theta)
         thetas_obs.append(theta - L)
 
-    return thetas, thetas_obs, L
+    return thetas, thetas_obs, np.array([L] * T)
 
 
 def generate_dataset(n_dim_obs=3, n_dim_lat=2, eps=1e-3, T=10, degree=2,
@@ -361,32 +361,32 @@ def generate_ma_xue_zou(n_dim_obs=12, epsilon=1e-3, sparsity = 0.1):
     ph = p - n_dim_obs
     W = np.zeros((p,p))
     picks = np.random.permutation(p*p)
-    dim = int(p*p*sparsity)
+    dim = int(round(p*p*sparsity))
     picks = picks[1:dim]
     W = W.ravel()
     W[picks] = np.random.randn(dim);
     W.reshape((p,p))
 
     C = W.T.dot(W)
-    print(C)
-    C[0:po,po:p] = C[0:po,po:p] + 0.5*np.random.randn((po,ph))
-    C = (C+C.T)/2;
+    C[0:po, po:p] = C[0:po, po:p] + 0.5*np.random.randn((po, ph))
+    C = (C+C.T) / 2.
 
-    d = diag(C)
+    d = np.diag(C)
     np.clip(C, -1, 1, out=C)
     eig, Q = np.linalg.eigh(C)
     K = C + max(-1.2 * np.min(eig), 0.001) * np.eye(p)
-    KO = K[0:po,0:po]
-    KOH = K[0:po,po:p]
-    KHO = K[po:p,0:po]
-    KH = K[po:p,po:p]
-    assert(is_pos_semidef(KH))
-    assert(np.linalg.matrix_rank( np.divide(KOH, KH.dot(KHO))) == ph)
-    KOtilde = KO - np.divide(KOH, KH.dot(KHO))
-    assert(is_pos_def(KOtilde))
-    N = 5*po;
+    KO = K[0:po, 0:po]
+    KOH = K[0:po, po:p]
+    KHO = K[po:p, 0:po]
+    KH = K[po:p, po:p]
+    assert is_pos_semidef(KH)
+    assert np.linalg.matrix_rank(np.divide(KOH, KH.dot(KHO))) == ph
 
+    KOtilde = KO - np.divide(KOH, KH.dot(KHO))
+    assert is_pos_def(KOtilde)
+
+    N = 5*po
     EmpCov = np.linalg.inverse(KOtilde)
-    EmpCov = (EmpCov + EmpCov.T)/2
+    EmpCov = (EmpCov + EmpCov.T) / 2.
     data = np.random.multivariate_normal(np.zeros(po), EmpCov, size=N)
-    SigmaO = (1/N)*data.T.dot(data)
+    SigmaO = 1. / N * data.T.dot(data)

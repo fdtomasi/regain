@@ -11,12 +11,11 @@ import warnings
 from functools import partial
 from six.moves import range
 from sklearn.covariance import empirical_covariance
-from sklearn.utils.extmath import fast_logdet, squared_norm
+from sklearn.utils.extmath import fast_logdet
 
 from regain.norm import l1_od_norm, l1_norm
-from regain.prox import prox_logdet, prox_laplacian
+from regain.prox import prox_logdet
 from regain.prox import soft_thresholding_od, soft_thresholding_sign
-from regain.prox import blockwise_soft_thresholding, prox_linf
 from regain.utils import convergence
 from regain.validation import check_norm_prox
 
@@ -28,8 +27,9 @@ def log_likelihood(emp_cov, precision):
 
 def log_likelihood_trace(emp_cov, precision):
     """Gaussian log-likelihood without constant term."""
-    #return fast_logdet(precision) - np.trace(emp_cov * precision)
+    # return fast_logdet(precision) - np.trace(emp_cov * precision)
     return np.trace(emp_cov.dot(precision))
+
 
 def objective(S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
     """Objective function for time-varying graphical lasso."""
@@ -79,6 +79,7 @@ def time_graph_lasso(
         If return_history, then also a structure that contains the
         objective value, the primal and dual residual norms, and tolerances
         for the primal and dual residual norms at each iteration.
+
     """
     psi, prox_psi = check_norm_prox(psi)
 

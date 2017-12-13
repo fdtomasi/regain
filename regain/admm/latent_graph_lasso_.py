@@ -5,8 +5,9 @@ import numpy as np
 import warnings
 
 from six.moves import range
-from sklearn.covariance import EmpiricalCovariance
+from sklearn.covariance import EmpiricalCovariance, empirical_covariance
 from sklearn.utils.extmath import squared_norm
+from sklearn.utils.validation import check_array
 
 from regain.admm.time_graph_lasso_ import log_likelihood
 from regain.norm import l1_od_norm
@@ -64,6 +65,7 @@ def latent_graph_lasso(
         If return_history, then also a structure that contains the
         objective value, the primal and dual residual norms, and tolerances
         for the primal and dual residual norms at each iteration.
+
     """
     K = np.zeros_like(emp_cov)
     L = np.zeros_like(emp_cov)
@@ -168,21 +170,16 @@ class LatentGraphLasso(EmpiricalCovariance):
     graph_lasso, GraphLassoCV
     """
 
-    def __init__(self, alpha=1., tau=1., beta=1., eta=1., mode='cd', rho=1.,
-                 bypass_transpose=True, tol=1e-4, rtol=1e-4,
-                 psi='laplacian', phi='laplacian', max_iter=100,
+    def __init__(self, alpha=1., tau=1., mode='cd', rho=1.,
+                 bypass_transpose=True, tol=1e-4, rtol=1e-4, max_iter=100,
                  verbose=False, assume_centered=False):
-        super(LatentTimeGraphLasso, self).__init__(assume_centered=assume_centered)
+        super(LatentGraphLasso, self).__init__(assume_centered=assume_centered)
         self.alpha = alpha
         self.tau = tau
-        self.beta = beta
-        self.eta = eta
         self.rho = rho
         self.mode = mode
         self.tol = tol
         self.rtol = rtol
-        self.psi = psi
-        self.phi = phi
         self.max_iter = max_iter
         self.verbose = verbose
         # for splitting purposes, data may come transposed, with time in the
@@ -191,7 +188,7 @@ class LatentGraphLasso(EmpiricalCovariance):
         self.bypass_transpose = bypass_transpose
 
     def fit(self, X, y=None):
-        """Fits the GraphLasso model to X.
+        """Fit the GraphLasso model to X.
 
         Parameters
         ----------
@@ -205,18 +202,18 @@ class LatentGraphLasso(EmpiricalCovariance):
         if not self.bypass_transpose:
             X = X.transpose(2, 0, 1)  # put time as first dimension
 
+        X = check_array(X, ensure_min_features=2, ensure_min_samples=2,
+                        estimator=self)
         if self.assume_centered:
             self.location_ = np.zeros((X.shape[0], X.shape[2]))
         else:
             self.location_ = X.mean(1)
-        # emp_cov = np.array([empirical_covariance(
-        #     x, assume_centered=self.assume_centered) for x in X])
+        emp_cov = empirical_covariance(X, assume_centered=self.assume_centered)
 
         self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
-            time_latent_graph_lasso(
-                X, alpha=self.alpha, tau=self.tau, beta=self.beta, rho=self.rho,
-                eta=self.eta, mode=self.mode, tol=self.tol, rtol=self.rtol,
+            latent_graph_lasso(
+                emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
+                mode=self.mode, tol=self.tol, rtol=self.rtol,
                 max_iter=self.max_iter, verbose=self.verbose,
-                return_n_iter=True, psi=self.psi, phi=self.phi,
-                return_history=False, assume_centered=self.assume_centered)
+                return_n_iter=True, return_history=False)
         return self
