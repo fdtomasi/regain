@@ -30,13 +30,6 @@ def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
     obj += eta * np.sum(map(phi, W_2 - W_1))
     return obj
 
-# def _objective(S, K, L, alpha, tau, beta, eta, psi, phi):
-#     obj = np.sum(- log_likelihood(s, r) for s, r in zip(S, K-L))
-#     obj += alpha * np.sum(map(l1_od_norm, K))
-#     obj += tau * np.sum(map(partial(np.linalg.norm, ord='nuc'), L))
-#     obj += beta * np.sum(map(psi, K[2:] - K[:-1]))
-#     obj += eta * np.sum(map(phi, L[2:] - L[:-1]))
-#     return obj
 
 def latent_time_graph_lasso(
         emp_cov, alpha=1, tau=1, rho=1, beta=1., eta=1., max_iter=1000,
@@ -79,12 +72,10 @@ def latent_time_graph_lasso(
         If return_history, then also a structure that contains the
         objective value, the primal and dual residual norms, and tolerances
         for the primal and dual residual norms at each iteration.
+
     """
     psi, prox_psi = check_norm_prox(psi)
     phi, prox_phi = check_norm_prox(phi)
-
-    # S = np.array(map(empirical_covariance, data_list))
-    # n_samples = np.array([s for s in [1.]])
 
     K = np.zeros_like(emp_cov)
     Z_0 = np.zeros_like(K)
@@ -106,7 +97,7 @@ def latent_time_graph_lasso(
     W_2_old = np.zeros_like(W_2)
 
     # divisor for consensus variables, accounting for two less matrices
-    divisor = np.full(K.shape[0], 3.)
+    divisor = np.full(K.shape[0], 3, dtype=float)
     divisor[0] -= 1
     divisor[-1] -= 1
 
@@ -120,8 +111,6 @@ def latent_time_graph_lasso(
         R = np.array(map(partial(prox_logdet, lamda=1. / rho), A))
 
         # update Z_0
-        # Zold = Z
-        # X_hat = alpha * X + (1 - alpha) * Zold
         A = R + W_0 + X_0
         A[:-1] += Z_1 - X_1
         A[1:] += Z_2 - X_2
@@ -203,11 +192,11 @@ def latent_time_graph_lasso(
                 squared_norm(rho * X_1) + squared_norm(rho * X_2) +
                 squared_norm(rho * U_1) + squared_norm(rho * U_2)))
 
+        R_old = R.copy()
         Z_1_old = Z_1.copy()
         Z_2_old = Z_2.copy()
         W_1_old = W_1.copy()
         W_2_old = W_2.copy()
-        R_old = R.copy()
 
         if verbose:
             print("obj: %.4f, rnorm: %.4f, snorm: %.4f,"
@@ -283,6 +272,7 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
     See Also
     --------
     graph_lasso, GraphLassoCV
+
     """
 
     def __init__(self, alpha=1., tau=1., beta=1., eta=1., mode='cd', rho=1.,
@@ -373,7 +363,7 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
         # ALLA SKLEARN
         res = np.sum([log_likelihood(S, K-L) for S, K, L in zip(
             test_cov, self.precision_, self.latent_)])
-        #-----------------------------------------------------------
+        # -----------------------------------------------------------
 
         # ALLA TIBSHIRANI
         # score_f = lambda x, y : - fast_logdet(np.linalg.inv(x))\
@@ -385,25 +375,25 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
         # for train, test in zip(self.precision_ - self.latent_ ,test_cov):
         #     res += score_f(train, test)
         # res /= self.precision_.shape[0]
-        #-------------------------------------------------------------------
+        # -------------------------------------------------------------------
 
-        #ALLA  MATLAB1
+        # ALLA  MATLAB1
         # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
         # # print(ranks)
         # scores_ranks = np.square(ranks-np.sqrt(L.shape[0]))
         # #scores_ranks[np.array(ranks)==0] = 1e10
         # res = np.mean([log_likelihood(S, K-L) for S, K, L in zip(
         #      test_cov, self.precision_, self.latent_)])
-        #-----------------------------------------------------------------
+        # -----------------------------------------------------------------
 
-        #ALLA MATLAB2
+        # ALLA MATLAB2
         # chols = [2*np.sum(np.log(np.diag(np.linalg.cholesky(K))))
         #         for K in self.precision_]
         # res = np.sum([c - t.ravel(order='F').T.dot(K.ravel(order="F"))
         #               for c, t, K in
         #               zip(chols, test_cov, self.precision_ - self.latent_)])
         # print(self.alpha, self.tau, res )#-  np.sum(scores_ranks))
-        return res #-  np.sum(scores_ranks)
+        return res  # -  np.sum(scores_ranks)
 
     def error_norm(self, comp_cov, norm='frobenius', scaling=True,
                    squared=True):

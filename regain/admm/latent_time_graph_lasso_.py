@@ -104,7 +104,7 @@ def latent_time_graph_lasso(
     R_old = np.zeros_like(K)
 
     # divisor for consensus variables, accounting for two less matrices
-    divisor = np.zeros(K.shape[0]) + 3
+    divisor = np.full(K.shape[0], 3, dtype=float)
     divisor[0] -= 1
     divisor[-1] -= 1
 
@@ -188,19 +188,13 @@ def latent_time_graph_lasso(
             obj=objective(emp_cov, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
                           alpha, tau, beta, eta, psi, phi),
             rnorm=np.linalg.norm(R - Z_consensus + W_consensus),
-            # snorm=np.sqrt(squared_norm(rho * (Z_consensus - Z_consensus_old)) +
-            #               squared_norm(rho * (W_consensus - W_consensus_old))),
             snorm=np.linalg.norm(rho * (R - R_old)),
             e_pri=np.sqrt(np.prod(K.shape)) * tol + rtol * max(
                 np.linalg.norm(R),
                 np.sqrt(squared_norm(Z_consensus) - squared_norm(W_consensus))),
-            # e_dual=np.sqrt(np.prod(K.shape) * 2) * tol + rtol * np.linalg.norm(
-            #     rho * X_consensus)
             e_dual=np.sqrt(np.prod(K.shape)) * tol + rtol * np.linalg.norm(
                 rho * X_consensus)
         )
-        # Z_consensus_old = Z_consensus.copy()
-        # W_consensus_old = W_consensus.copy()
         R_old = R.copy()
 
         if verbose:
@@ -216,7 +210,8 @@ def latent_time_graph_lasso(
     else:
         warnings.warn("Objective did not converge.")
 
-    return_list = [Z_consensus, W_consensus, emp_cov]
+    # return_list = [Z_consensus, W_consensus, emp_cov]
+    return_list = [Z_consensus, W_0, W_1, W_2, emp_cov]
     if return_history:
         return_list.append(checks)
     if return_n_iter:
@@ -277,6 +272,7 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
     See Also
     --------
     graph_lasso, GraphLassoCV
+
     """
 
     def __init__(self, alpha=1., tau=1., beta=1., eta=1., mode='cd', rho=1.,
@@ -365,9 +361,9 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
             x, assume_centered=True) for x in X_test - self.location_])
 
         # ALLA SKLEARN
-        # res = np.sum([log_likelihood(S, K-L) for S, K,L in zip(
-        #     test_cov, self.precision_, self.latent_)])
-        #-----------------------------------------------------------
+        res = np.sum([log_likelihood(S, K-L) for S, K,L in zip(
+            test_cov, self.precision_, self.latent_)])
+        # -----------------------------------------------------------
 
         # ALLA TIBSHIRANI
         # score_f = lambda x, y : - fast_logdet(np.linalg.inv(x))\
@@ -379,25 +375,25 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
         # for train, test in zip(self.precision_ - self.latent_ ,test_cov):
         #     res += score_f(train, test)
         # res /= self.precision_.shape[0]
-        #-------------------------------------------------------------------
+        # -------------------------------------------------------------------
 
-        #ALLA  MATLAB1
-        ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
-        # print(ranks)
-        scores_ranks = np.square(ranks-np.sqrt(L.shape[0]))
-        #scores_ranks[np.array(ranks)==0] = 1e10
-        res = np.mean([log_likelihood_trace(S, K-L) for S, K,L in zip(
-             test_cov, self.precision_, self.latent_)])
-        #-----------------------------------------------------------------
+        # ALLA  MATLAB1
+        # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
+        # # print(ranks)
+        # scores_ranks = np.square(ranks-np.sqrt(L.shape[0]))
+        # #scores_ranks[np.array(ranks)==0] = 1e10
+        # res = np.mean([log_likelihood_trace(S, K-L) for S, K,L in zip(
+        #      test_cov, self.precision_, self.latent_)])
+        # -----------------------------------------------------------------
 
-        #ALLA MATLAB2
+        # ALLA MATLAB2
         # chols = [2*np.sum(np.log(np.diag(np.linalg.cholesky(K))))
         #         for K in self.precision_]
         # res = np.sum([c - t.ravel(order='F').T.dot(K.ravel(order="F"))
         #               for c, t, K in
         #               zip(chols, test_cov, self.precision_ - self.latent_)])
         # print(self.alpha, self.tau, res )#-  np.sum(scores_ranks))
-        return res #-  np.sum(scores_ranks)
+        return res  # -  np.sum(scores_ranks)
 
     def error_norm(self, comp_cov, norm='frobenius', scaling=True,
                    squared=True):
