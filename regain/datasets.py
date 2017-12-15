@@ -354,7 +354,7 @@ def generate_dataset_fede(
     return data_list, Kobs, Ks, Ls
 
 
-def generate_ma_xue_zou(n_dim_obs=12, epsilon=1e-3, sparsity = 0.1):
+def generate_ma_xue_zou(n_dim_obs=12, epsilon=1e-3, sparsity=0.1):
     """Generate the dataset as in Ma, Xue, Zou (2012)."""
     p = n_dim_obs + int(n_dim_obs+0.05)
     po = n_dim_obs
@@ -362,17 +362,17 @@ def generate_ma_xue_zou(n_dim_obs=12, epsilon=1e-3, sparsity = 0.1):
     W = np.zeros((p,p))
     picks = np.random.permutation(p*p)
     dim = int(round(p*p*sparsity))
-    picks = picks[1:dim]
-    W = W.ravel()
-    W[picks] = np.random.randn(dim);
-    W.reshape((p,p))
+    picks = picks[:dim]
+    W = W.ravel(order='F')
+    W[picks] = np.random.randn(dim)
+    W = np.reshape(W, (p,p), order="F")
 
     C = W.T.dot(W)
-    C[0:po, po:p] = C[0:po, po:p] + 0.5*np.random.randn((po, ph))
+    C[0:po, po:p] = C[0:po, po:p] + 0.5*np.random.randn(po, ph)
     C = (C+C.T) / 2.
 
     d = np.diag(C)
-    np.clip(C, -1, 1, out=C)
+    np.clip(C-np.diag(d), -1, 1, out=C)
     eig, Q = np.linalg.eigh(C)
     K = C + max(-1.2 * np.min(eig), 0.001) * np.eye(p)
     KO = K[0:po, 0:po]
@@ -383,10 +383,11 @@ def generate_ma_xue_zou(n_dim_obs=12, epsilon=1e-3, sparsity = 0.1):
     assert np.linalg.matrix_rank(np.divide(KOH, KH.dot(KHO))) == ph
 
     KOtilde = KO - np.divide(KOH, KH.dot(KHO))
-    assert is_pos_def(KOtilde)
+    # assert is_pos_def(KOtilde)
 
     N = 5*po
-    EmpCov = np.linalg.inverse(KOtilde)
-    EmpCov = (EmpCov + EmpCov.T) / 2.
-    data = np.random.multivariate_normal(np.zeros(po), EmpCov, size=N)
-    SigmaO = 1. / N * data.T.dot(data)
+    cov = np.linalg.inv(KOtilde)
+    cov = (cov + cov.T) / 2.
+    data = np.random.multivariate_normal(np.zeros(po), cov, size=N)
+    # emp_cov = 1. / N * data.T.dot(data)
+    return data, KOtilde, KO, np.divide(KOH, KH.dot(KHO))
