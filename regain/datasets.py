@@ -354,40 +354,43 @@ def generate_dataset_fede(
     return data_list, Kobs, Ks, Ls
 
 
-def generate_ma_xue_zou(n_dim_obs=12, epsilon=1e-3, sparsity=0.1):
+def generate_ma_xue_zou(n_dim_obs=12, n_latent=3, epsilon=1e-3, sparsity=0.1):
     """Generate the dataset as in Ma, Xue, Zou (2012)."""
-    p = n_dim_obs + int(n_dim_obs+0.05)
+    # p = n_dim_obs + n_latent  # int(n_dim_obs * 0.05)
+    p = n_dim_obs + int(n_dim_obs * 0.05)
     po = n_dim_obs
     ph = p - n_dim_obs
-    W = np.zeros((p,p))
-    picks = np.random.permutation(p*p)
-    dim = int(round(p*p*sparsity))
-    picks = picks[:dim]
+    W = np.zeros((p, p))
+    non_zeros = int(round(p*p*sparsity))
+    picks = np.random.permutation(p*p)[:non_zeros]
     W = W.ravel(order='F')
-    W[picks] = np.random.randn(dim)
-    W = np.reshape(W, (p,p), order="F")
+    W[picks] = np.random.randn(non_zeros)
+    W = np.reshape(W, (p, p), order="F")
 
     C = W.T.dot(W)
-    C[0:po, po:p] = C[0:po, po:p] + 0.5*np.random.randn(po, ph)
-    C = (C+C.T) / 2.
+    C[:po, po:] += 0.5 * np.random.randn(po, ph)
+    C = (C + C.T) / 2.
 
-    d = np.diag(C)
-    np.clip(C-np.diag(d), -1, 1, out=C)
+    C = np.clip(C - np.diag(np.diag(C)), -1, 1)
     eig, Q = np.linalg.eigh(C)
     K = C + max(-1.2 * np.min(eig), 0.001) * np.eye(p)
-    KO = K[0:po, 0:po]
-    KOH = K[0:po, po:p]
-    KHO = K[po:p, 0:po]
-    KH = K[po:p, po:p]
+    KO = K[:po, :po]
+    KOH = K[:po, po:]
+    KHO = K[po:, :po]
+    KH = K[po:, po:]
+
+    # L = np.divide(KOH, KH.dot(KHO))
+    assert np.allclose(KOH, KHO.T)
+    L = np.linalg.multi_dot((KOH, np.linalg.inv(KH), KHO))
+    KOtilde = KO - L
+    assert is_pos_def(KOtilde)
     assert is_pos_semidef(KH)
-    assert np.linalg.matrix_rank(np.divide(KOH, KH.dot(KHO))) == ph
+    assert np.linalg.matrix_rank(L) == ph
+    print ph
 
-    KOtilde = KO - np.divide(KOH, KH.dot(KHO))
-    # assert is_pos_def(KOtilde)
-
-    N = 5*po
+    N = 5 * po * 2
     cov = np.linalg.inv(KOtilde)
     cov = (cov + cov.T) / 2.
     data = np.random.multivariate_normal(np.zeros(po), cov, size=N)
     # emp_cov = 1. / N * data.T.dot(data)
-    return data, KOtilde, KO, np.divide(KOH, KH.dot(KHO))
+    return data, KOtilde, KO, L
