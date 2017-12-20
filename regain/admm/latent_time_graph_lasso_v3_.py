@@ -181,14 +181,16 @@ def latent_time_graph_lasso(
                           squared_norm(rho * (Z_2 - Z_2_old)) +
                           squared_norm(rho * (W_1 - W_1_old)) +
                           squared_norm(rho * (W_2 - W_2_old))),
-            e_pri=np.sqrt(5 * np.prod(K.shape)) * tol + rtol * max(
+            e_pri=np.sqrt(np.prod(K.shape[1:]) * (5 * K.shape[0] - 4)) * tol +
+                  rtol * max(
                 np.sqrt(squared_norm(R) +
                         squared_norm(Z_1) + squared_norm(Z_2) +
                         squared_norm(W_1) + squared_norm(W_2)),
                 np.sqrt(squared_norm(Z_0) - squared_norm(W_0) +
                         squared_norm(Z_0[:-1]) + squared_norm(Z_0[1:]) +
                         squared_norm(W_0[:-1]) + squared_norm(W_0[1:]))),
-            e_dual=np.sqrt(5 * np.prod(K.shape)) * tol + rtol * np.sqrt(
+            e_dual=np.sqrt(np.prod(K.shape[1:]) * (5 * K.shape[0] - 4)) * tol +
+                   rtol * np.sqrt(
                 squared_norm(rho * X_0) +
                 squared_norm(rho * X_1) + squared_norm(rho * X_2) +
                 squared_norm(rho * U_1) + squared_norm(rho * U_2)))
