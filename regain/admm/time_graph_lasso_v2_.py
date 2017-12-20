@@ -86,7 +86,7 @@ def time_graph_lasso(
     # S = np.array(map(empirical_covariance, data_list))
     # n_samples = np.array([1. for data in data_list])
 
-    # K = np.zeros_like(emp_cov)
+    K = np.zeros_like(emp_cov)
     Z_0 = np.zeros_like(emp_cov)
     Z_1 = np.zeros_like(emp_cov)[:-1]
     Z_2 = np.zeros_like(emp_cov)[1:]
@@ -94,12 +94,12 @@ def time_graph_lasso(
     U_1 = np.zeros_like(emp_cov)[:-1]
     U_2 = np.zeros_like(emp_cov)[1:]
 
-    U_consensus = np.zeros_like(emp_cov)
-    Z_consensus = np.zeros_like(emp_cov)
-    Z_consensus_old = np.zeros_like(emp_cov)
     Z_0_old = np.zeros_like(Z_0)
     Z_1_old = np.zeros_like(Z_1)
     Z_2_old = np.zeros_like(Z_2)
+    U_consensus = np.zeros_like(emp_cov)
+    Z_consensus = np.zeros_like(emp_cov)
+    Z_consensus_old = np.zeros_like(emp_cov)
 
     # divisor for consensus variables, accounting for two less matrices
     divisor = np.full(emp_cov.shape[0], 3, dtype=float)
@@ -109,37 +109,27 @@ def time_graph_lasso(
     checks = []
     for iteration_ in range(max_iter):
         # x-update
-        # A = Z_consensus - U_consensus
+        A = K + U_0
+
+        A *= - rho
+        A += emp_cov
+
+        Z_0 = np.array([prox_logdet(a, lamda=1. / rho) for a in A])
+
+        # z-update with relaxation
         A = Z_0 - U_0
         A[:-1] += Z_1 - U_1
         A[1:] += Z_2 - U_2
         A /= divisor[:, None, None]
-
-        # A += np.array(map(np.transpose, A))
-        # A /= 2.
-
-        # A *= - rho / n_samples[:, None, None]
-        A *= - rho
-        A += emp_cov
-
-        K = np.array([prox_logdet(a, lamda=1. / rho) for a in A])
-
-        # z-update with relaxation
-        # Zold = Z
-        # X_hat = alpha * X + (1 - alpha) * Zold
         soft_thresholding = partial(soft_thresholding_sign, lamda=alpha / rho)
-        Z_0 = np.array(map(soft_thresholding, K + U_0))
+        K = np.array(map(soft_thresholding, A))
 
         # other Zs
-        if beta != 0:
-            A_1 = K[:-1] + U_1
-            A_2 = K[1:] + U_2
-            prox_e = prox_psi(A_2 - A_1, lamda=2. * beta / rho)
-            Z_1 = .5 * (A_1 + A_2 - prox_e)
-            Z_2 = .5 * (A_1 + A_2 + prox_e)
-        else:
-            Z_1 = Z_0[:-1].copy()
-            Z_2 = Z_0[1:].copy()
+        A_1 = K[:-1] + U_1
+        A_2 = K[1:] + U_2
+        prox_e = prox_psi(A_2 - A_1, lamda=2. * beta / rho)
+        Z_1 = .5 * (A_1 + A_2 - prox_e)
+        Z_2 = .5 * (A_1 + A_2 + prox_e)
 
         # update residuals
         U_0 += K - Z_0
@@ -156,18 +146,8 @@ def time_graph_lasso(
         U_consensus[:-1] += U_1
         U_consensus[1:] += U_2
         U_consensus /= divisor[:, None, None]
-
-        # check = convergence(
-        #     obj=objective(emp_cov, K, Z_0, Z_1, Z_2, alpha, beta, psi),
-        #     rnorm=np.linalg.norm(K - Z_consensus),
-        #     snorm=np.linalg.norm(rho * (Z_consensus - Z_consensus_old)),
-        #     e_pri=np.sqrt(np.prod(K.shape)) * tol + rtol * max(
-        #         np.linalg.norm(K), np.linalg.norm(Z_consensus)),
-        #     e_dual=np.sqrt(np.prod(K.shape)) * tol + rtol * np.linalg.norm(
-        #         rho * U_consensus)
-        # )
         check = convergence(
-            obj=objective(emp_cov, K, Z_0, Z_1, Z_2, alpha, beta, psi),
+            obj=objective(emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi),
             rnorm=np.sqrt(squared_norm(K - Z_0) +
                           squared_norm(K[:-1] - Z_1) +
                           squared_norm(K[1:] - Z_2)),
@@ -180,7 +160,15 @@ def time_graph_lasso(
                 squared_norm(rho * U_0) + squared_norm(rho * U_1) +
                 squared_norm(rho * U_2))
         )
-
+        # check = convergence(
+        #     obj=objective(emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi),
+        #     rnorm=np.linalg.norm(K - Z_consensus),
+        #     snorm=np.linalg.norm(rho * (Z_consensus - Z_consensus_old)),
+        #     e_pri=np.sqrt(np.prod(K.shape)) * tol + rtol * max(
+        #         np.linalg.norm(K), np.linalg.norm(Z_consensus)),
+        #     e_dual=np.sqrt(np.prod(K.shape)) * tol + rtol * np.linalg.norm(
+        #         rho * U_consensus)
+        # )
         Z_consensus_old = Z_consensus.copy()
         Z_0_old = Z_0.copy()
         Z_1_old = Z_1.copy()
