@@ -387,11 +387,14 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
         # -----------------------------------------------------------------
 
         # ALLA MATLAB2
-        # chols = [2*np.sum(np.log(np.diag(np.linalg.cholesky(K))))
-        #         for K in self.precision_]
-        # res = np.sum([c - t.ravel(order='F').T.dot(K.ravel(order="F"))
-        #               for c, t, K in
+        # try:
+        #     chols = [2*np.sum(np.log(np.diag(np.linalg.cholesky(K))))
+        #              for K in self.precision_ - self.latent_]
+        #     res = np.sum([c - t.ravel(order='F').T.dot(K.ravel(order="F"))
+        #                   for c, t, K in
         #               zip(chols, test_cov, self.precision_ - self.latent_)])
+        # except:
+        #     res = -np.inf
         # print(self.alpha, self.tau, res )#-  np.sum(scores_ranks))
         return res  # -  np.sum(scores_ranks)
 
