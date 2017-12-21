@@ -17,6 +17,7 @@ def normalize_matrix(x):
     x *= d
     x *= d.T
 
+
 def is_pos_def(x, tol=1e-15):
     """Check if x is positive definite."""
     eigs = np.linalg.eigvalsh(x)
@@ -29,6 +30,7 @@ def is_pos_semidef(x, tol=1e-15):
     eigs = np.linalg.eigvalsh(x)
     eigs[np.abs(eigs) < tol] = 0
     return np.all(eigs >= 0)
+
 
 def generate_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
                      mode="evolving", **kwargs):
@@ -77,18 +79,18 @@ def generate_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
                        Valid dataset generation mode are: evolving, fixed, l1, \
                        l1l2, sin")
 
-    thetas, thetas_obs, ells = func(n_dim_obs, n_dim_lat, T, kwargs)
+    thetas, thetas_obs, ells = func(n_dim_obs, n_dim_lat, T, **kwargs)
     sigmas = np.array(map(np.linalg.inv, thetas_obs))
     map(normalize_matrix, sigmas)  # in place
     data_list = [np.random.multivariate_normal(
         np.zeros(n_dim_obs), sigma, size=n_samples) for sigma in sigmas]
-    return {'data_list:'data_list,
+    return {'data_list':data_list,
             'thetas':thetas,
             'theta_observed':thetas_obs,
             'ells': ells}
 
 
-def generate_dataset_L1L2(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
+def generate_dataset_L1L2(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """
     DESCRIZIONE, PRIMA O POI
     """
@@ -166,7 +168,7 @@ def generate_dataset_L1L2(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
     return thetas, thetas_obs, ells
 
 
-def generate_dataset_L1(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
+def generate_dataset_L1(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """
     DESCRIZIONE, PRIMA O POI
     """
@@ -236,7 +238,7 @@ def generate_dataset_L1(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
     return thetas, thetas_obs, ells
 
 
-def generate_dataset_with_evolving_L(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
+def generate_dataset_with_evolving_L(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """
     descrizione prima o poi"""
 
@@ -310,7 +312,7 @@ def generate_dataset_with_evolving_L(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
     return thetas, thetas_obs, ells
 
 
-def generate_dataset_with_fixed_L(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
+def generate_dataset_with_fixed_L(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """Generate precisions with a fixed L matrix."""
 
     degree= kwargs.get('degree',2)
@@ -368,51 +370,12 @@ def generate_dataset_with_fixed_L(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
     return thetas, thetas_obs, np.array([L] * T)
 
 
-
-
-def generate_dataset_fede(
-        n_dim_obs=3, n_dim_lat=2, eps=1e-3, T=10, n_samples=50):
-    """Generate dataset (new version)."""
-    b = np.random.rand(1, n_dim_obs)
-    es, Q = np.linalg.eigh(b.T.dot(b))  # Q random
-
-    b = np.random.rand(1, n_dim_obs)
-    es, R = np.linalg.eigh(b.T.dot(b))  # R random
-
-    start_sigma = np.random.rand(n_dim_obs) + 1
-    start_lamda = np.zeros(n_dim_obs)
-    idx = np.random.randint(n_dim_obs, size=n_dim_lat)
-    start_lamda[idx] = np.random.rand(2)
-
-    Ks = []
-    Ls = []
-    Kobs = []
-
-    for i in range(T):
-        K = np.linalg.multi_dot((Q, np.diag(start_sigma), Q.T))
-        L = np.linalg.multi_dot((R, np.diag(start_lamda), R.T))
-
-        K[np.abs(K) < eps] = 0  # enforce sparsity on K
-
-        assert is_pos_def(K - L)
-        assert is_pos_semidef(L)
-
-        start_sigma += 1 + np.random.rand(n_dim_obs)
-        start_lamda[idx] += np.random.rand(n_dim_lat) * 2 - 1
-        start_lamda = np.maximum(start_lamda, 0)
-
-        Ks.append(K)
-        Ls.append(L)
-        Kobs.append(K - L)
-
-    ll = map(np.linalg.inv, Kobs)
-    map(normalize_matrix, ll)  # in place
-
-    data_list = [np.random.multivariate_normal(
-        np.zeros(n_dim_obs), l, size=n_samples) for l in ll]
-    return data_list, Kobs, Ks, Ls
-
-def generate_dataset_sin_cos(n_dim_obs=100, n_dim_lat=10, eps=1e-2, T=10, sparsity=0.95):
+def generate_dataset_sin_cos(n_dim_obs=100, n_dim_lat=10,  T=10, **kwargs):
+    """
+    aggiungi descrizione
+    """
+    degree= kwargs.get('sparsity',2)
+    epsilon=kwargs.get('eps',1e-2)
     K_HO = np.zeros((n_dim_lat, n_dim_obs))
     for i in range(n_dim_lat):
         percentage = int(n_dim_obs * 0.8)
@@ -433,8 +396,8 @@ def generate_dataset_sin_cos(n_dim_obs=100, n_dim_lat=10, eps=1e-2, T=10, sparsi
     picks = picks[:dim]
     clip1 = clip[np.triu_indices(n_dim_obs,1)].ravel()
     clip1[picks] = 1
-    clip[np.triu_indices(n_dim_obs,1)[::-1]] = clip[np.triu_indices(n_dim_obs,1)] = clip1
-
+    clip[np.triu_indices(n_dim_obs,1)[::-1]] = clip1
+    clip[np.triu_indices(n_dim_obs,1)] = clip1
 
     thetas = np.array([np.eye(n_dim_obs) for i in range(T)])
 
@@ -456,45 +419,4 @@ def generate_dataset_sin_cos(n_dim_obs=100, n_dim_lat=10, eps=1e-2, T=10, sparsi
         assert(is_pos_def(theta_observed))
         thetas_obs = [theta_observed]
 
-    return thetas, thetas_obs, [L]
-
-def generate_ma_xue_zou(n_dim_obs=12, n_latent=3, epsilon=1e-3, sparsity=0.1):
-    """Generate the dataset as in Ma, Xue, Zou (2012)."""
-    # p = n_dim_obs + n_latent  # int(n_dim_obs * 0.05)
-    p = n_dim_obs + int(n_dim_obs * 0.05)
-    po = n_dim_obs
-    ph = p - n_dim_obs
-    W = np.zeros((p, p))
-    non_zeros = int(round(p*p*sparsity))
-    picks = np.random.permutation(p*p)[:non_zeros]
-    W = W.ravel(order='F')
-    W[picks] = np.random.randn(non_zeros)
-    W = np.reshape(W, (p, p), order="F")
-
-    C = W.T.dot(W)
-    C[:po, po:] += 0.5 * np.random.randn(po, ph)
-    C = (C + C.T) / 2.
-
-    C = np.clip(C - np.diag(np.diag(C)), -1, 1)
-    eig, Q = np.linalg.eigh(C)
-    K = C + max(-1.2 * np.min(eig), 0.001) * np.eye(p)
-    KO = K[:po, :po]
-    KOH = K[:po, po:]
-    KHO = K[po:, :po]
-    KH = K[po:, po:]
-
-    # L = np.divide(KOH, KH.dot(KHO))
-    assert np.allclose(KOH, KHO.T)
-    L = np.linalg.multi_dot((KOH, np.linalg.inv(KH), KHO))
-    KOtilde = KO - L
-    assert is_pos_def(KOtilde)
-    assert is_pos_semidef(KH)
-    assert np.linalg.matrix_rank(L) == ph
-    print ph
-
-    N = 5 * po * 2
-    cov = np.linalg.inv(KOtilde)
-    cov = (cov + cov.T) / 2.
-    data = np.random.multivariate_normal(np.zeros(po), cov, size=N)
-    # emp_cov = 1. / N * data.T.dot(data)
-    return data, KOtilde, KO, L
+    return thetas, thetas_obs, np.array([L]*T)
