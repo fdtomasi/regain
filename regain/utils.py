@@ -28,7 +28,12 @@ def compose(*functions):
         return lambda x: f(g(x))
     return functools.reduce(compose2, functions, lambda x: x)
 
+def error_rank(ells_true, ells_pred):
+    ranks_true = [np.linalg.matrix_rank(l) for l in ells_true]
+    ranks_pred = [np.linalg.matrix_rank(l) for l in ells_pred]
 
+    return np.mean(ranks_true - ranks_pred)
+    
 def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
                squared=True):
     """Computes the Mean Squared Error between two covariance estimators.
@@ -80,6 +85,42 @@ def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
         result = np.sqrt(squared_norm)
 
     return result
+
+def structure_error(true, pred, thresholding=0, epsilon=1e-2):
+    """Computes the error in structure between the real inverse covariance
+        matrix and the predicted.
+
+    Parameters
+    ----------
+
+    true: array-like, shape=(d,d)
+        the true inverse covariance matrix, if an entry is different from 0
+        it is consider as an edge
+
+    pred: array-like, shape=(d,d)
+        the predicted inverse covariance matrix, if an entry is different from 0
+        it is consider as an edge
+
+    thresholding: bool, default=0,
+       if true the pred is threshold to the value of epsilon
+
+    epsilon: float, default=1e-2
+      if thresholding is true it is used to threshold the values of pred.
+    """
+    if thresholding:
+        pred[np.abs(pred)<1e-2] = 0
+    true[true != 0] = 1
+    pred[pred != 0] = 2
+    res = true+pred
+    FN = np.count_nonzero((res==1).astype(int))
+    FP = np.count_nonzero((res==2).astype(int))
+    TP = np.count_nonzero((res==3).astype(int))
+    TN = np.count_nonzero((res==0).astype(int))
+    p = TP/(TP+FP)
+    r = TP/(TP+FN)
+    return {'TP':TP, 'TN':TN, 'FP':FP, 'FN':FN,
+            'precision': p, 'recall': r,
+            'f1score': p*r/(p+r)}
 
 
 def error_norm_time(cov, comp_cov, norm='frobenius', scaling=True,

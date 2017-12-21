@@ -78,15 +78,19 @@ def generate_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
         warnings.warn("You put an unknown option.\n \
                        Valid dataset generation mode are: evolving, fixed, l1, \
                        l1l2, sin")
+    n_dim_obs = int(n_dim_obs)
+    n_dim_lat = int(n_dim_lat)
+    n_samples = int(n_samples)
 
     thetas, thetas_obs, ells = func(n_dim_obs, n_dim_lat, T, **kwargs)
     sigmas = np.array(map(np.linalg.inv, thetas_obs))
     map(normalize_matrix, sigmas)  # in place
+
     data_list = [np.random.multivariate_normal(
         np.zeros(n_dim_obs), sigma, size=n_samples) for sigma in sigmas]
-    return {'data_list':data_list,
+    return {'data_list': data_list,
             'thetas':thetas,
-            'theta_observed':thetas_obs,
+            'thetas_observed':thetas_obs,
             'ells': ells}
 
 
