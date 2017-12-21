@@ -38,8 +38,16 @@ def blockwise_soft_thresholding(a, lamda):
     x = np.zeros_like(a)
     for t in range(a.shape[0]):
         x[t] = np.array([soft_thresholding(
-            a[t, :, j], lamda) for j in range(a.shape[1])]).T
+            a[t, :, j], lamda) for j in range(a.shape[2])]).T
     return x
+
+
+def blockwise_soft_thresholding_symmetric(a, lamda):
+    """Proximal operator for l2 norm, for symmetric matrices (last 2 axes)."""
+    col_norms = np.linalg.norm(a, axis=1)
+    return np.array([np.dot(x, np.diag(
+        (np.ones(x.shape[0]) - lamda / c_norm) * (c_norm > lamda)))
+        for x, c_norm in zip(a, col_norms)])
 
 
 def prox_linf_1d(a, lamda):
@@ -79,6 +87,40 @@ def prox_trace_indicator(a, lamda):
 def prox_laplacian(a, lamda):
     """Prox for l_2 square norm, Laplacian regularisation."""
     return a / (1 + 2. * lamda)
+
+
+def prox_node_penalty(A_12, lamda, tol=1e-4, rtol=1e-2, max_iter=500):
+    """Lamda = beta / (2. * rho).
+
+    A_12 = np.vstack((A_1, A_2))
+    """
+    n = A_12.shape[0] / 2.
+    U_1 = np.full((n, n), 1. / n, dtype=float)
+    U_2 = np.full((n, n), 1. / n, dtype=float)
+    Y_1 = np.full((n, n), 1. / n, dtype=float)
+    Y_2 = np.full((n, n), 1. / n, dtype=float)
+    C = np.hstack((np.eye(n), -np.eye(n), np.eye(n)))
+    inverse = np.linalg.inv(C.T.dot(C) + 2 * np.eye(3 * n))
+
+    for iteration_ in range(max_iter):
+        A = (Y_1 - Y_2 - U_1 - U_2) / 2.
+        V = blockwise_soft_thresholding_symmetric(A, lamda=lamda)
+
+        A = np.vstack(((V+U_2).T, A_12))
+        D = V + U_1
+        # Z = np.linalg.solve(C.T*C + eta*np.identity(3*n), - C.T*D + eta* A)
+        Z = inverse.dot(2 * A - C.T.dot(D))
+        W, Y_1, Y_2 = [Z[i*n:(i+1) * n, :] for i in range(3)]
+        assert np.allclose(W, W.T)
+
+        delta_U_1 = V + W - (Y_1 - Y_2)
+        delta_U_2 = V - W.T
+        U_1 += delta_U_1
+        U_2 += delta_U_2
+        if np.linalg.norm(delta_U_1, 'fro') < tol and \
+                np.linalg.norm(delta_U_2, 'fro') < tol:
+            break
+    return Y_1, Y_2
 
 
 def prox_FL(a, beta, lamda):

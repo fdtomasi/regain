@@ -34,8 +34,7 @@ def is_pos_semidef(x, tol=1e-15):
 
 def generate_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
                      mode="evolving", **kwargs):
-    """
-    Function that generate a synthetic dataset using different settings.
+    """Function that generate a synthetic dataset using different settings.
 
     Parameters
     ----------
@@ -61,7 +60,7 @@ def generate_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
                 that differs for a small l2 norm
         "sin": generate a dataset with fixed latent variables and evolving
                 observed variables that are generated from sin functions.
-    *args: other arguments related to each specific data generation mode
+    *kwargs: other arguments related to each specific data generation mode
 
     """
     if mode == "evolving":
@@ -98,9 +97,9 @@ def generate_dataset_L1L2(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """
     DESCRIZIONE, PRIMA O POI
     """
-    degree= kwargs.get('degree',2)
-    proportional=kwargs.get('proportional',False)
-    epsilon=kwargs.get('epsilon',1e-2)
+    degree = kwargs.get('degree',2)
+    proportional = kwargs.get('proportional',False)
+    epsilon = kwargs.get('epsilon',1e-2)
 
     K_HO = np.zeros((n_dim_lat, n_dim_obs))
     for i in range(n_dim_lat):
@@ -176,8 +175,8 @@ def generate_dataset_L1(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """
     DESCRIZIONE, PRIMA O POI
     """
-    degree= kwargs.get('degree',2)
-    proportional=kwargs.get('proportional',False)
+    degree = kwargs.get('degree',2)
+    proportional = kwargs.get('proportional',False)
 
     K_HO = np.zeros((n_dim_lat, n_dim_obs))
     for i in range(n_dim_lat):
@@ -192,8 +191,9 @@ def generate_dataset_L1(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     for i in range(n_dim_obs):
         l = list(set(np.arange(0, n_dim_obs)) -
                 set().union(list(np.nonzero(theta[i,:])[0]),
-                            list(np.where(np.count_nonzero(theta, axis=1)>=3)[0])))
-        if len(l)==0: continue
+                            list(np.where(np.count_nonzero(theta, axis=1) >= 3)[0])))
+        if len(l)==0:
+            continue
         indices = np.random.choice(l, degree-(np.count_nonzero(theta[i,:])-1))
         theta[i, indices] = theta[indices, i] = .5 / degree
     assert(is_pos_def(theta))
