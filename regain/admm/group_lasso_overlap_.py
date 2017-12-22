@@ -5,8 +5,10 @@ import warnings
 
 from scipy import sparse
 
+from sklearn.preprocessing import LabelBinarizer
 from sklearn.base import RegressorMixin
 from sklearn.linear_model.base import LinearModel, _pre_fit
+from sklearn.linear_model.base import LinearClassifierMixin
 from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.utils.validation import check_is_fitted
 from sklearn.utils import check_array, check_X_y, deprecated
@@ -254,6 +256,34 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
                                    dense_output=True) + self.intercept_
         else:
             return super(GroupLassoOverlap, self)._decision_function(X)
+
+
+
+class GroupLassoOverlapClassifier(LinearClassifierMixin, GroupLassoOverlap):
+    """Class to extend group lasso in case of classification."""
+
+    def fit(self, X, y, check_input=True):
+        self._label_binarizer = LabelBinarizer(pos_label=1, neg_label=-1)
+        Y = self._label_binarizer.fit_transform(y)
+        if self._label_binarizer.y_type_.startswith('multilabel'):
+            # we don't (yet) support multi-label classification in ENet
+            raise ValueError(
+                "%s doesn't support multi-label classification" % (
+                    self.__class__.__name__))
+
+        # Y = column_or_1d(Y, warn=True)
+        super(GroupLassoOverlapClassifier, self).fit(X, Y)
+        if self.classes_.shape[0] > 2:
+            ndim = self.classes_.shape[0]
+        else:
+            ndim = 1
+        self.coef_ = self.coef_.reshape(ndim, -1)
+
+        return self
+
+    @property
+    def classes_(self):
+        return self._label_binarizer.classes_
 
 
 def overlapping_group_lasso(A, b, lamda=1.0, groups=None, rho=1.0, alpha=1.0,

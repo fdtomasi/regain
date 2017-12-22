@@ -25,7 +25,7 @@ def check_norm_prox(function):
         prox = prox_linf
         norm = partial(np.linalg.norm, ord=np.inf)
     elif function == 'node':
-        prox = prox_linf
+        prox = prox_node_penalty
         norm = partial(np.linalg.norm, ord=np.inf)
     else:
         raise ValueError("Value of %s not understood.", function)
