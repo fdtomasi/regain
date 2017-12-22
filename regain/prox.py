@@ -4,8 +4,9 @@ import warnings
 
 from functools import partial
 from scipy.optimize import minimize
+from sklearn.utils.extmath import squared_norm
 
-from regain.utils import compose
+from regain.utils import convergence
 
 try:
     from prox_tv import tv1_1d
@@ -89,37 +90,61 @@ def prox_laplacian(a, lamda):
     return a / (1 + 2. * lamda)
 
 
-def prox_node_penalty(A_12, lamda, tol=1e-4, rtol=1e-2, max_iter=500):
+def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
     """Lamda = beta / (2. * rho).
 
     A_12 = np.vstack((A_1, A_2))
     """
-    n = A_12.shape[0] / 2.
-    U_1 = np.full((n, n), 1. / n, dtype=float)
-    U_2 = np.full((n, n), 1. / n, dtype=float)
-    Y_1 = np.full((n, n), 1. / n, dtype=float)
-    Y_2 = np.full((n, n), 1. / n, dtype=float)
+    n = A_12.shape[-1]
+
+    U_1 = np.full((A_12.shape[0], n, n), 1. / n, dtype=float)
+    U_2 = np.copy(U_1)
+    Y_1 = np.copy(U_1)
+    Y_2 = np.copy(U_1)
+
     C = np.hstack((np.eye(n), -np.eye(n), np.eye(n)))
     inverse = np.linalg.inv(C.T.dot(C) + 2 * np.eye(3 * n))
 
+    V = np.zeros_like(U_1)
+    W = np.zeros_like(U_1)
+    V_old = np.zeros_like(U_1)
+    W_old = np.zeros_like(U_1)
+
     for iteration_ in range(max_iter):
-        A = (Y_1 - Y_2 - U_1 - U_2) / 2.
+        A = (Y_1 - Y_2 - W - U_1 + (W.transpose(0, 2, 1) - U_2).transpose(0, 2, 1)) / 2.
         V = blockwise_soft_thresholding_symmetric(A, lamda=lamda)
 
-        A = np.vstack(((V+U_2).T, A_12))
+        A = np.concatenate(((V + U_2).transpose(0, 2, 1), A_12), axis=1)
         D = V + U_1
         # Z = np.linalg.solve(C.T*C + eta*np.identity(3*n), - C.T*D + eta* A)
-        Z = inverse.dot(2 * A - C.T.dot(D))
-        W, Y_1, Y_2 = [Z[i*n:(i+1) * n, :] for i in range(3)]
-        assert np.allclose(W, W.T)
+        Z = np.array([inverse.dot(2 * A_i - C.T.dot(D_i)) for A_i, D_i in zip(A, D)])
+        W, Y_1, Y_2 = (Z[:, i*n:(i+1) * n, :] for i in range(3))
 
         delta_U_1 = V + W - (Y_1 - Y_2)
-        delta_U_2 = V - W.T
+        delta_U_2 = V - W.transpose(0, 2, 1)
         U_1 += delta_U_1
         U_2 += delta_U_2
-        if np.linalg.norm(delta_U_1, 'fro') < tol and \
-                np.linalg.norm(delta_U_2, 'fro') < tol:
+
+        check = convergence(
+            obj=np.nan,
+            rnorm=np.sqrt(squared_norm(delta_U_1) +
+                          squared_norm(delta_U_2)),
+            snorm=np.sqrt(squared_norm(rho * (W - W_old)) +
+                          squared_norm(rho * (V + W - V_old - W_old))),
+            e_pri=np.sqrt(2 * np.prod(V.shape)) * tol + rtol * max(
+                np.sqrt(squared_norm(W) + squared_norm(V + W)),
+                np.sqrt(squared_norm(V) - squared_norm(Y_1 - Y_2))),
+            e_dual=np.sqrt(2 * np.prod(V.shape)) * tol + rtol * np.sqrt(
+                squared_norm(rho * U_1) + squared_norm(rho * U_2)))
+        W_old = W.copy()
+        V_old = V.copy()
+
+        # if np.linalg.norm(delta_U_1, 'fro') < tol and \
+        #         np.linalg.norm(delta_U_2, 'fro') < tol:
+        if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
+    else:
+        warnings.warn("Node norm did not converge.")
     return Y_1, Y_2
 
 

@@ -17,6 +17,7 @@ def normalize_matrix(x):
     x *= d
     x *= d.T
 
+
 def is_pos_def(x, tol=1e-15):
     """Check if x is positive definite."""
     eigs = np.linalg.eigvalsh(x)
@@ -30,10 +31,10 @@ def is_pos_semidef(x, tol=1e-15):
     eigs[np.abs(eigs) < tol] = 0
     return np.all(eigs >= 0)
 
+
 def generate_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
                      mode="evolving", **kwargs):
-    """
-    Function that generate a synthetic dataset using different settings.
+    """Function that generate a synthetic dataset using different settings.
 
     Parameters
     ----------
@@ -59,7 +60,7 @@ def generate_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
                 that differs for a small l2 norm
         "sin": generate a dataset with fixed latent variables and evolving
                 observed variables that are generated from sin functions.
-    *args: other arguments related to each specific data generation mode
+    *kwargs: other arguments related to each specific data generation mode
 
     """
     if mode == "evolving":
@@ -73,28 +74,29 @@ def generate_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
     elif mode == "sin":
         func = generate_dataset_sin_cos
     else:
-        warnings.warn("You put an unknown option.\n \
-                       Valid dataset generation mode are: evolving, fixed, l1, \
-                       l1l2, sin")
+        ValueError("Unknown mode %s. Choices are: `evolving`, `fixed`, `l1`, "
+                   "`l1l2`, `sin`." % mode)
+    n_dim_obs = int(n_dim_obs)
+    n_dim_lat = int(n_dim_lat)
+    n_samples = int(n_samples)
 
-    thetas, thetas_obs, ells = func(n_dim_obs, n_dim_lat, T, kwargs)
+    thetas, thetas_obs, ells = func(n_dim_obs, n_dim_lat, T, **kwargs)
     sigmas = np.array(map(np.linalg.inv, thetas_obs))
     map(normalize_matrix, sigmas)  # in place
+
     data_list = [np.random.multivariate_normal(
         np.zeros(n_dim_obs), sigma, size=n_samples) for sigma in sigmas]
-    return {'data_list:'data_list,
-            'thetas':thetas,
-            'theta_observed':thetas_obs,
+    return {'data_list': data_list,
+            'thetas': thetas,
+            'thetas_observed': thetas_obs,
             'ells': ells}
 
 
-def generate_dataset_L1L2(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
-    """
-    DESCRIZIONE, PRIMA O POI
-    """
-    degree= kwargs.get('degree',2)
-    proportional=kwargs.get('proportional',False)
-    epsilon=kwargs.get('epsilon',1e-2)
+def generate_dataset_L1L2(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
+    """DESCRIZIONE, PRIMA O POI."""
+    degree = kwargs.get('degree', 2)
+    proportional = kwargs.get('proportional', False)
+    epsilon = kwargs.get('epsilon', 1e-2)
 
     K_HO = np.zeros((n_dim_lat, n_dim_obs))
     for i in range(n_dim_lat):
@@ -107,12 +109,12 @@ def generate_dataset_L1L2(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
 
     theta = np.eye(n_dim_obs)
     for i in range(n_dim_obs):
-        l = list(set(np.arange(0, n_dim_obs)) -
-                set().union(
-                list(np.nonzero(theta[i,:])[0]),
-                list(np.where(np.count_nonzero(theta, axis=1)>=3)[0])))
-        if len(l)==0: continue
-        indices = np.random.choice(l, degree-(np.count_nonzero(theta[i,:])-1))
+        l = list(set(np.arange(0, n_dim_obs)) - set().union(
+            list(np.nonzero(theta[i, :])[0]),
+            list(np.where(np.count_nonzero(theta, axis=1) >= 3)[0])))
+        if len(l) == 0:
+            continue
+        indices = np.random.choice(l, degree - np.count_nonzero(theta[i, :]) + 1)
         theta[i, indices] = theta[indices, i] = .5 / degree
     assert(is_pos_def(theta))
     theta_observed = theta - L
@@ -123,22 +125,21 @@ def generate_dataset_L1L2(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
     ells = [L]
     K_HOs = [K_HO]
 
-    for i in range(1,T):
+    for i in range(1, T):
         if proportional:
-            no = int(math.ceil(n_dim_obs/20))
+            no = int(math.ceil(n_dim_obs / 20))  # TODO parametrise the 20
         else:
-            no=1
+            no = 1
 
         rows = np.zeros(no)
         cols = np.zeros(no)
-        while (np.any(rows==cols)):
+        while (np.any(rows == cols)):
             rows = np.random.randint(0, n_dim_obs, no)
             cols = np.random.randint(0, n_dim_obs, no)
         theta = thetas[-1].copy()
         for r, c in zip(rows, cols):
-            theta[r,c] = 0.12 if theta[r,c] == 0 else 0;
-            theta[c,r] = theta[r,c]
-       # print(theta)
+            theta[r, c] = 0.12 if theta[r, c] == 0 else 0
+            theta[c, r] = theta[r, c]
         assert(is_pos_def(theta))
 
         K_HO = K_HOs[-1].copy()
@@ -146,8 +147,8 @@ def generate_dataset_L1L2(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
         addition *= (epsilon / np.linalg.norm(addition))
         K_HO += addition
         K_HO = K_HO / np.sum(K_HO, axis=1)[:, None]
-        K_HO *=0.12
-        K_HO[np.abs(K_HO)<epsilon/(theta.shape[0])] = 0
+        K_HO *= 0.12
+        K_HO[np.abs(K_HO) < epsilon / theta.shape[0]] = 0
         K_HOs.append(K_HO)
         L = K_HO.T.dot(K_HO)
         assert np.linalg.matrix_rank(L) == n_dim_lat
@@ -166,12 +167,10 @@ def generate_dataset_L1L2(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
     return thetas, thetas_obs, ells
 
 
-def generate_dataset_L1(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
-    """
-    DESCRIZIONE, PRIMA O POI
-    """
-    degree= kwargs.get('degree',2)
-    proportional=kwargs.get('proportional',False)
+def generate_dataset_L1(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
+    """DESCRIZIONE, PRIMA O POI."""
+    degree = kwargs.get('degree', 2)
+    proportional = kwargs.get('proportional', False)
 
     K_HO = np.zeros((n_dim_lat, n_dim_obs))
     for i in range(n_dim_lat):
@@ -185,10 +184,11 @@ def generate_dataset_L1(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
     theta = np.eye(n_dim_obs)
     for i in range(n_dim_obs):
         l = list(set(np.arange(0, n_dim_obs)) -
-                set().union(list(np.nonzero(theta[i,:])[0]),
-                            list(np.where(np.count_nonzero(theta, axis=1)>=3)[0])))
-        if len(l)==0: continue
-        indices = np.random.choice(l, degree-(np.count_nonzero(theta[i,:])-1))
+                set().union(list(np.nonzero(theta[i, :])[0]),
+                            list(np.where(np.count_nonzero(theta, axis=1) >= 3)[0])))
+        if len(l) == 0:
+            continue
+        indices = np.random.choice(l, degree-(np.count_nonzero(theta[i,:]) - 1))
         theta[i, indices] = theta[indices, i] = .5 / degree
     assert(is_pos_def(theta))
     theta_observed = theta - L
@@ -199,11 +199,11 @@ def generate_dataset_L1(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
     ells = [L]
     K_HOs = [K_HO]
 
-    for i in range(1,T):
+    for i in range(1, T):
         if proportional:
             no = int(math.ceil(n_dim_obs/20))
         else:
-            no=1
+            no = 1
 
         rows = np.zeros(no)
         cols = np.zeros(no)
@@ -236,7 +236,7 @@ def generate_dataset_L1(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
     return thetas, thetas_obs, ells
 
 
-def generate_dataset_with_evolving_L(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
+def generate_dataset_with_evolving_L(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """
     descrizione prima o poi"""
 
@@ -310,7 +310,7 @@ def generate_dataset_with_evolving_L(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
     return thetas, thetas_obs, ells
 
 
-def generate_dataset_with_fixed_L(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
+def generate_dataset_with_fixed_L(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """Generate precisions with a fixed L matrix."""
 
     degree= kwargs.get('degree',2)
@@ -368,6 +368,53 @@ def generate_dataset_with_fixed_L(n_dim_obs=10, n_dim_lat=2, T=10, *kwargs):
     return thetas, thetas_obs, np.array([L] * T)
 
 
+def generate_dataset_sin_cos(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
+    """Aggiungi descrizione."""
+    degree = kwargs.get('sparsity', 2)
+    eps = kwargs.get('eps', 1e-2)
+    K_HO = np.zeros((n_dim_lat, n_dim_obs))
+    for i in range(n_dim_lat):
+        percentage = int(n_dim_obs * 0.8)
+        indices = np.random.randint(0, high=n_dim_obs, size=percentage)
+        K_HO[i, indices] = np.random.rand(percentage)
+    L = K_HO.T.dot(K_HO)
+    L *= (0.12/np.sqrt(n_dim_obs))/np.max(L)
+    assert(is_pos_semidef(L))
+    assert np.linalg.matrix_rank(L) == n_dim_lat
+
+    phase = np.random.randn(n_dim_obs, n_dim_obs)*np.pi
+    phase[np.triu_indices(n_dim_obs)[::-1]] = phase[np.triu_indices(n_dim_obs)]
+
+    clip = np.zeros((n_dim_obs, n_dim_obs))
+    picks = np.random.permutation(len(np.triu_indices(n_dim_obs, 1)[0]))
+    dim = int(len(np.triu_indices(n_dim_obs, 1)[0]) * degree)
+    picks = picks[:dim]
+    clip1 = clip[np.triu_indices(n_dim_obs, 1)].ravel()
+    clip1[picks] = 1
+    clip[np.triu_indices(n_dim_obs, 1)[::-1]] = clip1
+    clip[np.triu_indices(n_dim_obs, 1)] = clip1
+
+    thetas = np.array([np.eye(n_dim_obs) for i in range(T)])
+
+    x = np.linspace(-np.pi, np.pi, T)
+    for i in range(T):
+        for r in range(thetas[i].shape[0]):
+            for c in range(thetas[i].shape[1]):
+                if r == c:
+                    continue
+                if clip[r, c]:
+                    thetas[i, r, c] = np.sin((x[i]+phase[r, c])/T**2)*(0.5/T)
+                else:
+                    thetas[i, r, c] = np.sin((x[i]+phase[r, c]))*(0.5/T)
+        thetas[i][clip == 1] = np.clip(thetas[i][clip == 1], 0,1)
+        thetas[i][np.abs(thetas[i]) < eps] = 0
+
+        assert(is_pos_def(thetas[i]))
+        theta_observed = thetas[i] - L
+        assert(is_pos_def(theta_observed))
+        thetas_obs = [theta_observed]
+
+    return thetas, thetas_obs, np.array([L]*T)
 
 
 def generate_dataset_fede(
@@ -412,51 +459,6 @@ def generate_dataset_fede(
         np.zeros(n_dim_obs), l, size=n_samples) for l in ll]
     return data_list, Kobs, Ks, Ls
 
-def generate_dataset_sin_cos(n_dim_obs=100, n_dim_lat=10, eps=1e-2, T=10, sparsity=0.95):
-    K_HO = np.zeros((n_dim_lat, n_dim_obs))
-    for i in range(n_dim_lat):
-        percentage = int(n_dim_obs * 0.8)
-        indices = np.random.randint(0, high=n_dim_obs, size=percentage)
-        K_HO[i, indices] = np.random.rand(percentage)
-    L = K_HO.T.dot(K_HO)
-    L *= (0.12/np.sqrt(n_dim_obs))/np.max(L)
-    assert(is_pos_semidef(L))
-    assert np.linalg.matrix_rank(L) == n_dim_lat
-
-
-    phase = np.random.randn(n_dim_obs, n_dim_obs)*np.pi
-    phase[np.triu_indices(n_dim_obs)[::-1]] = phase[np.triu_indices(n_dim_obs)]
-
-    clip = np.zeros((n_dim_obs, n_dim_obs))
-    picks = np.random.permutation(len(np.triu_indices(n_dim_obs,1)[0]))
-    dim = int(len(np.triu_indices(n_dim_obs,1)[0])*sparsity)
-    picks = picks[:dim]
-    clip1 = clip[np.triu_indices(n_dim_obs,1)].ravel()
-    clip1[picks] = 1
-    clip[np.triu_indices(n_dim_obs,1)[::-1]] = clip[np.triu_indices(n_dim_obs,1)] = clip1
-
-
-    thetas = np.array([np.eye(n_dim_obs) for i in range(T)])
-
-    x = np.linspace(-np.pi, np.pi, T)
-    for i in range(T):
-        for r in range(thetas[i].shape[0]):
-            for c in range(thetas[i].shape[1]):
-                if r==c:
-                    continue
-                if clip[r,c]:
-                    thetas[i,r,c] = np.sin((x[i]+phase[r,c])/T**2)*(0.5/T)
-                else:
-                    thetas[i,r,c] = np.sin((x[i]+phase[r,c]))*(0.5/T)
-        thetas[i][clip==1] = np.clip(thetas[i][clip==1],0,1)
-        thetas[i][np.abs(thetas[i])<eps]=0
-
-        assert(is_pos_def(thetas[i]))
-        theta_observed = thetas[i] - L
-        assert(is_pos_def(theta_observed))
-        thetas_obs = [theta_observed]
-
-    return thetas, thetas_obs, [L]
 
 def generate_ma_xue_zou(n_dim_obs=12, n_latent=3, epsilon=1e-3, sparsity=0.1):
     """Generate the dataset as in Ma, Xue, Zou (2012)."""

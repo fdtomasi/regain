@@ -75,8 +75,8 @@ def latent_time_graph_lasso(
         for the primal and dual residual norms at each iteration.
 
     """
-    psi, prox_psi = check_norm_prox(psi)
-    phi, prox_phi = check_norm_prox(phi)
+    psi, prox_psi, psi_node_penalty = check_norm_prox(psi)
+    phi, prox_phi, phi_node_penalty = check_norm_prox(phi)
 
     K = np.zeros_like(emp_cov)
     Z_0 = np.zeros_like(K)
@@ -108,7 +108,6 @@ def latent_time_graph_lasso(
         A = Z_0 - W_0 - X_0
         A *= - rho
         A += emp_cov
-
         R = np.array(map(partial(prox_logdet, lamda=1. / rho), A))
 
         # update Z_0
@@ -122,9 +121,14 @@ def latent_time_graph_lasso(
         # update Z_1, Z_2
         A_1 = Z_0[:-1] + X_1
         A_2 = Z_0[1:] + X_2
-        prox_e = prox_psi(A_2 - A_1, lamda=2. * beta / rho)
-        Z_1 = .5 * (A_1 + A_2 - prox_e)
-        Z_2 = .5 * (A_1 + A_2 + prox_e)
+        if not psi_node_penalty:
+            prox_e = prox_psi(A_2 - A_1, lamda=2. * beta / rho)
+            Z_1 = .5 * (A_1 + A_2 - prox_e)
+            Z_2 = .5 * (A_1 + A_2 + prox_e)
+        else:
+            Z_1, Z_2 = prox_phi(np.concatenate((A_1, A_2), axis=1),
+                                lamda=.5 * beta / rho,
+                                rho=rho, tol=tol, rtol=rtol, max_iter=max_iter)
 
         # update W_0
         A = Z_0 - R - X_0
@@ -136,9 +140,14 @@ def latent_time_graph_lasso(
         # update W_1, W_2
         A_1 = W_0[:-1] + U_1
         A_2 = W_0[1:] + U_2
-        prox_e = prox_phi(A_2 - A_1, lamda=2. * eta / rho)
-        W_1 = .5 * (A_1 + A_2 - prox_e)
-        W_2 = .5 * (A_1 + A_2 + prox_e)
+        if not phi_node_penalty:
+            prox_e = prox_phi(A_2 - A_1, lamda=2. * eta / rho)
+            W_1 = .5 * (A_1 + A_2 - prox_e)
+            W_2 = .5 * (A_1 + A_2 + prox_e)
+        else:
+            W_1, W_2 = prox_phi(np.concatenate((A_1, A_2), axis=1),
+                                lamda=.5 * eta / rho,
+                                rho=rho, tol=tol, rtol=rtol, max_iter=max_iter)
 
         # update residuals
         X_0 += R - Z_0 + W_0

@@ -28,12 +28,14 @@ def compose(*functions):
         return lambda x: f(g(x))
     return functools.reduce(compose2, functions, lambda x: x)
 
+
 def error_rank(ells_true, ells_pred):
     ranks_true = [np.linalg.matrix_rank(l) for l in ells_true]
     ranks_pred = [np.linalg.matrix_rank(l) for l in ells_pred]
 
     return np.mean(ranks_true - ranks_pred)
-    
+
+
 def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
                squared=True):
     """Computes the Mean Squared Error between two covariance estimators.
@@ -83,8 +85,8 @@ def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
         result = squared_norm
     else:
         result = np.sqrt(squared_norm)
-
     return result
+
 
 def structure_error(true, pred, thresholding=0, epsilon=1e-2):
     """Computes the error in structure between the real inverse covariance
