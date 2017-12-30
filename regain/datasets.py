@@ -6,6 +6,7 @@ import math
 import warnings
 
 from sklearn.datasets import make_sparse_spd_matrix
+from sklearn.datasets.base import Bunch
 
 from regain.plot import plot_graph_with_latent_variables
 
@@ -84,12 +85,12 @@ def generate_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
     sigmas = np.array(map(np.linalg.inv, thetas_obs))
     map(normalize_matrix, sigmas)  # in place
 
-    data_list = [np.random.multivariate_normal(
-        np.zeros(n_dim_obs), sigma, size=n_samples) for sigma in sigmas]
-    return {'data_list': data_list,
-            'thetas': thetas,
-            'thetas_observed': thetas_obs,
-            'ells': ells}
+    data_list = np.array([np.random.multivariate_normal(
+        np.zeros(n_dim_obs), sigma, size=n_samples) for sigma in sigmas])
+    return Bunch(data=data_list,
+            thetas=np.array(thetas),
+            thetas_observed=np.array(thetas_obs),
+            ells=np.array(ells))
 
 
 def generate_dataset_L1L2(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):

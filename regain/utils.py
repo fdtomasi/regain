@@ -30,8 +30,8 @@ def compose(*functions):
 
 
 def error_rank(ells_true, ells_pred):
-    ranks_true = [np.linalg.matrix_rank(l) for l in ells_true]
-    ranks_pred = [np.linalg.matrix_rank(l) for l in ells_pred]
+    ranks_true = np.array([np.linalg.matrix_rank(l) for l in ells_true])
+    ranks_pred = np.array([np.linalg.matrix_rank(l) for l in ells_pred])
 
     return np.mean(ranks_true - ranks_pred)
 
@@ -110,19 +110,19 @@ def structure_error(true, pred, thresholding=0, epsilon=1e-2):
       if thresholding is true it is used to threshold the values of pred.
     """
     if thresholding:
-        pred[np.abs(pred)<1e-2] = 0
+        pred[np.abs(pred) < epsilon] = 0
     true[true != 0] = 1
     pred[pred != 0] = 2
     res = true+pred
-    FN = np.count_nonzero((res==1).astype(int))
-    FP = np.count_nonzero((res==2).astype(int))
-    TP = np.count_nonzero((res==3).astype(int))
-    TN = np.count_nonzero((res==0).astype(int))
-    p = TP/(TP+FP)
-    r = TP/(TP+FN)
+    FN = np.count_nonzero((res == 1).astype(float))
+    FP = np.count_nonzero((res == 2).astype(float))
+    TP = np.count_nonzero((res == 3).astype(float))
+    TN = np.count_nonzero((res == 0).astype(float))
+    p = TP/float(TP+FP)
+    r = TP/float(TP+FN)
     return {'TP':TP, 'TN':TN, 'FP':FP, 'FN':FN,
             'precision': p, 'recall': r,
-            'f1score': p*r/(p+r)}
+            'f1': p*r/(p+r)}
 
 
 def error_norm_time(cov, comp_cov, norm='frobenius', scaling=True,
