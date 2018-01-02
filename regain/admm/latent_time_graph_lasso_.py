@@ -126,7 +126,7 @@ def latent_time_graph_lasso(
             Z_1 = .5 * (A_1 + A_2 - prox_e)
             Z_2 = .5 * (A_1 + A_2 + prox_e)
         else:
-            Z_1, Z_2 = prox_phi(np.concatenate((A_1, A_2), axis=1),
+            Z_1, Z_2 = prox_psi(np.concatenate((A_1, A_2), axis=1),
                                 lamda=.5 * beta / rho,
                                 rho=rho, tol=tol, rtol=rtol, max_iter=max_iter)
 
