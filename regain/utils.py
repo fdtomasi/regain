@@ -109,6 +109,9 @@ def structure_error(true, pred, thresholding=0, epsilon=1e-2):
     epsilon: float, default=1e-2
       if thresholding is true it is used to threshold the values of pred.
     """
+    # avoid inplace modifications
+    true = true.copy()
+    pred = pred.copy()
     if thresholding:
         pred[np.abs(pred) < epsilon] = 0
     true[true != 0] = 1
