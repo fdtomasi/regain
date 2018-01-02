@@ -115,8 +115,9 @@ def latent_time_graph_lasso(
         A[:-1] += Z_1 - X_1
         A[1:] += Z_2 - X_2
         A /= divisor[:, None, None]
-        soft_thresholding = partial(soft_thresholding_sign, lamda=alpha / rho)
-        Z_0 = np.array(map(soft_thresholding, A))
+        # soft_thresholding_ = partial(soft_thresholding, lamda=alpha / rho)
+        # Z_0 = np.array(map(soft_thresholding_, A))
+        Z_0 = soft_thresholding_sign(A, lamda=alpha / rho)
 
         # update Z_1, Z_2
         A_1 = Z_0[:-1] + X_1
