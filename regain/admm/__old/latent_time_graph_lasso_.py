@@ -6,13 +6,12 @@ import warnings
 
 from functools import partial
 from six.moves import range
-from sklearn.covariance import empirical_covariance, log_likelihood
+from sklearn.covariance import empirical_covariance
 from sklearn.covariance import EmpiricalCovariance
 from sklearn.utils.extmath import squared_norm, fast_logdet
 from sklearn.utils.validation import check_array
 
-from regain.admm.time_graph_lasso_ import log_likelihood as logl
-from regain.admm.time_graph_lasso_ import log_likelihood_trace
+from regain.admm.time_graph_lasso_ import log_likelihood, log_likelihood_trace
 from regain.norm import l1_od_norm
 from regain.prox import soft_thresholding_sign
 from regain.prox import prox_logdet
@@ -24,13 +23,20 @@ from regain.validation import check_norm_prox
 def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
               alpha, tau, beta, eta, psi, phi):
     """Objective function for time-varying graphical lasso."""
-    obj = np.sum(- logl(s, r) for s, r in zip(S, R))
+    obj = np.sum(- log_likelihood(s, r) for s, r in zip(S, R))
     obj += alpha * np.sum(map(l1_od_norm, Z_0))
     obj += tau * np.sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
     obj += beta * np.sum(map(psi, Z_2 - Z_1))
     obj += eta * np.sum(map(phi, W_2 - W_1))
     return obj
 
+# def _objective(S, K, L, alpha, tau, beta, eta, psi, phi):
+#     obj = np.sum(- log_likelihood(s, r) for s, r in zip(S, K-L))
+#     obj += alpha * np.sum(map(l1_od_norm, K))
+#     obj += tau * np.sum(map(partial(np.linalg.norm, ord='nuc'), L))
+#     obj += beta * np.sum(map(psi, K[2:] - K[:-1]))
+#     obj += eta * np.sum(map(phi, L[2:] - L[:-1]))
+#     return obj
 
 def latent_time_graph_lasso(
         emp_cov, alpha=1, tau=1, rho=1, beta=1., eta=1., max_iter=1000,
@@ -73,10 +79,12 @@ def latent_time_graph_lasso(
         If return_history, then also a structure that contains the
         objective value, the primal and dual residual norms, and tolerances
         for the primal and dual residual norms at each iteration.
-
     """
-    psi, prox_psi, psi_node_penalty = check_norm_prox(psi)
-    phi, prox_phi, phi_node_penalty = check_norm_prox(phi)
+    psi, prox_psi = check_norm_prox(psi)
+    phi, prox_phi = check_norm_prox(phi)
+
+    # S = np.array(map(empirical_covariance, data_list))
+    # n_samples = np.array([s for s in [1.]])
 
     K = np.zeros_like(emp_cov)
     Z_0 = np.zeros_like(K)
@@ -88,14 +96,12 @@ def latent_time_graph_lasso(
     X_0 = np.zeros_like(K)
     X_1 = np.zeros_like(K)[:-1]
     X_2 = np.zeros_like(K)[1:]
-    U_1 = np.zeros_like(K)[:-1]
-    U_2 = np.zeros_like(K)[1:]
 
+    Z_consensus = np.zeros_like(K)
+    # Z_consensus_old = np.zeros_like(K)
+    W_consensus = np.zeros_like(K)
+    # W_consensus_old = np.zeros_like(K)
     R_old = np.zeros_like(K)
-    Z_1_old = np.zeros_like(Z_1)
-    Z_2_old = np.zeros_like(Z_2)
-    W_1_old = np.zeros_like(W_1)
-    W_2_old = np.zeros_like(W_2)
 
     # divisor for consensus variables, accounting for two less matrices
     divisor = np.full(K.shape[0], 3, dtype=float)
@@ -106,109 +112,90 @@ def latent_time_graph_lasso(
     for iteration_ in range(max_iter):
         # update R
         A = Z_0 - W_0 - X_0
+        A[:-1] += Z_1 - W_1 - X_1
+        A[1:] += Z_2 - W_2 - X_2
+        A /= divisor[:, None, None]
+
+        # A += np.array(map(np.transpose, A))
+        # A /= 2.
+
+        # A *= - rho / n_samples[:, None, None]
         A *= - rho
         A += emp_cov
-        R = np.array(map(partial(prox_logdet, lamda=1. / rho), A))
+
+        R = np.array([prox_logdet(a, lamda=1. / rho) for a in A])
 
         # update Z_0
-        A = R + W_0 + X_0
-        A[:-1] += Z_1 - X_1
-        A[1:] += Z_2 - X_2
-        A /= divisor[:, None, None]
+        # Zold = Z
+        # X_hat = alpha * X + (1 - alpha) * Zold
         soft_thresholding = partial(soft_thresholding_sign, lamda=alpha / rho)
-        Z_0 = np.array(map(soft_thresholding, A))
+        Z_0 = np.array(map(soft_thresholding, R + W_0 + X_0))
 
         # update Z_1, Z_2
-        A_1 = Z_0[:-1] + X_1
-        A_2 = Z_0[1:] + X_2
-        if not psi_node_penalty:
+        # prox_l = partial(prox_laplacian, beta=2. * beta / rho)
+        # prox_e = np.array(map(prox_l, K[1:] - K[:-1] + U_2 - U_1))
+        if beta != 0:
+            A_1 = R[:-1] + W_1 + X_1
+            # A_1 = Z_0[:-1].copy()
+            A_2 = R[1:] + W_2 + X_2
+            # A_2 = Z_0[1:].copy()
             prox_e = prox_psi(A_2 - A_1, lamda=2. * beta / rho)
             Z_1 = .5 * (A_1 + A_2 - prox_e)
             Z_2 = .5 * (A_1 + A_2 + prox_e)
         else:
-            Z_1, Z_2 = prox_phi(np.concatenate((A_1, A_2), axis=1),
-                                lamda=.5 * beta / rho,
-                                rho=rho, tol=tol, rtol=rtol, max_iter=max_iter)
+            Z_1 = Z_0[:-1].copy()
+            Z_2 = Z_0[1:].copy()
 
         # update W_0
         A = Z_0 - R - X_0
-        A[:-1] += W_1 - U_1
-        A[1:] += W_2 - U_2
-        A /= divisor[:, None, None]
         W_0 = np.array(map(partial(prox_trace_indicator, lamda=tau / rho), A))
 
         # update W_1, W_2
-        A_1 = W_0[:-1] + U_1
-        A_2 = W_0[1:] + U_2
-        if not phi_node_penalty:
+        if eta != 0:
+            A_1 = Z_1 - R[:-1] - X_1
+            # A_1 = W_0[:-1].copy()
+            A_2 = Z_2 - R[1:] - X_2
+            # A_2 = W_0[1:].copy()
             prox_e = prox_phi(A_2 - A_1, lamda=2. * eta / rho)
             W_1 = .5 * (A_1 + A_2 - prox_e)
             W_2 = .5 * (A_1 + A_2 + prox_e)
         else:
-            W_1, W_2 = prox_phi(np.concatenate((A_1, A_2), axis=1),
-                                lamda=.5 * eta / rho,
-                                rho=rho, tol=tol, rtol=rtol, max_iter=max_iter)
+            W_1 = W_0[:-1].copy()
+            W_2 = W_0[1:].copy()
 
         # update residuals
         X_0 += R - Z_0 + W_0
-        X_1 += Z_0[:-1] - Z_1
-        X_2 += Z_0[1:] - Z_2
-        U_1 += W_0[:-1] - W_1
-        U_2 += W_0[1:] - W_2
+        X_1 += R[:-1] - Z_1 + W_1
+        X_2 += R[1:] - Z_2 + W_2
 
         # diagnostics, reporting, termination checks
-        # X_consensus = np.zeros_like(X_0)
-        # X_consensus[:-1] += X_1
-        # X_consensus[1:] += X_2
-        # X_consensus /= divisor[:, None, None] - 1
-        #
-        # U_consensus = np.zeros_like(X_0)
-        # U_consensus[:-1] += U_1
-        # U_consensus[1:] += U_2
-        # U_consensus /= divisor[:, None, None] - 1
-        #
-        # Z_consensus = np.zeros_like(Z_0)
-        # Z_consensus[:-1] += Z_1
-        # Z_consensus[1:] += Z_2
-        # Z_consensus /= divisor[:, None, None] - 1
-        #
-        # W_consensus = np.zeros_like(W_0)
-        # W_consensus[:-1] += W_1
-        # W_consensus[1:] += W_2
-        # W_consensus /= divisor[:, None, None] - 1
+        X_consensus = X_0.copy()
+        X_consensus[:-1] += X_1
+        X_consensus[1:] += X_2
+        X_consensus /= divisor[:, None, None]
+
+        Z_consensus = Z_0.copy()
+        Z_consensus[:-1] += Z_1
+        Z_consensus[1:] += Z_2
+        Z_consensus /= divisor[:, None, None]
+
+        W_consensus = W_0.copy()
+        W_consensus[:-1] += W_1
+        W_consensus[1:] += W_2
+        W_consensus /= divisor[:, None, None]
 
         check = convergence(
             obj=objective(emp_cov, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
                           alpha, tau, beta, eta, psi, phi),
-            rnorm=np.sqrt(squared_norm(R - Z_0 + W_0) +
-                          squared_norm(Z_0[:-1] - Z_1) +
-                          squared_norm(Z_0[1:] - Z_2) +
-                          squared_norm(W_0[:-1] - W_1) +
-                          squared_norm(W_0[1:] - W_2)),
-            snorm=np.sqrt(squared_norm(rho * (R - R_old)) +
-                          squared_norm(rho * (Z_1 - Z_1_old)) +
-                          squared_norm(rho * (Z_2 - Z_2_old)) +
-                          squared_norm(rho * (W_1 - W_1_old)) +
-                          squared_norm(rho * (W_2 - W_2_old))),
-            e_pri=np.sqrt(np.prod(K.shape[1:]) * (5 * K.shape[0] - 4)) * tol +
-                  rtol * max(
-                np.sqrt(squared_norm(R) +
-                        squared_norm(Z_1) + squared_norm(Z_2) +
-                        squared_norm(W_1) + squared_norm(W_2)),
-                np.sqrt(squared_norm(Z_0) - squared_norm(W_0) +
-                        squared_norm(Z_0[:-1]) + squared_norm(Z_0[1:]) +
-                        squared_norm(W_0[:-1]) + squared_norm(W_0[1:]))),
-            e_dual=np.sqrt(np.prod(K.shape[1:]) * (5 * K.shape[0] - 4)) * tol +
-                   rtol * np.sqrt(
-                squared_norm(rho * X_0) +
-                squared_norm(rho * X_1) + squared_norm(rho * X_2) +
-                squared_norm(rho * U_1) + squared_norm(rho * U_2)))
-
+            rnorm=np.linalg.norm(R - Z_consensus + W_consensus),
+            snorm=np.linalg.norm(rho * (R - R_old)),
+            e_pri=np.sqrt(np.prod(K.shape)) * tol + rtol * max(
+                np.linalg.norm(R),
+                np.sqrt(squared_norm(Z_consensus) - squared_norm(W_consensus))),
+            e_dual=np.sqrt(np.prod(K.shape)) * tol + rtol * np.linalg.norm(
+                rho * X_consensus)
+        )
         R_old = R.copy()
-        Z_1_old = Z_1.copy()
-        Z_2_old = Z_2.copy()
-        W_1_old = W_1.copy()
-        W_2_old = W_2.copy()
 
         if verbose:
             print("obj: %.4f, rnorm: %.4f, snorm: %.4f,"
@@ -218,12 +205,13 @@ def latent_time_graph_lasso(
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
 
-        # if iteration_ % 10 == 0 and rho > 1e-6:
-        #     rho /= 2.
+        # if iteration_ % 10 == 0:
+        #     rho = rho * 0.8
     else:
         warnings.warn("Objective did not converge.")
 
-    return_list = [Z_0, W_0, emp_cov]
+    # return_list = [Z_consensus, W_consensus, emp_cov]
+    return_list = [Z_consensus, W_0, W_1, W_2, emp_cov]
     if return_history:
         return_list.append(checks)
     if return_n_iter:
@@ -330,16 +318,15 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
         #                      % (X.ndim, self.__class__.__name__))
         X = np.array([check_array(x, ensure_min_features=2,
                       ensure_min_samples=2, estimator=self) for x in X])
-
         if self.assume_centered:
             self.location_ = np.zeros((X.shape[0], 1, X.shape[2]))
         else:
             self.location_ = X.mean(1).reshape(X.shape[0], 1, X.shape[2])
-        emp_cov = np.array([empirical_covariance(
+        self.emp_cov = np.array([empirical_covariance(
             x, assume_centered=self.assume_centered) for x in X])
         self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
             latent_time_graph_lasso(
-                emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
+                self.emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
                 beta=self.beta, eta=self.eta, mode=self.mode,
                 tol=self.tol, rtol=self.rtol, psi=self.psi, phi=self.phi,
                 max_iter=self.max_iter, verbose=self.verbose,
@@ -373,14 +360,43 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
         test_cov = np.array([empirical_covariance(
             x, assume_centered=True) for x in X_test - self.location_])
 
-        res = np.sum([log_likelihood(S, R) for S, R in zip(
-            test_cov, self.precision_ - self.latent_)])
+        # ALLA SKLEARN
+        res = np.sum([log_likelihood(S, K-L) for S, K,L in zip(
+            test_cov, self.precision_, self.latent_)])
+        # -----------------------------------------------------------
+
+        # ALLA TIBSHIRANI
+        # score_f = lambda x, y : - fast_logdet(np.linalg.inv(x))\
+        #         - np.trace(y.dot(x))
+        # #estimated_cov = np.array(map(np.linalg.inv, self.precision_ - self.latent_))
+        #
+        #
+        # res = 0
+        # for train, test in zip(self.precision_ - self.latent_ ,test_cov):
+        #     res += score_f(train, test)
+        # res /= self.precision_.shape[0]
+        # -------------------------------------------------------------------
 
         # ALLA  MATLAB1
         # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
-        # scores_ranks = np.square(ranks-np.sqrt(L.shape[1]))
+        # # print(ranks)
+        # scores_ranks = np.square(ranks-np.sqrt(L.shape[0]))
+        # #scores_ranks[np.array(ranks)==0] = 1e10
+        # res = np.mean([log_likelihood_trace(S, K-L) for S, K,L in zip(
+        #      test_cov, self.precision_, self.latent_)])
+        # -----------------------------------------------------------------
 
-        return res # - np.sum(scores_ranks)
+        # ALLA MATLAB2
+        # try:
+        #     chols = [2*np.sum(np.log(np.diag(np.linalg.cholesky(K))))
+        #              for K in self.precision_ - self.latent_]
+        #     res = np.sum([c - t.ravel(order='F').T.dot(K.ravel(order="F"))
+        #                   for c, t, K in
+        #               zip(chols, test_cov, self.precision_ - self.latent_)])
+        # except:
+        #     res = -np.inf
+        # print(self.alpha, self.tau, res )#-  np.sum(scores_ranks))
+        return res  # -  np.sum(scores_ranks)
 
     def error_norm(self, comp_cov, norm='frobenius', scaling=True,
                    squared=True):
