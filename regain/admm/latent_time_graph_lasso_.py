@@ -186,11 +186,11 @@ def latent_time_graph_lasso(
                           squared_norm(Z_0[1:] - Z_2) +
                           squared_norm(W_0[:-1] - W_1) +
                           squared_norm(W_0[1:] - W_2)),
-            snorm=np.sqrt(squared_norm(rho * (R - R_old)) +
-                          squared_norm(rho * (Z_1 - Z_1_old)) +
-                          squared_norm(rho * (Z_2 - Z_2_old)) +
-                          squared_norm(rho * (W_1 - W_1_old)) +
-                          squared_norm(rho * (W_2 - W_2_old))),
+            snorm=rho * np.sqrt(squared_norm(R - R_old) +
+                                squared_norm(Z_1 - Z_1_old) +
+                                squared_norm(Z_2 - Z_2_old) +
+                                squared_norm(W_1 - W_1_old) +
+                                squared_norm(W_2 - W_2_old)),
             e_pri=np.sqrt(np.prod(K.shape[1:]) * (5 * K.shape[0] - 4)) * tol +
                   rtol * max(
                 np.sqrt(squared_norm(R) +
@@ -200,10 +200,10 @@ def latent_time_graph_lasso(
                         squared_norm(Z_0[:-1]) + squared_norm(Z_0[1:]) +
                         squared_norm(W_0[:-1]) + squared_norm(W_0[1:]))),
             e_dual=np.sqrt(np.prod(K.shape[1:]) * (5 * K.shape[0] - 4)) * tol +
-                   rtol * np.sqrt(
-                squared_norm(rho * X_0) +
-                squared_norm(rho * X_1) + squared_norm(rho * X_2) +
-                squared_norm(rho * U_1) + squared_norm(rho * U_2)))
+                   rtol * rho * np.sqrt(
+                squared_norm(X_0) +
+                squared_norm(X_1) + squared_norm(X_2) +
+                squared_norm(U_1) + squared_norm(U_2)))
 
         R_old = R.copy()
         Z_1_old = Z_1.copy()

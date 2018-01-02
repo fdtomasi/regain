@@ -46,9 +46,11 @@ def blockwise_soft_thresholding(a, lamda):
 def blockwise_soft_thresholding_symmetric(a, lamda):
     """Proximal operator for l2 norm, for symmetric matrices (last 2 axes)."""
     col_norms = np.linalg.norm(a, axis=1)
-    return np.array([np.dot(x, np.diag(
-        (np.ones(x.shape[0]) - lamda / c_norm) * (c_norm > lamda)))
-        for x, c_norm in zip(a, col_norms)])
+    output = np.empty_like(a)
+    for i, (x, c_norm) in enumerate(zip(a, col_norms)):
+        output[i] = np.dot(x, np.diag(
+            (np.ones(x.shape[0]) - lamda / c_norm) * (c_norm > lamda)))
+    return output
 
 
 def prox_linf_1d(a, lamda):
@@ -95,15 +97,15 @@ def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
 
     A_12 = np.vstack((A_1, A_2))
     """
-    n = A_12.shape[-1]
+    n_time, _, n_dim = A_12.shape
 
-    U_1 = np.full((A_12.shape[0], n, n), 1. / n, dtype=float)
+    U_1 = np.full((A_12.shape[0], n_dim, n_dim), 1. / n_dim, dtype=float)
     U_2 = np.copy(U_1)
     Y_1 = np.copy(U_1)
     Y_2 = np.copy(U_1)
 
-    C = np.hstack((np.eye(n), -np.eye(n), np.eye(n)))
-    inverse = np.linalg.inv(C.T.dot(C) + 2 * np.eye(3 * n))
+    C = np.hstack((np.eye(n_dim), -np.eye(n_dim), np.eye(n_dim)))
+    inverse = np.linalg.inv(C.T.dot(C) + 2 * np.eye(3 * n_dim))
 
     V = np.zeros_like(U_1)
     W = np.zeros_like(U_1)
@@ -117,8 +119,10 @@ def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
         A = np.concatenate(((V + U_2).transpose(0, 2, 1), A_12), axis=1)
         D = V + U_1
         # Z = np.linalg.solve(C.T*C + eta*np.identity(3*n), - C.T*D + eta* A)
-        Z = np.array([inverse.dot(2 * A_i - C.T.dot(D_i)) for A_i, D_i in zip(A, D)])
-        W, Y_1, Y_2 = (Z[:, i*n:(i+1) * n, :] for i in range(3))
+        Z = np.empty_like(A)
+        for i, (A_i, D_i) in enumerate(zip(A, D)):
+            Z[i] = inverse.dot(2 * A_i - C.T.dot(D_i))
+        W, Y_1, Y_2 = (Z[:, i*n_dim:(i+1) * n_dim, :] for i in range(3))
 
         delta_U_1 = V + W - (Y_1 - Y_2)
         delta_U_2 = V - W.transpose(0, 2, 1)
@@ -129,13 +133,13 @@ def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
             obj=np.nan,
             rnorm=np.sqrt(squared_norm(delta_U_1) +
                           squared_norm(delta_U_2)),
-            snorm=np.sqrt(squared_norm(rho * (W - W_old)) +
-                          squared_norm(rho * (V + W - V_old - W_old))),
+            snorm=rho * np.sqrt(squared_norm(W - W_old) +
+                                squared_norm(V + W - V_old - W_old)),
             e_pri=np.sqrt(2 * np.prod(V.shape)) * tol + rtol * max(
                 np.sqrt(squared_norm(W) + squared_norm(V + W)),
                 np.sqrt(squared_norm(V) - squared_norm(Y_1 - Y_2))),
-            e_dual=np.sqrt(2 * np.prod(V.shape)) * tol + rtol * np.sqrt(
-                squared_norm(rho * U_1) + squared_norm(rho * U_2)))
+            e_dual=np.sqrt(2 * np.prod(V.shape)) * tol + rtol * rho * np.sqrt(
+                squared_norm(U_1) + squared_norm(U_2)))
         W_old = W.copy()
         V_old = V.copy()
 
