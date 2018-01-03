@@ -181,6 +181,8 @@ class BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
             else:
                 self.best_estimator_.fit(X, **fit_params)
 
+        return self
+
     def plot_acquisition(self):
         old_X, old_Y = self.X, self.Y
         # remove inf, to avoid error in plot_acquisition
