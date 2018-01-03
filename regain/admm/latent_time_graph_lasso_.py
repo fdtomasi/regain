@@ -6,18 +6,18 @@ import warnings
 
 from functools import partial
 from six.moves import range
-from sklearn.covariance import empirical_covariance, log_likelihood
-from sklearn.covariance import EmpiricalCovariance
-from sklearn.utils.extmath import squared_norm, fast_logdet
+from sklearn.covariance import empirical_covariance
+from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_array
 
-from regain.admm.time_graph_lasso_ import log_likelihood as logl
-from regain.admm.time_graph_lasso_ import log_likelihood_trace
+from regain.admm.time_graph_lasso_ import logl
+from regain.admm.time_graph_lasso_ import TimeGraphLasso
 from regain.norm import l1_od_norm
 from regain.prox import soft_thresholding_sign
 from regain.prox import prox_logdet
 from regain.prox import prox_trace_indicator
-from regain.utils import convergence, error_norm_time
+from regain.update_rules import update_rho
+from regain.utils import convergence
 from regain.validation import check_norm_prox
 
 
@@ -32,22 +32,8 @@ def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
     return obj
 
 
-def update_rho(rho, rnorm, snorm, iteration=None, mu=10, tau_inc=2, tau_dec=2):
-    """See Boyd pag 20-21 for details.
-
-    Parameters
-    ----------
-    rho : float
-    """
-    if rnorm > mu * snorm:
-        return tau_inc * rho
-    elif snorm > mu * rnorm:
-        return rho / tau_dec
-    return rho
-
-
 def latent_time_graph_lasso(
-        emp_cov, alpha=1, tau=1, rho=1, beta=1., eta=1., max_iter=1000,
+        emp_cov, alpha=1, tau=1, rho=1, beta=1., eta=1., max_iter=100,
         verbose=False, psi='laplacian', phi='laplacian', mode=None,
         tol=1e-4, rtol=1e-2, assume_centered=False,
         return_history=False, return_n_iter=True):
@@ -95,14 +81,15 @@ def latent_time_graph_lasso(
     Z_0 = np.zeros_like(emp_cov)
     Z_1 = np.zeros_like(emp_cov)[:-1]
     Z_2 = np.zeros_like(emp_cov)[1:]
-    W_0 = np.zeros_like(emp_cov)
-    W_1 = np.zeros_like(emp_cov)[:-1]
-    W_2 = np.zeros_like(emp_cov)[1:]
-    X_0 = np.zeros_like(emp_cov)
-    X_1 = np.zeros_like(emp_cov)[:-1]
-    X_2 = np.zeros_like(emp_cov)[1:]
-    U_1 = np.zeros_like(emp_cov)[:-1]
-    U_2 = np.zeros_like(emp_cov)[1:]
+    W_0 = np.zeros_like(Z_0)
+    W_1 = np.zeros_like(Z_1)
+    W_2 = np.zeros_like(Z_2)
+
+    X_0 = np.zeros_like(Z_0)
+    X_1 = np.zeros_like(Z_1)
+    X_2 = np.zeros_like(Z_2)
+    U_1 = np.zeros_like(W_1)
+    U_2 = np.zeros_like(W_2)
 
     R_old = np.zeros_like(emp_cov)
     Z_1_old = np.zeros_like(Z_1)
@@ -185,14 +172,14 @@ def latent_time_graph_lasso(
             obj=objective(emp_cov, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
                           alpha, tau, beta, eta, psi, phi),
             rnorm=rnorm, snorm=snorm,
-            e_pri=np.sqrt(R.size + Z_1.size * 4) * tol + rtol * max(
+            e_pri=np.sqrt(R.size + 4 * Z_1.size) * tol + rtol * max(
                 np.sqrt(squared_norm(R) +
                         squared_norm(Z_1) + squared_norm(Z_2) +
                         squared_norm(W_1) + squared_norm(W_2)),
                 np.sqrt(squared_norm(Z_0 - W_0) +
                         squared_norm(Z_0[:-1]) + squared_norm(Z_0[1:]) +
                         squared_norm(W_0[:-1]) + squared_norm(W_0[1:]))),
-            e_dual=np.sqrt(R.size + Z_1.size * 4) * tol + rtol * rho * (
+            e_dual=np.sqrt(R.size + 4 * Z_1.size) * tol + rtol * rho * (
                 np.sqrt(squared_norm(X_0) +
                         squared_norm(X_1) + squared_norm(X_2) +
                         squared_norm(U_1) + squared_norm(U_2))))
@@ -221,7 +208,6 @@ def latent_time_graph_lasso(
         U_1 *= rho / rho_new
         U_2 *= rho / rho_new
         rho = rho_new
-
     else:
         warnings.warn("Objective did not converge.")
 
@@ -233,7 +219,7 @@ def latent_time_graph_lasso(
     return return_list
 
 
-class LatentTimeGraphLasso(EmpiricalCovariance):
+class LatentTimeGraphLasso(TimeGraphLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Read more in the :ref:`User Guide <sparse_inverse_covariance>`.
@@ -293,23 +279,24 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
                  bypass_transpose=True, tol=1e-4, rtol=1e-4,
                  psi='laplacian', phi='laplacian', max_iter=100,
                  verbose=False, assume_centered=False):
-        super(LatentTimeGraphLasso, self).__init__(assume_centered=assume_centered)
-        self.alpha = alpha
+        super(LatentTimeGraphLasso, self).__init__(
+            alpha=alpha, beta=beta, mode=mode, rho=rho,
+            tol=tol, rtol=rtol, psi=psi, max_iter=max_iter, verbose=verbose,
+            bypass_transpose=bypass_transpose, assume_centered=assume_centered)
         self.tau = tau
-        self.beta = beta
         self.eta = eta
-        self.rho = rho
-        self.mode = mode
-        self.tol = tol
-        self.rtol = rtol
-        self.psi = psi
         self.phi = phi
-        self.max_iter = max_iter
-        self.verbose = verbose
-        # for splitting purposes, data may come transposed, with time in the
-        # last index. Set bypass_transpose=True if X comes with time in the
-        # first dimension already
-        self.bypass_transpose = bypass_transpose
+
+    def get_observed_precision(self):
+        """Getter for the observed precision matrix.
+
+        Returns
+        -------
+        precision_ : array-like,
+            The precision matrix associated to the current covariance object.
+
+        """
+        return self.precision_ - self.latent_
 
     def fit(self, X, y=None):
         """Fit the GraphLasso model to X.
@@ -347,103 +334,3 @@ class LatentTimeGraphLasso(EmpiricalCovariance):
                 max_iter=self.max_iter, verbose=self.verbose,
                 return_n_iter=True, return_history=False)
         return self
-
-    def score(self, X_test, y=None):
-        """Computes the log-likelihood of a Gaussian data set with
-        `self.covariance_` as an estimator of its covariance matrix.
-
-        Parameters
-        ----------
-        X_test : array-like, shape = [n_samples, n_features]
-            Test data of which we compute the likelihood, where n_samples is
-            the number of samples and n_features is the number of features.
-            X_test is assumed to be drawn from the same distribution than
-            the data used in fit (including centering).
-
-        y : not used, present for API consistence purpose.
-
-        Returns
-        -------
-        res : float
-            The likelihood of the data set with `self.covariance_` as an
-            estimator of its covariance matrix.
-
-        """
-        if not self.bypass_transpose:
-            X_test = X_test.transpose(2, 0, 1)  # put time as first dimension
-        # compute empirical covariance of the test set
-        test_cov = np.array([empirical_covariance(
-            x, assume_centered=True) for x in X_test - self.location_])
-
-        res = np.sum([log_likelihood(S, R) for S, R in zip(
-            test_cov, self.precision_ - self.latent_)])
-
-        # ALLA  MATLAB1
-        # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
-        # scores_ranks = np.square(ranks-np.sqrt(L.shape[1]))
-
-        return res # - np.sum(scores_ranks)
-
-    def error_norm(self, comp_cov, norm='frobenius', scaling=True,
-                   squared=True):
-        """Compute the Mean Squared Error between two covariance estimators.
-        (In the sense of the Frobenius norm).
-
-        Parameters
-        ----------
-        comp_cov : array-like, shape = [n_features, n_features]
-            The covariance to compare with.
-
-        norm : str
-            The type of norm used to compute the error. Available error types:
-            - 'frobenius' (default): sqrt(tr(A^t.A))
-            - 'spectral': sqrt(max(eigenvalues(A^t.A))
-            where A is the error ``(comp_cov - self.covariance_)``.
-
-        scaling : bool
-            If True (default), the squared error norm is divided by n_features.
-            If False, the squared error norm is not rescaled.
-
-        squared : bool
-            Whether to compute the squared error norm or the error norm.
-            If True (default), the squared error norm is returned.
-            If False, the error norm is returned.
-
-        Returns
-        -------
-        The Mean Squared Error (in the sense of the Frobenius norm) between
-        `self` and `comp_cov` covariance estimators.
-
-        """
-        return error_norm_time(self.covariance_, comp_cov, norm=norm,
-                               scaling=scaling, squared=squared)
-
-    def mahalanobis(self, observations):
-        """Computes the squared Mahalanobis distances of given observations.
-
-        Parameters
-        ----------
-        observations : array-like, shape = [n_observations, n_features]
-            The observations, the Mahalanobis distances of the which we
-            compute. Observations are assumed to be drawn from the same
-            distribution than the data used in fit.
-
-        Returns
-        -------
-        mahalanobis_distance : array, shape = [n_observations,]
-            Squared Mahalanobis distances of the observations.
-
-        """
-        if not self.bypass_transpose:
-            # put time as first dimension
-            observations = observations.transpose(2, 0, 1)
-        precision = self.get_precision()
-        # compute mahalanobis distances
-        sum_ = 0.
-        for obs, loc in zip(observations, self.location_):
-            centered_obs = observations - self.location_
-            sum_ += np.sum(
-                np.dot(centered_obs, precision) * centered_obs, 1)
-
-        mahalanobis_dist = sum_ / len(observations)
-        return mahalanobis_dist
