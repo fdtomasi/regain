@@ -32,6 +32,20 @@ def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
     return obj
 
 
+def update_rho(rho, rnorm, snorm, iteration=None, mu=10, tau_inc=2, tau_dec=2):
+    """See Boyd pag 20-21 for details.
+
+    Parameters
+    ----------
+    rho : float
+    """
+    if rnorm > mu * snorm:
+        return tau_inc * rho
+    elif snorm > mu * rnorm:
+        return rho / tau_dec
+    return rho
+
+
 def latent_time_graph_lasso(
         emp_cov, alpha=1, tau=1, rho=1, beta=1., eta=1., max_iter=1000,
         verbose=False, psi='laplacian', phi='laplacian', mode=None,
@@ -78,27 +92,26 @@ def latent_time_graph_lasso(
     psi, prox_psi, psi_node_penalty = check_norm_prox(psi)
     phi, prox_phi, phi_node_penalty = check_norm_prox(phi)
 
-    K = np.zeros_like(emp_cov)
-    Z_0 = np.zeros_like(K)
-    Z_1 = np.zeros_like(K)[:-1]
-    Z_2 = np.zeros_like(K)[1:]
-    W_0 = np.zeros_like(K)
-    W_1 = np.zeros_like(K)[:-1]
-    W_2 = np.zeros_like(K)[1:]
-    X_0 = np.zeros_like(K)
-    X_1 = np.zeros_like(K)[:-1]
-    X_2 = np.zeros_like(K)[1:]
-    U_1 = np.zeros_like(K)[:-1]
-    U_2 = np.zeros_like(K)[1:]
+    Z_0 = np.zeros_like(emp_cov)
+    Z_1 = np.zeros_like(emp_cov)[:-1]
+    Z_2 = np.zeros_like(emp_cov)[1:]
+    W_0 = np.zeros_like(emp_cov)
+    W_1 = np.zeros_like(emp_cov)[:-1]
+    W_2 = np.zeros_like(emp_cov)[1:]
+    X_0 = np.zeros_like(emp_cov)
+    X_1 = np.zeros_like(emp_cov)[:-1]
+    X_2 = np.zeros_like(emp_cov)[1:]
+    U_1 = np.zeros_like(emp_cov)[:-1]
+    U_2 = np.zeros_like(emp_cov)[1:]
 
-    R_old = np.zeros_like(K)
+    R_old = np.zeros_like(emp_cov)
     Z_1_old = np.zeros_like(Z_1)
     Z_2_old = np.zeros_like(Z_2)
     W_1_old = np.zeros_like(W_1)
     W_2_old = np.zeros_like(W_2)
 
     # divisor for consensus variables, accounting for two less matrices
-    divisor = np.full(K.shape[0], 3, dtype=float)
+    divisor = np.full(emp_cov.shape[0], 3, dtype=float)
     divisor[0] -= 1
     divisor[-1] -= 1
 
@@ -158,52 +171,31 @@ def latent_time_graph_lasso(
         U_2 += W_0[1:] - W_2
 
         # diagnostics, reporting, termination checks
-        # X_consensus = np.zeros_like(X_0)
-        # X_consensus[:-1] += X_1
-        # X_consensus[1:] += X_2
-        # X_consensus /= divisor[:, None, None] - 1
-        #
-        # U_consensus = np.zeros_like(X_0)
-        # U_consensus[:-1] += U_1
-        # U_consensus[1:] += U_2
-        # U_consensus /= divisor[:, None, None] - 1
-        #
-        # Z_consensus = np.zeros_like(Z_0)
-        # Z_consensus[:-1] += Z_1
-        # Z_consensus[1:] += Z_2
-        # Z_consensus /= divisor[:, None, None] - 1
-        #
-        # W_consensus = np.zeros_like(W_0)
-        # W_consensus[:-1] += W_1
-        # W_consensus[1:] += W_2
-        # W_consensus /= divisor[:, None, None] - 1
+        rnorm = np.sqrt(
+            squared_norm(R - Z_0 + W_0) +
+            squared_norm(Z_0[:-1] - Z_1) + squared_norm(Z_0[1:] - Z_2) +
+            squared_norm(W_0[:-1] - W_1) + squared_norm(W_0[1:] - W_2))
+
+        snorm = rho * np.sqrt(
+            squared_norm(R - R_old) +
+            squared_norm(Z_1 - Z_1_old) + squared_norm(Z_2 - Z_2_old) +
+            squared_norm(W_1 - W_1_old) + squared_norm(W_2 - W_2_old))
 
         check = convergence(
             obj=objective(emp_cov, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
                           alpha, tau, beta, eta, psi, phi),
-            rnorm=np.sqrt(squared_norm(R - Z_0 + W_0) +
-                          squared_norm(Z_0[:-1] - Z_1) +
-                          squared_norm(Z_0[1:] - Z_2) +
-                          squared_norm(W_0[:-1] - W_1) +
-                          squared_norm(W_0[1:] - W_2)),
-            snorm=rho * np.sqrt(squared_norm(R - R_old) +
-                                squared_norm(Z_1 - Z_1_old) +
-                                squared_norm(Z_2 - Z_2_old) +
-                                squared_norm(W_1 - W_1_old) +
-                                squared_norm(W_2 - W_2_old)),
-            e_pri=np.sqrt(np.prod(K.shape[1:]) * (5 * K.shape[0] - 4)) * tol +
-                  rtol * max(
+            rnorm=rnorm, snorm=snorm,
+            e_pri=np.sqrt(R.size + Z_1.size * 4) * tol + rtol * max(
                 np.sqrt(squared_norm(R) +
                         squared_norm(Z_1) + squared_norm(Z_2) +
                         squared_norm(W_1) + squared_norm(W_2)),
-                np.sqrt(squared_norm(Z_0) - squared_norm(W_0) +
+                np.sqrt(squared_norm(Z_0 - W_0) +
                         squared_norm(Z_0[:-1]) + squared_norm(Z_0[1:]) +
                         squared_norm(W_0[:-1]) + squared_norm(W_0[1:]))),
-            e_dual=np.sqrt(np.prod(K.shape[1:]) * (5 * K.shape[0] - 4)) * tol +
-                   rtol * rho * np.sqrt(
-                squared_norm(X_0) +
-                squared_norm(X_1) + squared_norm(X_2) +
-                squared_norm(U_1) + squared_norm(U_2)))
+            e_dual=np.sqrt(R.size + Z_1.size * 4) * tol + rtol * rho * (
+                np.sqrt(squared_norm(X_0) +
+                        squared_norm(X_1) + squared_norm(X_2) +
+                        squared_norm(U_1) + squared_norm(U_2))))
 
         R_old = R.copy()
         Z_1_old = Z_1.copy()
@@ -220,7 +212,16 @@ def latent_time_graph_lasso(
             break
 
         # if iteration_ % 10 == 0 and rho > 1e-6:
-        #     rho /= 2.
+        #     rho /= 2.  # see Boyd, pag 21
+        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_)
+        # scaled dual variables should be also rescaled
+        X_0 *= rho / rho_new
+        X_1 *= rho / rho_new
+        X_2 *= rho / rho_new
+        U_1 *= rho / rho_new
+        U_2 *= rho / rho_new
+        rho = rho_new
+
     else:
         warnings.warn("Objective did not converge.")
 
