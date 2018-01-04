@@ -2,7 +2,7 @@ function out = ADMMMA(emp_list,alpha,tau)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 opts.continuation = 1; opts.num_continuation = 0;
 opts.eta = sqrt(100); opts.muf = 1e-6;
-opts.maxiter = 500; opts.stoptol = 1e-5; 
+opts.maxiter = 500; opts.stoptol = 1e-5;
 opts.over_relax_par = 1;
 
 R = cell(1, size(emp_list,3));
@@ -24,10 +24,10 @@ for i=1:size(emp_list,3)
     res{i} = out_B.resid;
     iter{i} = out_B.iter;
 end
-out.elapsed_time = toc
-out.R = R
-out.S = S
-out.L = L
-out.iter = iter
-out.obj = obj
-out.res = res
+out.elapsed_time = toc;
+out.R = R;
+out.S = S;
+out.L = L;
+out.iter = iter;
+out.obj = obj;
+out.res = res;
