@@ -2,7 +2,6 @@
 import numpy as np
 import warnings
 
-from functools import partial
 from scipy.optimize import minimize
 from sklearn.utils.extmath import squared_norm
 
@@ -135,10 +134,10 @@ def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
                           squared_norm(delta_U_2)),
             snorm=rho * np.sqrt(squared_norm(W - W_old) +
                                 squared_norm(V + W - V_old - W_old)),
-            e_pri=np.sqrt(2 * np.prod(V.shape)) * tol + rtol * max(
+            e_pri=np.sqrt(2 * V.size) * tol + rtol * max(
                 np.sqrt(squared_norm(W) + squared_norm(V + W)),
                 np.sqrt(squared_norm(V) - squared_norm(Y_1 - Y_2))),
-            e_dual=np.sqrt(2 * np.prod(V.shape)) * tol + rtol * rho * np.sqrt(
+            e_dual=np.sqrt(2 * V.size) * tol + rtol * rho * np.sqrt(
                 squared_norm(U_1) + squared_norm(U_2)))
         W_old = W.copy()
         V_old = V.copy()
