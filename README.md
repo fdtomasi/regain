@@ -1,2 +1,2 @@
 # regain
-REGAIN (Regularised Graph Inference)
+REGAIN (REGularised GrAph INference)
