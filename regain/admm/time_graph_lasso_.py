@@ -39,7 +39,7 @@ def objective(S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
 def time_graph_lasso(
         emp_cov, alpha=1, rho=1, beta=1, max_iter=100,
         verbose=False, psi='laplacian', tol=1e-4, rtol=1e-2,
-        return_history=False, return_n_iter=True):
+        return_history=False, return_n_iter=True, mode=None):
     """Time-varying graphical lasso solver.
 
     Solves the following problem via ADMM:
