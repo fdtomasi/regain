@@ -16,7 +16,11 @@ from GPyOpt.optimization.acquisition_optimizer import AcquisitionOptimizer
 
 
 class BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
-    """DOCSTRING."""
+    """Wrapper for BayesianOptimization object from GPyOpt package.
+
+    This is done to use estimator in the same way as scikit-learn.
+    For more information, see GPyOpt package.
+    """
 
     def __init__(self, estimator, domain=None, constraints=None,
                  cost_withGradients=None, model_type='GP', X=None, Y=None,
@@ -24,10 +28,11 @@ class BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
                  acquisition_type='EI', normalize_Y=True, exact_feval=False,
                  acquisition_optimizer_type='lbfgs', model_update_interval=1,
                  evaluator_type='sequential', batch_size=1, num_cores=1,
-                 verbosity_model=False, verbosity=True, de_duplication=False,
+                 verbosity_model=False, verbosity=False, de_duplication=False,
                  max_iter=50, refit=True, cv=None, scoring=None, n_jobs=1,
                  verbose=False,
                  **kwargs):
+        """Initialise the estimator."""
         # super(BayesianOptimization, self).__init__(
         #     f=f, domain=domain, constraints=constraints,
         #     cost_withGradients=cost_withGradients, model_type=model_type,
@@ -61,7 +66,7 @@ class BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
         self.objective_name = kwargs.get('objective_name', '') or 'no_name'
         self.batch_size = batch_size
         self.num_cores = num_cores
-        self.maximize = True
+        # self.maximize = True
         # self.objective = None
 
         # --- CHOOSE the cost model
@@ -163,7 +168,7 @@ class BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
             self.f, self.batch_size, self.objective_name)
         self._init_design_chooser()
 
-        self.run_optimization(max_iter=self.max_iter)
+        self.run_optimization(max_iter=self.max_iter, verbosity=self.verbosity)
 
         self.best_index_ = self.Y.argmin()
         self.best_params_ = dict(zip(self.param_names,
