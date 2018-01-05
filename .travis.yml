@@ -1,0 +1,26 @@
+language: python
+
+notifications:
+  email:
+    on_success: change
+    on_failure: always
+
+os:
+- linux
+
+python:
+  - "2.7"
+  - "3.4"
+# command to install dependencies
+install:
+  - pip install -r requirements.txt
+  - pip install .
+# command to run tests
+script:
+- coverage run travis_tests.py
+
+
+after_success:
+- codecov
+
+skip_cleanup: true

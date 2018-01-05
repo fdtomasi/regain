@@ -2,7 +2,7 @@
 
 # regain
 Regularised graph inference across multiple time stamps, considering the influence of latent variables.
-It inherits functionalities from the ![scikit-learn](https://github.com/scikit-learn/scikit-learn) package.
+It inherits functionalities from the [scikit-learn](https://github.com/scikit-learn/scikit-learn) package.
 
 ## Getting started
 ### Dependencies
@@ -11,7 +11,7 @@ regain requires:
 - NumPy (>= 1.8.2)
 - scikit-learn (>= 0.17)
 
-To use the parameter selection via gaussian process optimisation, ![GPyOpt](https://github.com/SheffieldML/GPyOpt) is required.
+To use the parameter selection via gaussian process optimisation, [GPyOpt](https://github.com/SheffieldML/GPyOpt) is required.
 You can install dependencies by running:
 ```bash
 pip install -r requirements.txt
@@ -33,6 +33,9 @@ git clone https://github.com/fdtomasi/regain.git
 cd regain
 python setup.py develop
 ```
+
+## Quickstart
+TODO
 
 ## Citation
 ```latex

@@ -1,0 +1,7 @@
+numpy>=1.11.2
+scikit-learn>=0.17
+GPyOpt
+
+# For tests
+nose
+codecov
