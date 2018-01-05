@@ -1,4 +1,4 @@
-[![licence](https://img.shields.io/badge/licence-BSD-blue.svg)](http://opensource.org/licenses/BSD-3-Clause)
+[![develstat](https://travis-ci.org/fdtomasi/regain.svg?branch=master)](https://travis-ci.org/fdtomasi/regain) [![covdevel](http://codecov.io/github/fdtomasi/regain/coverage.svg?branch=master)](http://codecov.io/github/fdtomasi/regain?branch=master) [![licence](https://img.shields.io/badge/licence-BSD-blue.svg)](http://opensource.org/licenses/BSD-3-Clause)
 
 # regain
 Regularised graph inference across multiple time stamps, considering the influence of latent variables.
@@ -23,6 +23,7 @@ The simplest way to install regain is using pip
 pip install regain
 ```
 or `conda`
+
 ```bash
 conda install regain
 ```
