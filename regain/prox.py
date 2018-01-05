@@ -5,6 +5,7 @@ import warnings
 from scipy.optimize import minimize
 from sklearn.utils.extmath import squared_norm
 
+from regain.update_rules import update_rho
 from regain.utils import convergence
 
 try:
@@ -123,20 +124,21 @@ def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
             Z[i] = inverse.dot(2 * A_i - C.T.dot(D_i))
         W, Y_1, Y_2 = (Z[:, i*n_dim:(i+1) * n_dim, :] for i in range(3))
 
+        # update residuals
         delta_U_1 = V + W - (Y_1 - Y_2)
         delta_U_2 = V - W.transpose(0, 2, 1)
         U_1 += delta_U_1
         U_2 += delta_U_2
 
+        # diagnostics
+        rnorm = np.sqrt(squared_norm(delta_U_1) + squared_norm(delta_U_2))
+        snorm = rho * np.sqrt(squared_norm(W - W_old) +
+                              squared_norm(V + W - V_old - W_old))
         check = convergence(
-            obj=np.nan,
-            rnorm=np.sqrt(squared_norm(delta_U_1) +
-                          squared_norm(delta_U_2)),
-            snorm=rho * np.sqrt(squared_norm(W - W_old) +
-                                squared_norm(V + W - V_old - W_old)),
+            obj=np.nan, rnorm=rnorm, snorm=snorm,
             e_pri=np.sqrt(2 * V.size) * tol + rtol * max(
                 np.sqrt(squared_norm(W) + squared_norm(V + W)),
-                np.sqrt(squared_norm(V) - squared_norm(Y_1 - Y_2))),
+                np.sqrt(squared_norm(V) + squared_norm(Y_1 - Y_2))),
             e_dual=np.sqrt(2 * V.size) * tol + rtol * rho * np.sqrt(
                 squared_norm(U_1) + squared_norm(U_2)))
         W_old = W.copy()
@@ -146,6 +148,11 @@ def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
         #         np.linalg.norm(delta_U_2, 'fro') < tol:
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
+        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_)
+        # scaled dual variables should be also rescaled
+        U_1 *= rho / rho_new
+        U_2 *= rho / rho_new
+        rho = rho_new
     else:
         warnings.warn("Node norm did not converge.")
     return Y_1, Y_2
