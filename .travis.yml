@@ -10,7 +10,8 @@ os:
 
 python:
   - "2.7"
-  - "3.4"
+
+# - "3.4" # fix map for this
 # command to install dependencies
 install:
   - pip install -r requirements.txt
