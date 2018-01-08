@@ -1,5 +1,7 @@
 """Test LatentTimeGraphLasso."""
 import numpy as np
+import warnings
+
 from numpy.testing import assert_array_equal
 
 from regain.admm.latent_time_graph_lasso_ import LatentTimeGraphLasso
@@ -8,8 +10,11 @@ from regain.admm.latent_time_graph_lasso_ import LatentTimeGraphLasso
 def test_ltgl_zero():
     """Check that LatentTimeGraphLasso can handle zero data."""
     a = np.zeros((3, 3, 3))
-    mdl = LatentTimeGraphLasso(
-        bypass_transpose=False, max_iter=1, assume_centered=True).fit(a)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        mdl = LatentTimeGraphLasso(
+            bypass_transpose=False, max_iter=1, assume_centered=True).fit(a)
 
     for p in mdl.precision_:
         # remove the diagonal

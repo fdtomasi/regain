@@ -9,7 +9,7 @@ from regain.admm.graph_lasso_ import GraphLasso
 def test_gl():
     """Check GraphLasso vs sklearn-graph lasso."""
     np.random.seed(2)
-    X = np.multivariate_normal(np.zeros(3), np.eye(3), size=100)
+    X = np.random.multivariate_normal(np.zeros(3), np.eye(3), size=100)
     p1 = GL().fit(X).precision_
     p2 = GraphLasso().fit(X).precision_
 
