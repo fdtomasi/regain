@@ -6,20 +6,28 @@ http://www.stanford.edu/~boyd/papers/distr_opt_stat_learning_admm.html
 from __future__ import division
 
 import numpy as np
-from sklearn.covariance import empirical_covariance
-from sklearn.utils.extmath import fast_logdet
+import warnings
+
+from six.moves import range
+from sklearn.covariance import empirical_covariance, GraphLasso
+from sklearn.utils.validation import check_array
 
 from regain.norm import l1_od_norm
-from regain.prox import soft_thresholding_od
+from regain.prox import soft_thresholding_sign
+from regain.prox import prox_logdet
+from regain.admm.time_graph_lasso_ import logl
+from regain.update_rules import update_rho
+from regain.utils import convergence
 
 
-def objective(S, X, Z, lamda):
+def objective(S, X, Z, alpha):
     """Graph lasso objective."""
-    return np.sum(S * X) - fast_logdet(X) + lamda * l1_od_norm(Z)
+    return - logl(S, X) + alpha * l1_od_norm(Z)
 
 
-def graph_lasso(D, lamda=1, rho=1, alpha=1, max_iter=1000, verbose=False,
-                tol=1e-4, rtol=1e-2, return_history=False):
+def graph_lasso(
+        emp_cov, alpha=.01, rho=1, over_relax=1, max_iter=100, verbose=False,
+        tol=1e-4, rtol=1e-2, return_history=False, return_n_iter=True):
     """Graph lasso solver via ADMM.
 
     Solves the following problem via ADMM:
@@ -55,52 +63,148 @@ def graph_lasso(D, lamda=1, rho=1, alpha=1, max_iter=1000, verbose=False,
         If return_history, then also a structure that contains the
         objective value, the primal and dual residual norms, and tolerances
         for the primal and dual residual norms at each iteration.
+
     """
-    S = empirical_covariance(D)
-    n = S.shape[0]
+    Z = np.zeros_like(emp_cov)
+    U = np.zeros_like(emp_cov)
 
-    # X = zeros(n)
-    Z = np.zeros((n, n))
-    U = np.zeros((n, n))
+    Z_old = np.zeros_like(Z)
 
-    hist = []
-    count = 0
-    for _ in range(max_iter):
+    checks = []
+    for iteration_ in range(max_iter):
         # x-update
-        es, Q = np.linalg.eigh(rho * (Z - U) - S)
-        xi = (es + np.sqrt(np.square(es) + 4 * rho)) / (2. * rho)
-        X = np.dot(Q.dot(np.diag(xi)), Q.T)
+        X = prox_logdet(emp_cov - rho * (Z - U), 1. / rho)
 
         # z-update with relaxation
-        Zold = Z
-        X_hat = alpha * X + (1 - alpha) * Zold
-        Z = soft_thresholding_od(X_hat + U, lamda / rho)
+        X_hat = over_relax * X - (1 - over_relax) * Z
+        Z = soft_thresholding_sign(X_hat + U, lamda=alpha / rho)
 
-        U = U + (X_hat - Z)
+        # update residuals
+        U += X_hat - Z
 
         # diagnostics, reporting, termination checks
-        history = (
-            objective(S, X, Z, lamda),
-
-            np.linalg.norm(X - Z, 'fro'),
-            np.linalg.norm(-rho * (Z - Zold), 'fro'),
-
-            np.sqrt(n) * tol + rtol * max(
+        rnorm = np.linalg.norm(X - Z, 'fro')
+        snorm = rho * np.linalg.norm(Z - Z_old, 'fro')
+        check = convergence(
+            obj=objective(emp_cov, X, Z, alpha),
+            rnorm=rnorm, snorm=snorm,
+            e_pri=np.sqrt(X.size) * tol + rtol * max(
                 np.linalg.norm(X, 'fro'), np.linalg.norm(Z, 'fro')),
-            np.sqrt(n) * tol + rtol * np.linalg.norm(rho * U, 'fro')
+            e_dual=np.sqrt(X.size) * tol + rtol * rho * np.linalg.norm(
+                U, 'fro')
         )
 
+        Z_old = Z.copy()
         if verbose:
             print("obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                  "eps_pri: %.4f, eps_dual: %.4f" % history)
+                  "eps_pri: %.4f, eps_dual: %.4f" % check)
 
-        hist.append(history)
-        if history[1] < history[3] and history[2] < history[4]:
-            if count > 10:
-                break
-            else:
-                count += 1
+        checks.append(check)
+        if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
+            break
+
+        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_)
+        # scaled dual variables should be also rescaled
+        U *= rho / rho_new
+        rho = rho_new
+    else:
+        warnings.warn("Objective did not converge.")
+
+    return_list = [Z, emp_cov]
+    if return_history:
+        return_list.append(checks)
+    if return_n_iter:
+        return_list.append(iteration_)
+    return return_list
+
+
+class GraphLasso(GraphLasso):
+    """Sparse inverse covariance estimation with an l1-penalized estimator.
+
+    Read more in the :ref:`User Guide <sparse_inverse_covariance>`.
+
+    Parameters
+    ----------
+    alpha : positive float, default 0.01
+        The regularization parameter: the higher alpha, the more
+        regularization, the sparser the inverse covariance.
+
+    mode : {'cd', 'lars'}, default 'cd'
+        The Lasso solver to use: coordinate descent or LARS. Use LARS for
+        very sparse underlying graphs, where p > n. Elsewhere prefer cd
+        which is more numerically stable.
+
+    tol : positive float, default 1e-4
+        The tolerance to declare convergence: if the dual gap goes below
+        this value, iterations are stopped.
+
+    enet_tol : positive float, optional
+        The tolerance for the elastic net solver used to calculate the descent
+        direction. This parameter controls the accuracy of the search direction
+        for a given column update, not of the overall parameter estimate. Only
+        used for mode='cd'.
+
+    max_iter : integer, default 100
+        The maximum number of iterations.
+
+    verbose : boolean, default False
+        If verbose is True, the objective function and dual gap are
+        plotted at each iteration.
+
+    assume_centered : boolean, default False
+        If True, data are not centered before computation.
+        Useful when working with data whose mean is almost, but not exactly
+        zero.
+        If False, data are centered before computation.
+
+    Attributes
+    ----------
+    covariance_ : array-like, shape (n_features, n_features)
+        Estimated covariance matrix
+
+    precision_ : array-like, shape (n_features, n_features)
+        Estimated pseudo inverse matrix.
+
+    n_iter_ : int
+        Number of iterations run.
+
+    See Also
+    --------
+    graph_lasso, GraphLassoCV
+
+    """
+
+    def __init__(self, alpha=.01, rho=1., over_relax=1., max_iter=100,
+                 tol=1e-4, rtol=1e-2, verbose=False, assume_centered=False):
+        super(GraphLasso, self).__init__(
+            alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
+            assume_centered=assume_centered)
+        self.rho = rho
+        self.rtol = rtol
+        self.over_relax = over_relax
+
+    def fit(self, X, y=None):
+        """Fits the GraphLasso model to X.
+
+        Parameters
+        ----------
+        X : ndarray, shape (n_samples, n_features)
+            Data from which to compute the covariance estimate
+        y : (ignored)
+
+        """
+        # Covariance does not make sense for a single feature
+        X = check_array(X, ensure_min_features=2, ensure_min_samples=2,
+                        estimator=self)
+
+        if self.assume_centered:
+            self.location_ = np.zeros(X.shape[1])
         else:
-            count = 0
-
-    return X, Z, hist
+            self.location_ = X.mean(0)
+        emp_cov = empirical_covariance(
+            X, assume_centered=self.assume_centered)
+        self.precision_, self.covariance_, self.n_iter_ = graph_lasso(
+            emp_cov, alpha=self.alpha, tol=self.tol, rtol=self.rtol,
+            max_iter=self.max_iter, over_relax=self.over_relax, rho=self.rho,
+            verbose=self.verbose, return_n_iter=True, return_history=False)
+        return self
