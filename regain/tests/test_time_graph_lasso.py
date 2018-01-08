@@ -9,7 +9,7 @@ def test_ltgl_zero():
     """Check that LatentTimeGraphLasso can handle zero data."""
     a = np.zeros((3, 3, 3))
     mdl = TimeGraphLasso(
-        bypass_transpose=False, assume_centered=True).fit(a)
+        bypass_transpose=False, max_iter=1, assume_centered=True).fit(a)
 
     for p in mdl.precision_:
         # remove the diagonal
