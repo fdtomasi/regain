@@ -13,7 +13,7 @@ def group_lasso_overlap_paspal(X, y, groups=(), lamda=0.1, **kwargs):
     coef_ = eng.glopridu_algorithm(
         matlab.double(X.tolist()),
         matlab.double(y[:, None].tolist()),
-        [matlab.double(x) for x in groups],
+        [matlab.int32((np.array(x) + 1).tolist()) for x in groups],  # +1 because of the change of indices
         float(lamda))
 
     eng.quit()
