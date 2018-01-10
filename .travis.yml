@@ -2,9 +2,10 @@ language: python
 notifications:
   slack:
     rooms:
-      - secure: I+CJQ9xJ7wXcVfJ33pWpWS16zhRDD1odSpCKINQMpTV9UEtCo7n9SmOwaKD/JRDkyW2eT2VwK5d86gzgEEDAiPk3+Kysx6nokp9tg22t0vZ6bdFHj/9N7Vqu3THZ0xWGik/WMdOh6bdM4TK2sJPiqX8L7GKFVDqBeNF5nL3qTHhAjpIl6juXlY8A2CNAtdsdzX0pGa4Q+1LIATs6ViXac6jaW4JLdOt2hXIrKR1S43gVIs3s2N9QZ06s0LXMux68bEQiW6/BHhs6FlAUmGv2KhmMhP4gZnKkcnw/B0sq8l/35S/A10vHZG9JuQzjzvOKBn1JMNt/LtiEca4CcxVwamWHFUvEPAkI0LHzv09DCFGgnu/o1ClAx3IMPik6kkDFHfqRemUsv3tJu+PMZfsOLmSK5e+TT5uTljPZq0MxTVun53JAx6ziBkuiI+gMT9j6wYXZ41P+rf5tTcUG6uhlfCqjypMPjTHK4wy6zGgPS1RelPMblLlFfpMgqDe/pL7iVkamxxURqtbchYDzF10FCY1p+xXOLyq9hXBAHaSEGKYWjjdRzI+s19YX8Ln25ytEFObKzgPp/tXu4sqR/DmBhb7t9CM7unpKf35kmTv6EJi6qCvSfi1Ncj/sOpaIJhKGD4OxnAjm8FARGM/sPDoZWJOk3m2n9bW+qKpmSe6BuDI=
-    on_success: always # default: always
-    on_failure: always # default: always
+    - secure: I+CJQ9xJ7wXcVfJ33pWpWS16zhRDD1odSpCKINQMpTV9UEtCo7n9SmOwaKD/JRDkyW2eT2VwK5d86gzgEEDAiPk3+Kysx6nokp9tg22t0vZ6bdFHj/9N7Vqu3THZ0xWGik/WMdOh6bdM4TK2sJPiqX8L7GKFVDqBeNF5nL3qTHhAjpIl6juXlY8A2CNAtdsdzX0pGa4Q+1LIATs6ViXac6jaW4JLdOt2hXIrKR1S43gVIs3s2N9QZ06s0LXMux68bEQiW6/BHhs6FlAUmGv2KhmMhP4gZnKkcnw/B0sq8l/35S/A10vHZG9JuQzjzvOKBn1JMNt/LtiEca4CcxVwamWHFUvEPAkI0LHzv09DCFGgnu/o1ClAx3IMPik6kkDFHfqRemUsv3tJu+PMZfsOLmSK5e+TT5uTljPZq0MxTVun53JAx6ziBkuiI+gMT9j6wYXZ41P+rf5tTcUG6uhlfCqjypMPjTHK4wy6zGgPS1RelPMblLlFfpMgqDe/pL7iVkamxxURqtbchYDzF10FCY1p+xXOLyq9hXBAHaSEGKYWjjdRzI+s19YX8Ln25ytEFObKzgPp/tXu4sqR/DmBhb7t9CM7unpKf35kmTv6EJi6qCvSfi1Ncj/sOpaIJhKGD4OxnAjm8FARGM/sPDoZWJOk3m2n9bW+qKpmSe6BuDI=
+    on_success: change
+    on_failure: always
+  email: false
 os:
 - linux
 python:
@@ -17,3 +18,13 @@ script:
 after_success:
 - codecov
 skip_cleanup: true
+
+# deploy:
+#   provider: releases
+#   api_key:
+#     secure: IbzvHgN5aRUwSUcTdnnmLqAJw1DZz2InulgYheAT1CrUwepXWguppdD4zYnkhylZ283rNPHgeuyfIBl/x1SXQHqkyOXb5TjjhMU7t2iMM1M5NzZ8p5VsYcV8er3HkDj2br7/kgW0UdyHBaGHwgyLNULTBehCnK5zagvuY0A5M5vjljuJ7DPi/v/UtorBBqpY6/tJ7se+/Qy4XVrRyAxTkq+Nr3bTb742dERZLHyIDiv/kYEYQaMsHC/t4lPTTuZZsz1rs8C9/hi1+C8Dsjmo/nks46m2mmAaYwEGvM3bzBEFyF2o+IDrnV7JE0JhJHzEIEotKmVxG1AVntlbSyLyirZh6qqfLnLSqTYMynRlggNEhT4meOifc1g3f9KtZQtfO6y90ffhEVNpwVOGg7CVIiH1p4DiS01byT9H7bPH2LJyla3P6WG6gJx4jdEYcfv28NK0K7kk90vICKySv0LsCm/9iZlGcHSbd9O55U7sG8oQcXJdJfXYYqml2SBtOjjprI9mwdmvvsInAp3EkAi31+y8IMMPNba6/iv96WF3ZW2nez6l13kbZmC8tBl63TJb7gHYxHGER3T97VeYA7XmHd+va9qtfQ7/lngwJHJgFXm3C5h0QiK4guWGqqwDboluSOgz8zpxrhrzhtd3R/0zA7nASyKfnq+FdOV38Duxkrc=
+#   file: build/regain_$(TRAVIS_TAG).zip
+#   skip_cleanup: true
+#   on:
+#     repo: fdtomasi/regain
+#     tags: true
