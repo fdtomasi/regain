@@ -14,7 +14,7 @@ def group_lasso_overlap_paspal(X, y, groups=(), lamda=0.1, **kwargs):
         matlab.double(X.tolist()),
         matlab.double(y[:, None].tolist()),
         [matlab.double(x) for x in groups],
-        lamda)
+        float(lamda))
 
     eng.quit()
 
