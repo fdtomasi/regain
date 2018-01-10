@@ -103,7 +103,7 @@ def generate_dataset_L1L2(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     for i in range(n_dim_lat):
         percentage = int(n_dim_obs * 0.8)
         indices = np.random.randint(0, high=n_dim_obs, size=percentage)
-        K_HO[i, indices] = np.random.rand(percentage) * 0.12
+        K_HO[i, indices] = np.random.rand(percentage) * (0.12 / (n_dim_obs/100))
     L = K_HO.T.dot(K_HO)
     assert(is_pos_semidef(L))
     assert np.linalg.matrix_rank(L) == n_dim_lat
@@ -148,7 +148,7 @@ def generate_dataset_L1L2(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
         addition *= (epsilon / np.linalg.norm(addition))
         K_HO += addition
         K_HO = K_HO / np.sum(K_HO, axis=1)[:, None]
-        K_HO *= 0.12
+        K_HO *= 0.12 / (n_dim_obs/100)
         K_HO[np.abs(K_HO) < epsilon / theta.shape[0]] = 0
         K_HOs.append(K_HO)
         L = K_HO.T.dot(K_HO)
