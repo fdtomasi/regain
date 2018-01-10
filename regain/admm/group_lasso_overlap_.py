@@ -14,6 +14,8 @@ from sklearn.utils.validation import check_is_fitted
 from sklearn.utils import check_array, check_X_y, deprecated
 
 from regain.prox import soft_thresholding
+from regain.wrapper.paspal.wrapper import group_lasso_overlap_paspal
+
 
 def D_function(d, groups):
     D = np.zeros(d)
@@ -103,7 +105,7 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
                  tol=1e-4, verbose=False, rtol=1e-2,
                  normalize=False, precompute=False, max_iter=1000,
                  copy_X=True, warm_start=False, positive=False,
-                 random_state=None, selection='cyclic'):
+                 random_state=None, selection='cyclic', mode='admm'):
         self.alpha = alpha
         self.coef_ = None
         self.fit_intercept = fit_intercept
@@ -121,6 +123,7 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
         self.intercept_ = 0.0
         self.random_state = random_state
         self.selection = selection
+        self.mode = mode
 
     def fit(self, X, y, check_input=True):
         """Fit model with coordinate descent.
@@ -195,11 +198,18 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
         history = []
 
         for k in xrange(n_targets):
-            this_coef, hist, this_iter = \
-                group_lasso_overlap(
-                    X, y[:, k], lamda=self.alpha, groups=self.groups,
-                    rho=self.rho, max_iter=self.max_iter, tol=self.tol,
-                    verbose=self.verbose, rtol=self.rtol)
+            if self.mode == 'admm':
+                this_coef, hist, this_iter = \
+                    group_lasso_overlap(
+                        X, y[:, k], lamda=self.alpha, groups=self.groups,
+                        rho=self.rho, max_iter=self.max_iter, tol=self.tol,
+                        verbose=self.verbose, rtol=self.rtol)
+            else:  # paspal wrapper
+                this_coef, hist, this_iter = \
+                    group_lasso_overlap_paspal(
+                        X, y[:, k], lamda=self.alpha, groups=self.groups,
+                        rho=self.rho, max_iter=self.max_iter, tol=self.tol,
+                        verbose=self.verbose, rtol=self.rtol)
             coef_[k] = this_coef.ravel()
             history.append(hist)
             self.n_iter_.append(this_iter)
