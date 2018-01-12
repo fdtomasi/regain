@@ -3,16 +3,19 @@ import matlab.engine
 import numpy as np
 import os
 
+matlab_engine = matlab.engine.start_matlab()
+
 
 def group_lasso_overlap_paspal(X, y, groups=(), lamda=0.1, verbose=False,
                                matlab_engine=None, **kwargs):
-    if matlab_engine is None or not matlab_engine._check_matlab():
-        if verbose:
-            print("Starting matlab engine ...")
-        close_engine = True
-        matlab_engine = matlab.engine.start_matlab()
-    else:
-        close_engine = False
+    # if matlab_engine is None or not matlab_engine._check_matlab():
+    #     if verbose:
+    #         print("Starting matlab engine ...")
+    #     close_engine = True
+    #     matlab_engine = matlab.engine.start_matlab()
+    # else:
+    #     close_engine = False
+    global matlab_engine
 
     matlab_engine.addpath(
         os.path.join(os.path.abspath(os.path.dirname(__file__)),
@@ -26,8 +29,8 @@ def group_lasso_overlap_paspal(X, y, groups=(), lamda=0.1, verbose=False,
         [matlab.int32((np.array(x) + 1).tolist()) for x in groups],  # +1 because of the change of indices
         float(lamda))
 
-    if close_engine:
-        matlab_engine.quit()
+    # if close_engine:
+    #     matlab_engine.quit()
     coef_ = np.asarray(coef_).ravel()
     return coef_, None, np.nan
 
