@@ -4,12 +4,18 @@ import numpy as np
 import os
 
 
-def group_lasso_overlap_paspal(X, y, groups=(), lamda=0.1, **kwargs):
+def group_lasso_overlap_paspal(X, y, groups=(), lamda=0.1, verbose=False,
+                               **kwargs):
+    if verbose:
+        print("Starting matlab engine ...")
     eng = matlab.engine.start_matlab()
 
     eng.addpath(
         os.path.join(os.path.abspath(os.path.dirname(__file__)),
                      'matlab/GLO_PRIMAL_DUAL_TOOLBOX/'), nargout=0)
+
+    if verbose:
+        print("Start GLOPRIDU algorithm ...")
     coef_ = eng.glopridu_algorithm(
         matlab.double(X.tolist()),
         matlab.double(y[:, None].tolist()),
@@ -17,7 +23,6 @@ def group_lasso_overlap_paspal(X, y, groups=(), lamda=0.1, **kwargs):
         float(lamda))
 
     eng.quit()
-
     coef_ = np.asarray(coef_).ravel()
     return coef_, None, np.nan
 
