@@ -5,24 +5,29 @@ import os
 
 
 def group_lasso_overlap_paspal(X, y, groups=(), lamda=0.1, verbose=False,
-                               **kwargs):
-    if verbose:
-        print("Starting matlab engine ...")
-    eng = matlab.engine.start_matlab()
+                               matlab_engine=None, **kwargs):
+    if matlab_engine is None or not matlab_engine._check_matlab():
+        if verbose:
+            print("Starting matlab engine ...")
+        close_engine = True
+        matlab_engine = matlab.engine.start_matlab()
+    else:
+        close_engine = False
 
-    eng.addpath(
+    matlab_engine.addpath(
         os.path.join(os.path.abspath(os.path.dirname(__file__)),
                      'matlab/GLO_PRIMAL_DUAL_TOOLBOX/'), nargout=0)
 
     if verbose:
         print("Start GLOPRIDU algorithm ...")
-    coef_ = eng.glopridu_algorithm(
+    coef_ = matlab_engine.glopridu_algorithm(
         matlab.double(X.tolist()),
         matlab.double(y[:, None].tolist()),
         [matlab.int32((np.array(x) + 1).tolist()) for x in groups],  # +1 because of the change of indices
         float(lamda))
 
-    eng.quit()
+    if close_engine:
+        matlab_engine.quit()
     coef_ = np.asarray(coef_).ravel()
     return coef_, None, np.nan
 

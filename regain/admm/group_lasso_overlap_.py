@@ -105,7 +105,8 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
                  tol=1e-4, verbose=False, rtol=1e-2,
                  normalize=False, precompute=False, max_iter=1000,
                  copy_X=True, warm_start=False, positive=False,
-                 random_state=None, selection='cyclic', mode='admm'):
+                 random_state=None, selection='cyclic', mode='admm',
+                 matlab_engine=None):
         self.alpha = alpha
         self.coef_ = None
         self.fit_intercept = fit_intercept
@@ -124,6 +125,7 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
         self.random_state = random_state
         self.selection = selection
         self.mode = mode
+        self.matlab_engine = matlab_engine
 
     def fit(self, X, y, check_input=True):
         """Fit model with coordinate descent.
@@ -209,7 +211,8 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
                     group_lasso_overlap_paspal(
                         X, y[:, k], lamda=self.alpha, groups=self.groups,
                         rho=self.rho, max_iter=self.max_iter, tol=self.tol,
-                        verbose=self.verbose, rtol=self.rtol)
+                        verbose=self.verbose, rtol=self.rtol,
+                        matlab_engine=matlab_engine)
             coef_[k] = this_coef.ravel()
             history.append(hist)
             self.n_iter_.append(this_iter)
