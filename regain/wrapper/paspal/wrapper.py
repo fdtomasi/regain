@@ -7,7 +7,7 @@ matlab_engine = matlab.engine.start_matlab()
 
 
 def group_lasso_overlap_paspal(X, y, groups=(), lamda=0.1, verbose=False,
-                               matlab_engine=None, **kwargs):
+                               **kwargs):
     # if matlab_engine is None or not matlab_engine._check_matlab():
     #     if verbose:
     #         print("Starting matlab engine ...")
