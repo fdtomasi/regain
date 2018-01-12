@@ -212,7 +212,7 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
                         X, y[:, k], lamda=self.alpha, groups=self.groups,
                         rho=self.rho, max_iter=self.max_iter, tol=self.tol,
                         verbose=self.verbose, rtol=self.rtol,
-                        matlab_engine=matlab_engine)
+                        matlab_engine=self.matlab_engine)
             coef_[k] = this_coef.ravel()
             history.append(hist)
             self.n_iter_.append(this_iter)
