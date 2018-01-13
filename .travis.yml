@@ -1,23 +1,22 @@
 language: python
-notifications:
-  slack:
-    rooms:
-    - secure: I+CJQ9xJ7wXcVfJ33pWpWS16zhRDD1odSpCKINQMpTV9UEtCo7n9SmOwaKD/JRDkyW2eT2VwK5d86gzgEEDAiPk3+Kysx6nokp9tg22t0vZ6bdFHj/9N7Vqu3THZ0xWGik/WMdOh6bdM4TK2sJPiqX8L7GKFVDqBeNF5nL3qTHhAjpIl6juXlY8A2CNAtdsdzX0pGa4Q+1LIATs6ViXac6jaW4JLdOt2hXIrKR1S43gVIs3s2N9QZ06s0LXMux68bEQiW6/BHhs6FlAUmGv2KhmMhP4gZnKkcnw/B0sq8l/35S/A10vHZG9JuQzjzvOKBn1JMNt/LtiEca4CcxVwamWHFUvEPAkI0LHzv09DCFGgnu/o1ClAx3IMPik6kkDFHfqRemUsv3tJu+PMZfsOLmSK5e+TT5uTljPZq0MxTVun53JAx6ziBkuiI+gMT9j6wYXZ41P+rf5tTcUG6uhlfCqjypMPjTHK4wy6zGgPS1RelPMblLlFfpMgqDe/pL7iVkamxxURqtbchYDzF10FCY1p+xXOLyq9hXBAHaSEGKYWjjdRzI+s19YX8Ln25ytEFObKzgPp/tXu4sqR/DmBhb7t9CM7unpKf35kmTv6EJi6qCvSfi1Ncj/sOpaIJhKGD4OxnAjm8FARGM/sPDoZWJOk3m2n9bW+qKpmSe6BuDI=
-    on_success: change
-    on_failure: always
-  email: false
-os:
-- linux
 python:
 - '2.7'
+
+os:
+- linux
+
 cache: pip
+
 install:
 - pip install -r requirements.txt
 - pip install .
+
 script:
 - coverage run travis_tests.py
+
 after_success:
 - codecov
+
 deploy:
   - provider: pypi
     user: fdtomasi
@@ -36,4 +35,10 @@ deploy:
       repo: fdtomasi/regain
       tags: true
 
-# skip_cleanup: true
+notifications:
+  slack:
+    rooms:
+    - secure: I+CJQ9xJ7wXcVfJ33pWpWS16zhRDD1odSpCKINQMpTV9UEtCo7n9SmOwaKD/JRDkyW2eT2VwK5d86gzgEEDAiPk3+Kysx6nokp9tg22t0vZ6bdFHj/9N7Vqu3THZ0xWGik/WMdOh6bdM4TK2sJPiqX8L7GKFVDqBeNF5nL3qTHhAjpIl6juXlY8A2CNAtdsdzX0pGa4Q+1LIATs6ViXac6jaW4JLdOt2hXIrKR1S43gVIs3s2N9QZ06s0LXMux68bEQiW6/BHhs6FlAUmGv2KhmMhP4gZnKkcnw/B0sq8l/35S/A10vHZG9JuQzjzvOKBn1JMNt/LtiEca4CcxVwamWHFUvEPAkI0LHzv09DCFGgnu/o1ClAx3IMPik6kkDFHfqRemUsv3tJu+PMZfsOLmSK5e+TT5uTljPZq0MxTVun53JAx6ziBkuiI+gMT9j6wYXZ41P+rf5tTcUG6uhlfCqjypMPjTHK4wy6zGgPS1RelPMblLlFfpMgqDe/pL7iVkamxxURqtbchYDzF10FCY1p+xXOLyq9hXBAHaSEGKYWjjdRzI+s19YX8Ln25ytEFObKzgPp/tXu4sqR/DmBhb7t9CM7unpKf35kmTv6EJi6qCvSfi1Ncj/sOpaIJhKGD4OxnAjm8FARGM/sPDoZWJOk3m2n9bW+qKpmSe6BuDI=
+    on_success: change
+    on_failure: always
+  email: false
