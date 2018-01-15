@@ -7,7 +7,7 @@ Licensed under the FreeBSD license (see LICENSE.txt).
 """
 
 from setuptools import setup, Extension
-import numpy as np
+# import numpy as np
 
 # Package Version
 from regain import __version__ as version
@@ -49,5 +49,5 @@ setup(
               ],
     # scripts=['scripts/ici_run.py', 'scripts/ici_analysis.py'],
     # ext_modules=[ssk_module],
-    include_dirs=[np.get_include()]
+    # include_dirs=[np.get_include()]
 )

@@ -13,10 +13,10 @@ requirements:
     - python
     - nose
     - setuptools
-    - numpy
-    - scipy
-    - scikit-learn
-    - six
+    # - numpy
+    # - scipy
+    # - scikit-learn
+    # - six
 
   run:
     - python
