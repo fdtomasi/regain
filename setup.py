@@ -1,12 +1,12 @@
 #!/usr/bin/python
-"""RGI   setup script.
+"""regain setup script.
 
 Author: Federico Tomasi
 Copyright (c) 2017, Federico Tomasi.
-Licensed under the FreeBSD license (see LICENSE.txt).
+Licensed under the BSD 3-Clause License (see LICENSE.txt).
 """
 
-from setuptools import setup, Extension
+from setuptools import setup, find_packages
 # import numpy as np
 
 # Package Version
@@ -25,7 +25,7 @@ setup(
     maintainer_email='federico.tomasi@dibris.unige.it',
     url='https://github.com/fdtomasi/regain',
     download_url='https://github.com/fdtomasi/regain/archive/'+version+'.tar.gz',
-    keywords=['graph', 'inference'],
+    keywords=['graph inference', 'latent variables'],
     classifiers=[
         'Development Status :: 4 - Beta',
         'Environment :: Console',
@@ -34,13 +34,15 @@ setup(
         'Programming Language :: Python',
         'License :: OSI Approved :: BSD License',
         'Topic :: Software Development',
-        'Topic :: Scientific/Engineering :: Bio-Informatics',
+        'Topic :: Scientific/Engineering',
+        'Natural Language :: English',
         'Operating System :: POSIX',
         'Operating System :: Unix',
-        'Operating System :: MacOS'
+        'Operating System :: MacOS',
+        'Programming Language :: Python'
     ],
     license='FreeBSD',
-    packages=['regain'],
+    packages=find_packages(exclude=["*.__old", "*.tests"]),
     requires=['numpy (>=1.10.1)',
               'scipy (>=0.16.1)',
               'sklearn (>=0.17)',
