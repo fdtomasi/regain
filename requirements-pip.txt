@@ -1,1 +1,2 @@
 codecov
+numpy>=1.11
