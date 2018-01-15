@@ -25,7 +25,7 @@ pip install regain
 or `conda`
 
 ```bash
-conda install regain
+conda install -c fdtomasi regain
 ```
 
 If you'd like to install from source, or want to contribute to the project (e.g. by sending pull requests via github), read on. Clone the repository in GitHub and add it to your $PYTHONPATH.
