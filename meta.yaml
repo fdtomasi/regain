@@ -5,7 +5,7 @@ package:
   version: {{ data.get('version') }}
 
 source:
-  git_rev: {{ GIT_DESCRIBE_TAG }}
+  git_rev: {{ environ.get('GIT_DESCRIBE_TAG', '') }}
   git_url: https://github.com/fdtomasi/regain.git
 
 requirements:
