@@ -7,15 +7,28 @@ os:
 
 cache: pip
 
+# Setup anaconda
+before_install:
+  - wget http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh
+  - bash miniconda.sh -b
+  - export PATH=$HOME/miniconda2/bin:$PATH
+  - conda update --yes -q conda
+  - conda config --set always_yes true
+  - conda config --set anaconda_upload no
+
 install:
-- pip install -r requirements.txt
-- pip install .
+  # - pip install -r requirements.txt
+  # - pip install .
+  - conda install -q python=$TRAVIS_PYTHON_VERSION pip requests conda-build jinja2 anaconda-client
+  # install additional packages with conda and pip
+  - conda build .
+  - conda install --use-local regain
 
 script:
 - coverage run travis_tests.py
 
 after_success:
-- codecov
+  - codecov
 
 deploy:
   - provider: pypi
@@ -30,6 +43,12 @@ deploy:
     api_key:
       secure: IbzvHgN5aRUwSUcTdnnmLqAJw1DZz2InulgYheAT1CrUwepXWguppdD4zYnkhylZ283rNPHgeuyfIBl/x1SXQHqkyOXb5TjjhMU7t2iMM1M5NzZ8p5VsYcV8er3HkDj2br7/kgW0UdyHBaGHwgyLNULTBehCnK5zagvuY0A5M5vjljuJ7DPi/v/UtorBBqpY6/tJ7se+/Qy4XVrRyAxTkq+Nr3bTb742dERZLHyIDiv/kYEYQaMsHC/t4lPTTuZZsz1rs8C9/hi1+C8Dsjmo/nks46m2mmAaYwEGvM3bzBEFyF2o+IDrnV7JE0JhJHzEIEotKmVxG1AVntlbSyLyirZh6qqfLnLSqTYMynRlggNEhT4meOifc1g3f9KtZQtfO6y90ffhEVNpwVOGg7CVIiH1p4DiS01byT9H7bPH2LJyla3P6WG6gJx4jdEYcfv28NK0K7kk90vICKySv0LsCm/9iZlGcHSbd9O55U7sG8oQcXJdJfXYYqml2SBtOjjprI9mwdmvvsInAp3EkAi31+y8IMMPNba6/iv96WF3ZW2nez6l13kbZmC8tBl63TJb7gHYxHGER3T97VeYA7XmHd+va9qtfQ7/lngwJHJgFXm3C5h0QiK4guWGqqwDboluSOgz8zpxrhrzhtd3R/0zA7nASyKfnq+FdOV38Duxkrc=
     # file: build/regain_$(TRAVIS_TAG)
+    skip_cleanup: true
+    on:
+      repo: fdtomasi/regain
+      tags: true
+  - provider: script
+    script: bash deploy_anaconda.sh
     skip_cleanup: true
     on:
       repo: fdtomasi/regain

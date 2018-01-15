@@ -1,0 +1,28 @@
+package:
+  name: regain
+  version: "0.0.0b0"
+
+source:
+  git_rev: v0.0.0b0
+  git_url: https://github.com/fdtomasi/regain.git
+
+requirements:
+  build:
+    - python
+    - setuptools
+    - numpy
+    - scipy
+    - scikit-learn
+    - six
+
+  run:
+    - python
+
+test:
+  imports:
+    - regain
+
+about:
+  home: https://github.com/fdtomasi/regain
+  license: BSD-3
+  license_file: LICENSE
