@@ -30,10 +30,16 @@ def compose(*functions):
 
 
 def error_rank(ells_true, ells_pred):
+    """Compute the mean absolute error in rank between two matrices.
+
+    Parameters
+    ----------
+    ells_{true, pred} : array-like, 3 dimensional
+        Latent variable matrices for which to compare the rank.
+    """
     ranks_true = np.array([np.linalg.matrix_rank(l) for l in ells_true])
     ranks_pred = np.array([np.linalg.matrix_rank(l) for l in ells_pred])
-
-    return np.mean(ranks_true - ranks_pred)
+    return np.mean(np.abs(ranks_true - ranks_pred))
 
 
 def error_norm(cov, comp_cov, norm='frobenius', scaling=True,

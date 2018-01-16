@@ -1,14 +1,7 @@
 """Dataset generation module."""
 import numpy as np
-import sys
-import scipy.sparse as ss
-import math
-import warnings
 
-from sklearn.datasets import make_sparse_spd_matrix
 from sklearn.datasets.base import Bunch
-
-from regain.plot import plot_graph_with_latent_variables
 
 
 def normalize_matrix(x):
@@ -35,7 +28,7 @@ def is_pos_semidef(x, tol=1e-15):
 
 def generate_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
                      mode="evolving", **kwargs):
-    """Function that generate a synthetic dataset using different settings.
+    """Generate a synthetic dataset.
 
     Parameters
     ----------
@@ -128,7 +121,7 @@ def generate_dataset_L1L2(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
 
     for i in range(1, T):
         if proportional:
-            no = int(math.ceil(n_dim_obs / 20))  # TODO parametrise the 20
+            no = int(np.ceil(n_dim_obs / 20))  # TODO parametrise the 20
         else:
             no = 1
 
@@ -202,7 +195,7 @@ def generate_dataset_L1(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
 
     for i in range(1, T):
         if proportional:
-            no = int(math.ceil(n_dim_obs/20))
+            no = int(np.ceil(n_dim_obs/20))
         else:
             no = 1
 
