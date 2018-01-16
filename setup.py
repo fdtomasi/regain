@@ -43,7 +43,7 @@ setup(
     ],
     license='FreeBSD',
     packages=find_packages(exclude=["*.__old", "*.tests"]),
-    # include_package_data=True,
+    include_package_data=True,
     requires=['numpy (>=1.10.1)',
               'scipy (>=0.16.1)',
               'sklearn (>=0.17)',
