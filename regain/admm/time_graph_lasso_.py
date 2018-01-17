@@ -8,7 +8,7 @@ from __future__ import division
 import numpy as np
 import warnings
 
-from six.moves import range
+from six.moves import range, map, zip
 from sklearn.covariance import empirical_covariance, EmpiricalCovariance
 from sklearn.covariance import log_likelihood
 from sklearn.utils.extmath import fast_logdet, squared_norm
@@ -29,10 +29,9 @@ def logl(emp_cov, precision):
 
 def objective(S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
     """Objective function for time-varying graphical lasso."""
-    obj = np.sum(- logl(emp_cov, precision)
-                 for emp_cov, precision in zip(S, K))
-    obj += alpha * np.sum(map(l1_od_norm, Z_0))
-    obj += beta * np.sum(map(psi, Z_2 - Z_1))
+    obj = sum(- logl(emp_cov, precision) for emp_cov, precision in zip(S, K))
+    obj += alpha * sum(map(l1_od_norm, Z_0))
+    obj += beta * sum(map(psi, Z_2 - Z_1))
     return obj
 
 
@@ -103,7 +102,7 @@ def time_graph_lasso(
         A = K + U_0
         A *= - rho
         A += emp_cov
-        Z_0 = np.array([prox_logdet(a, lamda=1. / rho) for a in A])
+        Z_0 = np.array([prox_logdet(a_, lamda=1. / rho) for a_ in A])
 
         # z-update with relaxation
         A = Z_0 - U_0
@@ -144,7 +143,8 @@ def time_graph_lasso(
             obj=objective(emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi),
             rnorm=rnorm, snorm=snorm,
             e_pri=np.sqrt(K.size + 2 * Z_1.size) * tol + rtol * max(
-                np.sqrt(squared_norm(Z_0) + squared_norm(Z_1) + squared_norm(Z_2)), np.sqrt(squared_norm(K) + squared_norm(K[:-1]) + squared_norm(K[1:]))),
+                np.sqrt(squared_norm(Z_0) + squared_norm(Z_1) + squared_norm(Z_2)),
+                np.sqrt(squared_norm(K) + squared_norm(K[:-1]) + squared_norm(K[1:]))),
             e_dual=np.sqrt(K.size + 2 * Z_1.size) * tol + rtol * rho * np.sqrt(
                 squared_norm(U_0) + squared_norm(U_1) + squared_norm(U_2))
         )
@@ -327,8 +327,8 @@ class TimeGraphLasso(EmpiricalCovariance):
         test_cov = np.array([empirical_covariance(
             x, assume_centered=True) for x in X_test - self.location_])
 
-        res = np.sum([log_likelihood(S, K) for S, K in zip(
-            test_cov, self.get_observed_precision())])
+        res = sum(log_likelihood(S, K) for S, K in zip(
+            test_cov, self.get_observed_precision()))
 
         # ALLA  MATLAB1
         # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]

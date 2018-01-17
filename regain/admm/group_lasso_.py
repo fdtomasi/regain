@@ -13,7 +13,9 @@ from regain.utils import flatten
 
 def group_lasso(A, b, lamda=1.0, groups=None, rho=1.0, alpha=1.0, max_iter=1000,
                 tol=1e-4, rtol=1e-2, return_history=False):
-    r"""Solves the following problem via ADMM:
+    r"""Group Lasso solver.
+
+    Solves the following problem via ADMM
        minimize 1/2*|| Ax - b ||_2^2 + \lambda sum(norm(x_i))
 
     The input p is a K-element vector giving the block sizes n_i, so that x_i
@@ -50,6 +52,7 @@ def group_lasso(A, b, lamda=1.0, groups=None, rho=1.0, alpha=1.0, max_iter=1000,
         If return_history, then also a structure that contains the
         objective value, the primal and dual residual norms, and tolerances
         for the primal and dual residual norms at each iteration.
+
     """
     n_samples, n_features = A.shape
 
