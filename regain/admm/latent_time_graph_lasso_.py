@@ -145,7 +145,7 @@ def latent_time_graph_lasso(
         A[1:] += W_2 - U_2
         A /= divisor[:, None, None]
 
-        A += A.tranpose(0, 2, 1)
+        A += A.transpose(0, 2, 1)
         A /= 2.
 
         W_0 = np.array([prox_trace_indicator(a, lamda=tau / (rho * div))
