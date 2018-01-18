@@ -108,7 +108,11 @@ def latent_time_graph_lasso(
         A = Z_0 - W_0 - X_0
         A *= - rho
         A += emp_cov
-        R = np.array([prox_logdet(a_, lamda=1. / rho) for a_ in A])
+
+        A += A.transpose(0, 2, 1)
+        A /= 2.
+
+        R = np.array([prox_logdet(a, lamda=1. / rho) for a in A])
 
         # update Z_0
         A = R + W_0 + X_0
@@ -117,7 +121,11 @@ def latent_time_graph_lasso(
         A /= divisor[:, None, None]
         # soft_thresholding_ = partial(soft_thresholding, lamda=alpha / rho)
         # Z_0 = np.array(map(soft_thresholding_, A))
-        Z_0 = soft_thresholding_sign(A, lamda=alpha / rho)
+        A += A.transpose(0, 2, 1)
+        A /= 2.
+
+        Z_0 = soft_thresholding_sign(
+            A, lamda=alpha / (rho * divisor[:, None, None]))
 
         # update Z_1, Z_2
         A_1 = Z_0[:-1] + X_1
@@ -136,7 +144,12 @@ def latent_time_graph_lasso(
         A[:-1] += W_1 - U_1
         A[1:] += W_2 - U_2
         A /= divisor[:, None, None]
-        W_0 = np.array([prox_trace_indicator(a_, lamda=tau / rho) for a_ in A])
+
+        A += A.tranpose(0, 2, 1)
+        A /= 2.
+
+        W_0 = np.array([prox_trace_indicator(a, lamda=tau / (rho * div))
+                        for a, div in zip(A, divisor)])
 
         # update W_1, W_2
         A_1 = W_0[:-1] + U_1
