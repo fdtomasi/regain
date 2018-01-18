@@ -94,13 +94,18 @@ def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
     return result
 
 
+def error_norm_time(cov, comp_cov, norm='frobenius', scaling=True,
+                    squared=True):
+    return np.mean([error_norm(
+        x, y, norm=norm, scaling=scaling, squared=squared) for x, y in zip(
+            cov, comp_cov)])
+
+
 def structure_error(true, pred, thresholding=0, epsilon=1e-2):
-    """Computes the error in structure between the real inverse covariance
-        matrix and the predicted.
+    """Error in structure between a precision matrix and predicted.
 
     Parameters
     ----------
-
     true: array-like, shape=(d,d)
         the true inverse covariance matrix, if an entry is different from 0
         it is consider as an edge
@@ -114,6 +119,7 @@ def structure_error(true, pred, thresholding=0, epsilon=1e-2):
 
     epsilon: float, default=1e-2
       if thresholding is true it is used to threshold the values of pred.
+
     """
     # avoid inplace modifications
     true = true.copy()
@@ -122,20 +128,13 @@ def structure_error(true, pred, thresholding=0, epsilon=1e-2):
         pred[np.abs(pred) < epsilon] = 0
     true[true != 0] = 1
     pred[pred != 0] = 2
-    res = true+pred
+    res = true + pred
     FN = np.count_nonzero((res == 1).astype(float))
     FP = np.count_nonzero((res == 2).astype(float))
     TP = np.count_nonzero((res == 3).astype(float))
     TN = np.count_nonzero((res == 0).astype(float))
-    p = TP/float(TP+FP)
-    r = TP/float(TP+FN)
-    return {'TP':TP, 'TN':TN, 'FP':FP, 'FN':FN,
-            'precision': p, 'recall': r,
-            'f1': p*r/(p+r)}
-
-
-def error_norm_time(cov, comp_cov, norm='frobenius', scaling=True,
-                    squared=True):
-    return np.mean([error_norm(
-        x, y, norm=norm, scaling=scaling, squared=squared) for x, y in zip(
-            cov, comp_cov)])
+    precision = TP / float(TP + FP)
+    recall = TP / float(TP + FN)
+    return {'TP': TP, 'TN': TN, 'FP': FP, 'FN': FN,
+            'precision': precision, 'recall': recall,
+            'f1': 2 * precision * recall / (precision + recall)}
