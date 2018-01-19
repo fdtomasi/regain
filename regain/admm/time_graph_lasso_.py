@@ -9,11 +9,12 @@ import numpy as np
 import warnings
 
 from six.moves import range, map, zip
-from sklearn.covariance import empirical_covariance, EmpiricalCovariance
+from sklearn.covariance import empirical_covariance
 from sklearn.covariance import log_likelihood
 from sklearn.utils.extmath import fast_logdet, squared_norm
 from sklearn.utils.validation import check_array
 
+from regain.admm.graph_lasso_ import GraphLasso
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet
 from regain.prox import soft_thresholding_sign
@@ -177,7 +178,7 @@ def time_graph_lasso(
     return return_list
 
 
-class TimeGraphLasso(EmpiricalCovariance):
+class TimeGraphLasso(GraphLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Read more in the :ref:`User Guide <sparse_inverse_covariance>`.
@@ -233,20 +234,16 @@ class TimeGraphLasso(EmpiricalCovariance):
 
     """
 
-    def __init__(self, alpha=1., beta=1., mode='cd', rho=1.,
+    def __init__(self, alpha=.01, beta=1., mode='cd', rho=1.,
                  bypass_transpose=True, tol=1e-4, rtol=1e-4,
                  psi='laplacian', max_iter=100,
                  verbose=False, assume_centered=False):
-        super(TimeGraphLasso, self).__init__(assume_centered=assume_centered)
-        self.alpha = alpha
+        super(TimeGraphLasso, self).__init__(
+            alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
+            verbose=verbose, assume_centered=assume_centered)
         self.beta = beta
-        self.rho = rho
-        self.mode = mode
-        self.tol = tol
-        self.rtol = rtol
         self.psi = psi
-        self.max_iter = max_iter
-        self.verbose = verbose
+        self.mode = mode
         # for splitting purposes, data may come transposed, with time in the
         # last index. Set bypass_transpose=True if X comes with time in the
         # first dimension already

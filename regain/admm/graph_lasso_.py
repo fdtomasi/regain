@@ -196,13 +196,12 @@ class GraphLasso(GraphLasso):
         # Covariance does not make sense for a single feature
         X = check_array(X, ensure_min_features=2, ensure_min_samples=2,
                         estimator=self)
-
         if self.assume_centered:
             self.location_ = np.zeros(X.shape[1])
         else:
             self.location_ = X.mean(0)
-        emp_cov = empirical_covariance(
-            X, assume_centered=self.assume_centered)
+
+        emp_cov = empirical_covariance(X, assume_centered=self.assume_centered)
         self.precision_, self.covariance_, self.n_iter_ = graph_lasso(
             emp_cov, alpha=self.alpha, tol=self.tol, rtol=self.rtol,
             max_iter=self.max_iter, over_relax=self.over_relax, rho=self.rho,

@@ -23,7 +23,7 @@ from regain.validation import check_norm_prox
 
 def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
               alpha, tau, beta, eta, psi, phi):
-    """Objective function for time-varying graphical lasso."""
+    """Objective function for latent variable time-varying graphical lasso."""
     obj = sum(- logl(s, r) for s, r in zip(S, R))
     obj += alpha * sum(map(l1_od_norm, Z_0))
     obj += tau * sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
@@ -33,7 +33,7 @@ def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
 
 
 def latent_time_graph_lasso(
-        emp_cov, alpha=1, tau=1, rho=1, beta=1., eta=1., max_iter=100,
+        emp_cov, alpha=1., tau=1., rho=1., beta=1., eta=1., max_iter=100,
         verbose=False, psi='laplacian', phi='laplacian', mode=None,
         tol=1e-4, rtol=1e-2, assume_centered=False,
         return_history=False, return_n_iter=True):

@@ -5,45 +5,43 @@ import numpy as np
 import warnings
 
 from six.moves import range
-from sklearn.covariance import EmpiricalCovariance, empirical_covariance
-from sklearn.utils.extmath import squared_norm
+from sklearn.covariance import empirical_covariance
 from sklearn.utils.validation import check_array
 
-from regain.admm.time_graph_lasso_ import log_likelihood
+from regain.admm.graph_lasso_ import GraphLasso
+from regain.admm.time_graph_lasso_ import logl
 from regain.norm import l1_od_norm
 from regain.prox import soft_thresholding_sign
 from regain.prox import prox_logdet
 from regain.prox import prox_trace_indicator
+from regain.update_rules import update_rho
 from regain.utils import convergence
 
 
 def objective(S, R, K, L, alpha, tau):
     """Objective function for latent graphical lasso."""
-    obj = - log_likelihood(S, R)
+    obj = - logl(S, R)
     obj += alpha * l1_od_norm(K)
     obj += tau * np.linalg.norm(L, ord='nuc')
     return obj
 
 
 def latent_graph_lasso(
-        emp_cov, alpha=1., tau=1., rho=1., max_iter=1000,
+        emp_cov, alpha=1., tau=1., rho=1., max_iter=100,
         verbose=False, tol=1e-4, rtol=1e-2, return_history=False,
         return_n_iter=True, mode=None):
-    r"""Time-varying latent variable graphical lasso solver.
+    r"""Latent variable graphical lasso solver.
 
     Solves the following problem via ADMM:
-        min sum_{i=1}^T -n_i log_likelihood(K_i-L_i) + alpha ||K_i||_{od,1}
-            + tau ||L_i||_*
-            + beta sum_{i=2}^T Psi(K_i - K_{i-1})
-            + eta sum_{i=2}^T Phi(L_i - L_{i-1})
+        min - log_likelihood(S, K-L) + alpha ||K||_{od,1} + tau ||L_i||_*
 
     where S is the empirical covariance of the data
     matrix D (training observations by features).
 
     Parameters
     ----------
-    data_list : list of 2-dimensional matrices.
-        Input matrices.
+    emp_cov : array-like
+        Empirical covariance matrix.
     alpha, tau : float, optional
         Regularisation parameters.
     rho : float, optional
@@ -56,11 +54,19 @@ def latent_graph_lasso(
         Relative tolerance for convergence.
     return_history : bool, optional
         Return the history of computed values.
+    return_n_iter : bool, optional
+        Return the number of iteration before convergence.
+    verbose : bool, default False
+        Print info at each iteration.
 
     Returns
     -------
-    K, L : numpy.array, 3-dimensional (T x d x d)
-        Solution to the problem for each time t=1...T .
+    K, L : np.array, 2-dimensional, size (d x d)
+        Solution to the problem.
+    S : np.array, 2 dimensional
+        Empirical covariance matrix.
+    n_iter : int
+        If return_n_iter, returns the number of iterations before convergence.
     history : list
         If return_history, then also a structure that contains the
         objective value, the primal and dual residual norms, and tolerances
@@ -78,22 +84,30 @@ def latent_graph_lasso(
         A = K - L - X
         A *= - rho
         A += emp_cov
+        A += A.T
+        A /= 2.
         R = prox_logdet(A, lamda=1. / rho)
-        K = soft_thresholding_sign(L + R + X, lamda=alpha / rho)
-        L = prox_trace_indicator(K - R - X, lamda=tau / rho)
+        A = L + R + X
+        A += A.T
+        A /= 2.
+        K = soft_thresholding_sign(A, lamda=alpha / rho)
+        A = K - R - X
+        A += A.T
+        A /= 2.
+        L = prox_trace_indicator(A, lamda=tau / rho)
 
         # update residuals
         X += R - K + L
 
         # diagnostics, reporting, termination checks
+        rnorm = np.linalg.norm(R - K + L)
+        snorm = rho * np.linalg.norm(R - R_old)
         check = convergence(
             obj=objective(emp_cov, R, K, L, alpha, tau),
-            rnorm=np.linalg.norm(R - K + L),
-            snorm=np.linalg.norm(rho * (R - R_old)),
-            e_pri=np.sqrt(np.prod(R.shape)) * tol + rtol * max(
-                np.linalg.norm(R), np.sqrt(squared_norm(K) - squared_norm(L))),
-            e_dual=np.sqrt(np.prod(R.shape)) * tol + rtol * np.linalg.norm(
-                rho * X)
+            rnorm=rnorm, snorm=snorm,
+            e_pri=np.sqrt(R.size) * tol + rtol * max(
+                np.linalg.norm(R), np.linalg.norm(K - L)),
+            e_dual=np.sqrt(R.size) * tol + rtol * rho * np.linalg.norm(X)
         )
         R_old = R.copy()
 
@@ -104,6 +118,10 @@ def latent_graph_lasso(
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
+        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_)
+        # scaled dual variables should be also rescaled
+        X *= rho / rho_new
+        rho = rho_new
     else:
         warnings.warn("Objective did not converge.")
 
@@ -115,7 +133,7 @@ def latent_graph_lasso(
     return return_list
 
 
-class LatentGraphLasso(EmpiricalCovariance):
+class LatentGraphLasso(GraphLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Read more in the :ref:`User Guide <sparse_inverse_covariance>`.
@@ -170,25 +188,30 @@ class LatentGraphLasso(EmpiricalCovariance):
     graph_lasso, GraphLassoCV
     """
 
-    def __init__(self, alpha=1., tau=1., mode='cd', rho=1.,
-                 bypass_transpose=True, tol=1e-4, rtol=1e-4, max_iter=100,
-                 verbose=False, assume_centered=False):
-        super(LatentGraphLasso, self).__init__(assume_centered=assume_centered)
-        self.alpha = alpha
+    def __init__(self, alpha=0.01, tau=1., rho=1., tol=1e-4, rtol=1e-4,
+                 max_iter=100, verbose=False, assume_centered=False,
+                 mode='cd'):
+        super(LatentGraphLasso, self).__init__(
+            alpha=alpha, rho=rho,
+            tol=tol, rtol=rtol, max_iter=max_iter, verbose=verbose,
+            assume_centered=assume_centered)
         self.tau = tau
-        self.rho = rho
         self.mode = mode
-        self.tol = tol
-        self.rtol = rtol
-        self.max_iter = max_iter
-        self.verbose = verbose
-        # for splitting purposes, data may come transposed, with time in the
-        # last index. Set bypass_transpose=True if X comes with time in the
-        # first dimension already
-        self.bypass_transpose = bypass_transpose
+
+    def get_precision(self):
+        """Getter for the precision matrix.
+
+        Returns
+        -------
+        precision_ : array-like,
+            The precision matrix associated to the current covariance object.
+            Note that this is the observed precision matrix.
+
+        """
+        return self.precision_ - self.latent_
 
     def fit(self, X, y=None):
-        """Fit the GraphLasso model to X.
+        """Fit the LatentGraphLasso model to X.
 
         Parameters
         ----------
@@ -199,17 +222,14 @@ class LatentGraphLasso(EmpiricalCovariance):
         # Covariance does not make sense for a single feature
         # X = check_array(X, ensure_min_features=2, ensure_min_samples=2,
         #                 estimator=self)
-        if not self.bypass_transpose:
-            X = X.transpose(2, 0, 1)  # put time as first dimension
-
         X = check_array(X, ensure_min_features=2, ensure_min_samples=2,
                         estimator=self)
         if self.assume_centered:
-            self.location_ = np.zeros((X.shape[0], X.shape[2]))
+            self.location_ = np.zeros(X.shape[1])
         else:
-            self.location_ = X.mean(1)
-        emp_cov = empirical_covariance(X, assume_centered=self.assume_centered)
+            self.location_ = X.mean(0)
 
+        emp_cov = empirical_covariance(X, assume_centered=self.assume_centered)
         self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
             latent_graph_lasso(
                 emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,

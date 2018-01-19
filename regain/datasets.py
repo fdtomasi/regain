@@ -486,7 +486,7 @@ def generate_ma_xue_zou(n_dim_obs=12, n_latent=3, epsilon=1e-3, sparsity=0.1):
     assert is_pos_def(KOtilde)
     assert is_pos_semidef(KH)
     assert np.linalg.matrix_rank(L) == ph
-    print ph
+    print(ph)
 
     N = 5 * po * 2
     cov = np.linalg.inv(KOtilde)
