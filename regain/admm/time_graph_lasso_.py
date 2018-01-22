@@ -11,21 +11,16 @@ import warnings
 from six.moves import range, map, zip
 from sklearn.covariance import empirical_covariance
 from sklearn.covariance import log_likelihood
-from sklearn.utils.extmath import fast_logdet, squared_norm
+from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_array
 
-from regain.admm.graph_lasso_ import GraphLasso
+from regain.admm.graph_lasso_ import GraphLasso, logl
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet
 from regain.prox import soft_thresholding_sign
 from regain.update_rules import update_rho
 from regain.utils import convergence, error_norm_time
 from regain.validation import check_norm_prox
-
-
-def logl(emp_cov, precision):
-    """Gaussian log-likelihood without constant term."""
-    return fast_logdet(precision) - np.sum(emp_cov * precision)
 
 
 def objective(S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
