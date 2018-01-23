@@ -8,12 +8,10 @@ from six.moves import range
 from sklearn.covariance import empirical_covariance
 from sklearn.utils.validation import check_array
 
-from regain.admm.graph_lasso_ import GraphLasso
-from regain.admm.time_graph_lasso_ import logl
+from regain.admm.graph_lasso_ import GraphLasso, logl
 from regain.norm import l1_od_norm
 from regain.prox import soft_thresholding_sign
-from regain.prox import prox_logdet
-from regain.prox import prox_trace_indicator
+from regain.prox import prox_logdet, prox_trace_indicator
 from regain.update_rules import update_rho
 from regain.utils import convergence
 
@@ -75,29 +73,29 @@ def latent_graph_lasso(
     """
     K = np.zeros_like(emp_cov)
     L = np.zeros_like(emp_cov)
-    X = np.zeros_like(emp_cov)
+    U = np.zeros_like(emp_cov)
     R_old = np.zeros_like(emp_cov)
 
     checks = []
     for iteration_ in range(max_iter):
         # update R
-        A = K - L - X
-        A *= - rho
-        A += emp_cov
+        A = emp_cov - rho * (K - L - U)
         A += A.T
         A /= 2.
         R = prox_logdet(A, lamda=1. / rho)
-        A = L + R + X
+
+        A = L + R + U
         A += A.T
         A /= 2.
         K = soft_thresholding_sign(A, lamda=alpha / rho)
-        A = K - R - X
+        
+        A = K - R - U
         A += A.T
         A /= 2.
         L = prox_trace_indicator(A, lamda=tau / rho)
 
         # update residuals
-        X += R - K + L
+        U += R - K + L
 
         # diagnostics, reporting, termination checks
         rnorm = np.linalg.norm(R - K + L)
@@ -107,7 +105,7 @@ def latent_graph_lasso(
             rnorm=rnorm, snorm=snorm,
             e_pri=np.sqrt(R.size) * tol + rtol * max(
                 np.linalg.norm(R), np.linalg.norm(K - L)),
-            e_dual=np.sqrt(R.size) * tol + rtol * rho * np.linalg.norm(X)
+            e_dual=np.sqrt(R.size) * tol + rtol * rho * np.linalg.norm(U)
         )
         R_old = R.copy()
 
@@ -120,7 +118,7 @@ def latent_graph_lasso(
             break
         rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_)
         # scaled dual variables should be also rescaled
-        X *= rho / rho_new
+        U *= rho / rho_new
         rho = rho_new
     else:
         warnings.warn("Objective did not converge.")

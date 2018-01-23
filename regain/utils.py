@@ -36,6 +36,7 @@ def error_rank(ells_true, ells_pred):
     ----------
     ells_{true, pred} : array-like, 3 dimensional
         Latent variable matrices for which to compare the rank.
+
     """
     ranks_true = np.array([np.linalg.matrix_rank(l) for l in ells_true])
     ranks_pred = np.array([np.linalg.matrix_rank(l) for l in ells_pred])
@@ -44,12 +45,11 @@ def error_rank(ells_true, ells_pred):
 
 def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
                squared=True):
-    """Computes the Mean Squared Error between two covariance estimators.
-    (In the sense of the Frobenius norm).
+    """Mean Squared Error between two covariance estimators.
 
     Parameters
     ----------
-    comp_cov : array-like, shape = [n_features, n_features]
+    cov, comp_cov : array-like, shape = [n_features, n_features]
         The covariance to compare with.
 
     norm : str
@@ -96,36 +96,64 @@ def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
 
 def error_norm_time(cov, comp_cov, norm='frobenius', scaling=True,
                     squared=True):
+    """Mean Squared Error between two covariance estimators.
+
+    Parameters
+    ----------
+    cov, comp_cov : array-like, shape = [n_time, n_features, n_features]
+        The covariance to compare with.
+
+    norm : str
+        The type of norm used to compute the error. Available error types:
+        - 'frobenius' (default): sqrt(tr(A^t.A))
+        - 'spectral': sqrt(max(eigenvalues(A^t.A))
+        where A is the error ``(comp_cov - self.covariance_)``.
+
+    scaling : bool
+        If True (default), the squared error norm is divided by n_features.
+        If False, the squared error norm is not rescaled.
+
+    squared : bool
+        Whether to compute the squared error norm or the error norm.
+        If True (default), the squared error norm is returned.
+        If False, the error norm is returned.
+
+    Returns
+    -------
+    The Mean Squared Error (in the sense of the Frobenius norm) between
+    `self` and `comp_cov` covariance estimators.
+
+    """
     return np.mean([error_norm(
         x, y, norm=norm, scaling=scaling, squared=squared) for x, y in zip(
             cov, comp_cov)])
 
 
-def structure_error(true, pred, thresholding=0, epsilon=1e-2):
+def structure_error(true, pred, thresholding=False, eps=1e-2):
     """Error in structure between a precision matrix and predicted.
 
     Parameters
     ----------
-    true: array-like, shape=(d,d)
-        the true inverse covariance matrix, if an entry is different from 0
-        it is consider as an edge
+    true: array-like
+        True matrix. In grpahical inference, if an entry is different from 0
+        it is consider as an edge (inverse covariance).
 
     pred: array-like, shape=(d,d)
-        the predicted inverse covariance matrix, if an entry is different from 0
-        it is consider as an edge
+        Predicted matrix. In grpahical inference, if an entry is different
+        from 0 it is consider as an edge (inverse covariance).
 
-    thresholding: bool, default=0,
-       if true the pred is threshold to the value of epsilon
+    thresholding: bool, default False,
+       Apply a threshold (with eps) to the `pred` matrix.
 
-    epsilon: float, default=1e-2
-      if thresholding is true it is used to threshold the values of pred.
+    eps : float, default = 1e-2
+        Apply a threshold (with eps) to the `pred` matrix.
 
     """
     # avoid inplace modifications
     true = true.copy()
     pred = pred.copy()
     if thresholding:
-        pred[np.abs(pred) < epsilon] = 0
+        pred[np.abs(pred) < eps] = 0
     true[true != 0] = 1
     pred[pred != 0] = 2
     res = true + pred

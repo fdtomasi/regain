@@ -36,20 +36,20 @@ def graph_lasso(
     """Graph lasso solver via ADMM.
 
     Solves the following problem via ADMM:
-        minimize  trace(S*X) - log det X + lambda*||X||_1
+        minimize  trace(S*X) - log det X + alpha ||X||_{od,1}
 
     where S is the empirical covariance of the data
     matrix D (training observations by features).
 
     Parameters
     ----------
-    D : array-like, 2-dimensional
-        Input matrix.
-    lamda : float, optional
+    emp_cov : array-like
+        Empirical covariance matrix.
+    alpha : float, optional
         Regularisation parameter.
     rho : float, optional
         Augmented Lagrangian parameter.
-    alpha : float, optional
+    over_relax : float, optional
         Over-relaxation parameter (typically between 1.0 and 1.8).
     max_iter : int, optional
         Maximum number of iterations.
@@ -59,11 +59,19 @@ def graph_lasso(
         Relative tolerance for convergence.
     return_history : bool, optional
         Return the history of computed values.
+    return_n_iter : bool, optional
+        Return the number of iteration before convergence.
+    verbose : bool, default False
+        Print info at each iteration.
 
     Returns
     -------
     X : numpy.array, 2-dimensional
         Solution to the problem.
+    S : np.array, 2 dimensional
+        Empirical covariance matrix.
+    n_iter : int
+        If return_n_iter, returns the number of iterations before convergence.
     history : list
         If return_history, then also a structure that contains the
         objective value, the primal and dual residual norms, and tolerances
@@ -72,13 +80,15 @@ def graph_lasso(
     """
     Z = np.zeros_like(emp_cov)
     U = np.zeros_like(emp_cov)
-
     Z_old = np.zeros_like(Z)
 
     checks = []
     for iteration_ in range(max_iter):
         # x-update
-        X = prox_logdet(emp_cov - rho * (Z - U), 1. / rho)
+        A = emp_cov - rho * (Z - U)
+        A += A.T
+        A /= 2.
+        X = prox_logdet(A, lamda=1. / rho)
 
         # z-update with relaxation
         X_hat = over_relax * X - (1 - over_relax) * Z
@@ -95,8 +105,7 @@ def graph_lasso(
             rnorm=rnorm, snorm=snorm,
             e_pri=np.sqrt(X.size) * tol + rtol * max(
                 np.linalg.norm(X, 'fro'), np.linalg.norm(Z, 'fro')),
-            e_dual=np.sqrt(X.size) * tol + rtol * rho * np.linalg.norm(
-                U, 'fro')
+            e_dual=np.sqrt(X.size) * tol + rtol * rho * np.linalg.norm(U)
         )
 
         Z_old = Z.copy()
