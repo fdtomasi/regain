@@ -1,4 +1,4 @@
-[![develstat](https://travis-ci.org/fdtomasi/regain.svg?branch=master)](https://travis-ci.org/fdtomasi/regain) [![covdevel](http://codecov.io/github/fdtomasi/regain/coverage.svg?branch=master)](http://codecov.io/github/fdtomasi/regain?branch=master) [![licence](https://img.shields.io/badge/licence-BSD-blue.svg)](http://opensource.org/licenses/BSD-3-Clause) [![PyPI](https://img.shields.io/pypi/v/regain.svg)](https://pypi.python.org/pypi/regain) [![Conda](https://img.shields.io/conda/v/fdtomasi/regain.svg)](https://anaconda.org/fdtomasi/regain) [![Requirements Status](https://requires.io/github/fdtomasi/regain/requirements.svg?branch=master)](https://requires.io/github/fdtomasi/regain/requirements/?branch=master)
+[![develstat](https://travis-ci.org/fdtomasi/regain.svg?branch=master)](https://travis-ci.org/fdtomasi/regain) [![covdevel](http://codecov.io/github/fdtomasi/regain/coverage.svg?branch=master)](http://codecov.io/github/fdtomasi/regain?branch=master) [![licence](https://img.shields.io/badge/licence-BSD-blue.svg)](http://opensource.org/licenses/BSD-3-Clause) [![PyPI](https://img.shields.io/pypi/v/regain.svg)](https://pypi.python.org/pypi/regain) [![Conda](https://img.shields.io/conda/v/fdtomasi/regain.svg)](https://anaconda.org/fdtomasi/regain) [![Python27](https://img.shields.io/badge/python-2.7-blue.svg)](https://badge.fury.io/py/regain) [![Python34](https://img.shields.io/badge/python-3.5-blue.svg)](https://badge.fury.io/py/regain) [![Requirements Status](https://requires.io/github/fdtomasi/regain/requirements.svg?branch=master)](https://requires.io/github/fdtomasi/regain/requirements/?branch=master)
 
 # regain
 Regularised graph inference across multiple time stamps, considering the influence of latent variables.
@@ -7,7 +7,7 @@ It inherits functionalities from the [scikit-learn](https://github.com/scikit-le
 ## Getting started
 ### Dependencies
 regain requires:
-- Python (>= 2.7 or >= 3.4)
+- Python (>= 2.7 or >= 3.5)
 - NumPy (>= 1.8.2)
 - scikit-learn (>= 0.17)
 

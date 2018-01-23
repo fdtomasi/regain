@@ -5,7 +5,7 @@ import numpy as np
 import warnings
 
 from functools import partial
-from six.moves import range
+from six.moves import range, map, zip
 from sklearn.covariance import empirical_covariance
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_array
@@ -23,17 +23,17 @@ from regain.validation import check_norm_prox
 
 def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
               alpha, tau, beta, eta, psi, phi):
-    """Objective function for time-varying graphical lasso."""
-    obj = np.sum(- logl(s, r) for s, r in zip(S, R))
-    obj += alpha * np.sum(map(l1_od_norm, Z_0))
-    obj += tau * np.sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
-    obj += beta * np.sum(map(psi, Z_2 - Z_1))
-    obj += eta * np.sum(map(phi, W_2 - W_1))
+    """Objective function for latent variable time-varying graphical lasso."""
+    obj = sum(- logl(s, r) for s, r in zip(S, R))
+    obj += alpha * sum(map(l1_od_norm, Z_0))
+    obj += tau * sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
+    obj += beta * sum(map(psi, Z_2 - Z_1))
+    obj += eta * sum(map(phi, W_2 - W_1))
     return obj
 
 
 def latent_time_graph_lasso(
-        emp_cov, alpha=1, tau=1, rho=1, beta=1., eta=1., max_iter=100,
+        emp_cov, alpha=1., tau=1., rho=1., beta=1., eta=1., max_iter=100,
         verbose=False, psi='laplacian', phi='laplacian', mode=None,
         tol=1e-4, rtol=1e-2, assume_centered=False,
         return_history=False, return_n_iter=True):
@@ -108,7 +108,11 @@ def latent_time_graph_lasso(
         A = Z_0 - W_0 - X_0
         A *= - rho
         A += emp_cov
-        R = np.array(map(partial(prox_logdet, lamda=1. / rho), A))
+
+        A += A.transpose(0, 2, 1)
+        A /= 2.
+
+        R = np.array([prox_logdet(a, lamda=1. / rho) for a in A])
 
         # update Z_0
         A = R + W_0 + X_0
@@ -117,7 +121,11 @@ def latent_time_graph_lasso(
         A /= divisor[:, None, None]
         # soft_thresholding_ = partial(soft_thresholding, lamda=alpha / rho)
         # Z_0 = np.array(map(soft_thresholding_, A))
-        Z_0 = soft_thresholding_sign(A, lamda=alpha / rho)
+        A += A.transpose(0, 2, 1)
+        A /= 2.
+
+        Z_0 = soft_thresholding_sign(
+            A, lamda=alpha / (rho * divisor[:, None, None]))
 
         # update Z_1, Z_2
         A_1 = Z_0[:-1] + X_1
@@ -136,7 +144,12 @@ def latent_time_graph_lasso(
         A[:-1] += W_1 - U_1
         A[1:] += W_2 - U_2
         A /= divisor[:, None, None]
-        W_0 = np.array(map(partial(prox_trace_indicator, lamda=tau / rho), A))
+
+        A += A.transpose(0, 2, 1)
+        A /= 2.
+
+        W_0 = np.array([prox_trace_indicator(a, lamda=tau / (rho * div))
+                        for a, div in zip(A, divisor)])
 
         # update W_1, W_2
         A_1 = W_0[:-1] + U_1

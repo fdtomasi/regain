@@ -8,12 +8,13 @@ from __future__ import division
 import numpy as np
 import warnings
 
-from six.moves import range
-from sklearn.covariance import empirical_covariance, EmpiricalCovariance
+from six.moves import range, map, zip
+from sklearn.covariance import empirical_covariance
 from sklearn.covariance import log_likelihood
-from sklearn.utils.extmath import fast_logdet, squared_norm
+from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_array
 
+from regain.admm.graph_lasso_ import GraphLasso, logl
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet
 from regain.prox import soft_thresholding_sign
@@ -22,17 +23,11 @@ from regain.utils import convergence, error_norm_time
 from regain.validation import check_norm_prox
 
 
-def logl(emp_cov, precision):
-    """Gaussian log-likelihood without constant term."""
-    return fast_logdet(precision) - np.sum(emp_cov * precision)
-
-
 def objective(S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
     """Objective function for time-varying graphical lasso."""
-    obj = np.sum(- logl(emp_cov, precision)
-                 for emp_cov, precision in zip(S, K))
-    obj += alpha * np.sum(map(l1_od_norm, Z_0))
-    obj += beta * np.sum(map(psi, Z_2 - Z_1))
+    obj = sum(- logl(emp_cov, precision) for emp_cov, precision in zip(S, K))
+    obj += alpha * sum(map(l1_od_norm, Z_0))
+    obj += beta * sum(map(psi, Z_2 - Z_1))
     return obj
 
 
@@ -103,7 +98,7 @@ def time_graph_lasso(
         A = K + U_0
         A *= - rho
         A += emp_cov
-        Z_0 = np.array([prox_logdet(a, lamda=1. / rho) for a in A])
+        Z_0 = np.array([prox_logdet(a_, lamda=1. / rho) for a_ in A])
 
         # z-update with relaxation
         A = Z_0 - U_0
@@ -144,7 +139,8 @@ def time_graph_lasso(
             obj=objective(emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi),
             rnorm=rnorm, snorm=snorm,
             e_pri=np.sqrt(K.size + 2 * Z_1.size) * tol + rtol * max(
-                np.sqrt(squared_norm(Z_0) + squared_norm(Z_1) + squared_norm(Z_2)), np.sqrt(squared_norm(K) + squared_norm(K[:-1]) + squared_norm(K[1:]))),
+                np.sqrt(squared_norm(Z_0) + squared_norm(Z_1) + squared_norm(Z_2)),
+                np.sqrt(squared_norm(K) + squared_norm(K[:-1]) + squared_norm(K[1:]))),
             e_dual=np.sqrt(K.size + 2 * Z_1.size) * tol + rtol * rho * np.sqrt(
                 squared_norm(U_0) + squared_norm(U_1) + squared_norm(U_2))
         )
@@ -177,7 +173,7 @@ def time_graph_lasso(
     return return_list
 
 
-class TimeGraphLasso(EmpiricalCovariance):
+class TimeGraphLasso(GraphLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Read more in the :ref:`User Guide <sparse_inverse_covariance>`.
@@ -233,20 +229,16 @@ class TimeGraphLasso(EmpiricalCovariance):
 
     """
 
-    def __init__(self, alpha=1., beta=1., mode='cd', rho=1.,
+    def __init__(self, alpha=.01, beta=1., mode='cd', rho=1.,
                  bypass_transpose=True, tol=1e-4, rtol=1e-4,
                  psi='laplacian', max_iter=100,
                  verbose=False, assume_centered=False):
-        super(TimeGraphLasso, self).__init__(assume_centered=assume_centered)
-        self.alpha = alpha
+        super(TimeGraphLasso, self).__init__(
+            alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
+            verbose=verbose, assume_centered=assume_centered)
         self.beta = beta
-        self.rho = rho
-        self.mode = mode
-        self.tol = tol
-        self.rtol = rtol
         self.psi = psi
-        self.max_iter = max_iter
-        self.verbose = verbose
+        self.mode = mode
         # for splitting purposes, data may come transposed, with time in the
         # last index. Set bypass_transpose=True if X comes with time in the
         # first dimension already
@@ -327,8 +319,8 @@ class TimeGraphLasso(EmpiricalCovariance):
         test_cov = np.array([empirical_covariance(
             x, assume_centered=True) for x in X_test - self.location_])
 
-        res = np.sum([log_likelihood(S, K) for S, K in zip(
-            test_cov, self.get_observed_precision())])
+        res = sum(log_likelihood(S, K) for S, K in zip(
+            test_cov, self.get_observed_precision()))
 
         # ALLA  MATLAB1
         # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]

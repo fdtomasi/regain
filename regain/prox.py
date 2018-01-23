@@ -2,6 +2,7 @@
 import numpy as np
 import warnings
 
+from six.moves import range, zip
 from scipy.optimize import minimize
 from sklearn.utils.extmath import squared_norm
 
