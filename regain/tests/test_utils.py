@@ -38,3 +38,19 @@ def test_error_norm_time():
     a = np.arange(27).reshape(3, 3, 3)
     a += a.T
     assert_equal(utils.error_norm_time(a, a), 0)
+
+
+def test_structure_error():
+    """Test error_norm_time function."""
+    a = np.eye(3) + np.eye(3, k=1)
+    b = np.eye(3, k=-1) + np.eye(3)
+    result = {'FN': 2, 'FP': 2, 'TN': 2, 'TP': 3, 'f1': 0.6, 'precision': 0.6,
+              'recall': 0.6}
+    assert_equal(utils.structure_error(a, b), result)
+
+    b = np.eye(3) + np.eye(3, k=-1) * 1e-3
+    result = {'FN': 2, 'FP': 0, 'TN': 4, 'TP': 3, 'f1': 0.7499999999999999,
+              'precision': 1.0, 'recall': 0.6}
+
+    assert_equal(utils.structure_error(a, b, thresholding=True, eps=1e-2),
+                 result)
