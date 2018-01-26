@@ -94,20 +94,27 @@ def time_graph_lasso(
 
     checks = []
     for iteration_ in range(max_iter):
-        # x-update
-        A = K + U_0
-        A *= - rho
-        A += emp_cov
-        Z_0 = np.array([prox_logdet(a_, lamda=1. / rho) for a_ in A])
-
-        # z-update with relaxation
+        # update K
         A = Z_0 - U_0
         A[:-1] += Z_1 - U_1
         A[1:] += Z_2 - U_2
         A /= divisor[:, None, None]
         # soft_thresholding_ = partial(soft_thresholding, lamda=alpha / rho)
         # K = np.array(map(soft_thresholding_, A))
-        K = soft_thresholding_sign(A, lamda=alpha / rho)
+        A += A.transpose(0, 2, 1)
+        A /= 2.
+
+        A *= - rho * divisor[:, None, None]
+        A += emp_cov
+
+        K = np.array([prox_logdet(a, lamda=1. / (rho * div))
+                      for a, div in zip(A, divisor)])
+
+        # update Z_0
+        A = K + U_0
+        A += A.transpose(0, 2, 1)
+        A /= 2.
+        Z_0 = soft_thresholding_sign(A, lamda=alpha / rho)
 
         # other Zs
         A_1 = K[:-1] + U_1
@@ -165,7 +172,7 @@ def time_graph_lasso(
     else:
         warnings.warn("Objective did not converge.")
 
-    return_list = [K, emp_cov]
+    return_list = [Z_0, emp_cov]
     if return_history:
         return_list.append(checks)
     if return_n_iter:

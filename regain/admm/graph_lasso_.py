@@ -85,27 +85,27 @@ def graph_lasso(
     checks = []
     for iteration_ in range(max_iter):
         # x-update
-        A = emp_cov - rho * (Z - U)
+        A = Z - U
         A += A.T
         A /= 2.
-        X = prox_logdet(A, lamda=1. / rho)
+        K = prox_logdet(emp_cov - rho * A, lamda=1. / rho)
 
         # z-update with relaxation
-        X_hat = over_relax * X - (1 - over_relax) * Z
-        Z = soft_thresholding_sign(X_hat + U, lamda=alpha / rho)
+        K_hat = over_relax * K - (1 - over_relax) * Z
+        Z = soft_thresholding_sign(K_hat + U, lamda=alpha / rho)
 
         # update residuals
-        U += X_hat - Z
+        U += K_hat - Z
 
         # diagnostics, reporting, termination checks
-        rnorm = np.linalg.norm(X - Z, 'fro')
+        rnorm = np.linalg.norm(K - Z, 'fro')
         snorm = rho * np.linalg.norm(Z - Z_old, 'fro')
         check = convergence(
-            obj=objective(emp_cov, X, Z, alpha),
+            obj=objective(emp_cov, K, Z, alpha),
             rnorm=rnorm, snorm=snorm,
-            e_pri=np.sqrt(X.size) * tol + rtol * max(
-                np.linalg.norm(X, 'fro'), np.linalg.norm(Z, 'fro')),
-            e_dual=np.sqrt(X.size) * tol + rtol * rho * np.linalg.norm(U)
+            e_pri=np.sqrt(K.size) * tol + rtol * max(
+                np.linalg.norm(K, 'fro'), np.linalg.norm(Z, 'fro')),
+            e_dual=np.sqrt(K.size) * tol + rtol * rho * np.linalg.norm(U)
         )
 
         Z_old = Z.copy()
