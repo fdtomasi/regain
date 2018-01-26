@@ -1,7 +1,7 @@
-function out = ADMMMA(emp_cov, alpha, tau)
+function out = LVGLASSO_single_time(emp_cov, alpha, tau, rho)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 opts.continuation = 1; opts.num_continuation = 0;
-opts.eta = sqrt(100); opts.muf = 1e-6;
+opts.eta = 1/rho; opts.muf = 1e-6;
 opts.maxiter = 500; opts.stoptol = 1e-5;
 opts.over_relax_par = 1;
 
