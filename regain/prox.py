@@ -37,7 +37,7 @@ def soft_thresholding_od(a, lamda):
 
 def blockwise_soft_thresholding(a, lamda):
     """Proximal operator for l2 norm."""
-    x = np.zeros_like(a)
+    x = np.empty_like(a)
     for t in range(a.shape[0]):
         x[t] = np.array([soft_thresholding(
             a[t, :, j], lamda) for j in range(a.shape[2])]).T
@@ -47,10 +47,11 @@ def blockwise_soft_thresholding(a, lamda):
 def blockwise_soft_thresholding_symmetric(a, lamda):
     """Proximal operator for l2 norm, for symmetric matrices (last 2 axes)."""
     col_norms = np.linalg.norm(a, axis=1)
+    ones_vect = np.ones(a.shape[1])
     output = np.empty_like(a)
     for i, (x, c_norm) in enumerate(zip(a, col_norms)):
-        output[i] = np.dot(x, np.diag(
-            (np.ones(x.shape[0]) - lamda / c_norm) * (c_norm > lamda)))
+        output[i] = np.dot(
+            x, np.diag((ones_vect - lamda / c_norm) * (c_norm > lamda)))
     return output
 
 

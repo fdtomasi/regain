@@ -1,10 +1,32 @@
 """Utils for REGAIN package."""
 import functools
 import numpy as np
+import os
+import sys
+
 from collections import namedtuple
+from contextlib import contextmanager
 
 convergence = namedtuple('convergence',
                          ('obj', 'rnorm', 'snorm', 'e_pri', 'e_dual'))
+
+
+@contextmanager
+def suppress_stdout():
+    """Suppress function output.
+
+    Usage
+    -----
+    with suppress_stdout():
+        function_with_outputs()
+    """
+    with open(os.devnull, "w") as devnull:
+        old_stdout = sys.stdout
+        sys.stdout = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
 
 
 def flatten(lst):
