@@ -66,10 +66,12 @@ def generate_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
         l1l2=generate_dataset_L1L2,
         sin=generate_dataset_sin_cos,
         sklearn=make_sparse_low_rank,
-        fixed_sparsity=make_fixed_sparsity)
+        fixed_sparsity=make_fixed_sparsity,
+        ma=make_ma_xue_zou)
     func = modes.get(mode, None)
     if func is None:
-        ValueError("Unknown mode %s. Choices are: %s" % (mode, modes.keys()))
+        raise ValueError("Unknown mode %s. "
+                         "Choices are: %s" % (mode, modes.keys()))
 
     n_dim_obs = int(n_dim_obs)
     n_dim_lat = int(n_dim_lat)
@@ -472,7 +474,7 @@ def make_sparse_low_rank(
     return Ks, Kobs, Ls
 
 
-def generate_ma_xue_zou(n_dim_obs=12, n_latent=3, epsilon=1e-3, sparsity=0.1):
+def make_ma_xue_zou(n_dim_obs=12, n_latent=3, T=1, epsilon=1e-3, sparsity=0.1):
     """Generate the dataset as in Ma, Xue, Zou (2012)."""
     # p = n_dim_obs + n_latent  # int(n_dim_obs * 0.05)
     p = n_dim_obs + int(n_dim_obs * 0.05)
@@ -492,23 +494,20 @@ def generate_ma_xue_zou(n_dim_obs=12, n_latent=3, epsilon=1e-3, sparsity=0.1):
     C = np.clip(C - np.diag(np.diag(C)), -1, 1)
     eig, Q = np.linalg.eigh(C)
     K = C + max(-1.2 * np.min(eig), 0.001) * np.eye(p)
-    KO = K[:po, :po]
-    KOH = K[:po, po:]
-    KHO = K[po:, :po]
-    KH = K[po:, po:]
+    K_O = K[:po, :po]
+    K_OH = K[:po, po:]
+    K_HO = K[po:, :po]
+    K_H = K[po:, po:]
 
-    # L = np.divide(KOH, KH.dot(KHO))
-    assert np.allclose(KOH, KHO.T)
-    L = np.linalg.multi_dot((KOH, np.linalg.inv(KH), KHO))
-    KOtilde = KO - L
-    assert is_pos_def(KOtilde)
-    assert is_pos_semidef(KH)
+    # L = np.divide(K_OH, K_H.dot(K_HO))
+    assert np.allclose(K_OH, K_HO.T)
+    L = np.linalg.multi_dot((K_OH, np.linalg.inv(K_H), K_HO))
+    K_O_tilde = K_O - L
+    assert is_pos_def(K_O_tilde)
+    assert is_pos_semidef(K_H)
     assert np.linalg.matrix_rank(L) == ph
-    print(ph)
+    # print(ph)
 
     N = 5 * po * 2
-    cov = np.linalg.inv(KOtilde)
-    cov = (cov + cov.T) / 2.
-    data = np.random.multivariate_normal(np.zeros(po), cov, size=N)
-    # emp_cov = 1. / N * data.T.dot(data)
-    return data, KOtilde, KO, L
+    print("Note that, with this method, the n_samples should be %d" % N)
+    return [K_O] * T, [K_O_tilde] * T, [L] * T
