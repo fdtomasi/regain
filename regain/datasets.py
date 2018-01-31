@@ -78,7 +78,7 @@ def generate_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
     n_samples = int(n_samples)
 
     thetas, thetas_obs, ells = func(n_dim_obs, n_dim_lat, T, **kwargs)
-    sigmas = np.array(map(np.linalg.inv, thetas_obs))
+    sigmas = map(np.linalg.inv, thetas_obs)
     # map(normalize_matrix, sigmas)  # in place
 
     data_list = np.array([np.random.multivariate_normal(
@@ -120,6 +120,28 @@ def generate_starting_matrices(n_dim_obs=100, n_dim_lat=10, degree=2):
         indices = np.random.choice(
             possible_idx, degree - (np.count_nonzero(theta[i, :]) - 1))
         theta[i, indices] = theta[indices, i] = .5 / degree
+
+    assert(is_pos_def(theta))
+    theta_observed = theta - L
+    assert(is_pos_def(theta_observed))
+    return theta, theta_observed, L, K_HO
+
+
+def generate_starting_matrices_normalized(n_dim_obs=100, n_dim_lat=10, degree=2):
+    """Doc."""
+    L, K_HO = make_ell(n_dim_obs, n_dim_lat, degree)
+    theta = np.zeros((n_dim_obs, n_dim_obs))
+    for i in range(n_dim_obs):
+        possible_idx = list(set(range(n_dim_obs)) - (
+            set(np.nonzero(theta[i, :])[0]) |
+            set(np.where(np.count_nonzero(theta, axis=1) > degree)[0])))
+        if not possible_idx:
+            continue
+        indices = np.random.choice(
+            possible_idx, degree - (np.count_nonzero(theta[i, :]) - 1))
+        theta[i, indices] = theta[indices, i] = 0.5/degree
+
+    theta.flat[::n_dim_obs+1] = np.sum(theta, axis=1) + 0.02
 
     assert(is_pos_def(theta))
     theta_observed = theta - L
@@ -231,7 +253,7 @@ def update_theta(
             ii = indices[i]
         else:
             ii = np.random.randint(0, n_dim_obs, size=degree)
-        addition[i, ii] = np.random.randn(degree)
+        addition[i, ii] = np.random.randn(len(ii))
     addition[np.triu_indices(n_dim_obs)[::-1]] = \
         addition[np.triu_indices(n_dim_obs)]
     addition *= epsilon / np.linalg.norm(addition)
@@ -249,6 +271,56 @@ def generate_dataset_with_evolving_L(
     keep_sparsity = kwargs.get('keep_sparsity', False)
 
     theta, theta_observed, L, K_HO = generate_starting_matrices(
+        n_dim_obs, n_dim_lat, degree)
+
+    thetas = [theta]
+    thetas_obs = [theta_observed]
+    ells = [L]
+    K_HOs = [K_HO]
+
+    idx = [np.nonzero(row)[0] for row in theta] if keep_sparsity else None
+    for i in range(1, T):
+        theta = update_theta(thetas[-1], n_dim_obs, degree, epsilon,
+                             keep_sparsity=keep_sparsity, indices=idx)
+
+        # for j in range(n_dim_obs):
+        #     indices = list(np.where(theta[j,:]!=0)[0])
+        #     indices.remove(j)
+        #     if(len(indices)>degree):
+        #         choice = np.random.choice(indices, len(indices)-degree)
+        #         theta[j,choice] = 0
+        #         theta[choice,j] = 0
+
+        assert(is_pos_def(theta))
+
+        K_HO = K_HOs[-1].copy()
+        addition = np.random.rand(*K_HO.shape)
+        addition *= epsilon / np.linalg.norm(addition)
+        K_HO += addition
+        K_HO /= np.sum(K_HO, axis=1)[:, None] / 2.
+        # K_HO *= 0.12
+        K_HO[np.abs(K_HO) < epsilon / n_dim_obs] = 0
+        K_HOs.append(K_HO)
+        L = K_HO.T.dot(K_HO)
+
+        assert(np.linalg.matrix_rank(L) == n_dim_lat)
+        assert(is_pos_semidef(L))
+        assert(is_pos_def(theta - L))
+        thetas.append(theta)
+        thetas_obs.append(theta - L)
+        ells.append(L)
+        K_HOs.append(K_HO)
+
+    return thetas, thetas_obs, ells
+
+
+def make_evolving(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
+    """Generate dataset with evolving L."""
+    degree = kwargs.get('degree', 2)
+    epsilon = kwargs.get('epsilon', 1e-2)
+    keep_sparsity = kwargs.get('keep_sparsity', False)
+
+    theta, theta_observed, L, K_HO = generate_starting_matrices_normalized(
         n_dim_obs, n_dim_lat, degree)
 
     thetas = [theta]
