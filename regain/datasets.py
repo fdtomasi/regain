@@ -67,7 +67,7 @@ def generate_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
         sin=generate_dataset_sin_cos,
         sklearn=make_sparse_low_rank,
         fixed_sparsity=make_fixed_sparsity,
-        ma=make_ma_xue_zou)
+        ma=make_ma_xue_zou, mak=make_ma_xue_zou_rand_k)
     func = modes.get(mode, None)
     if func is None:
         raise ValueError("Unknown mode %s. "
@@ -94,7 +94,7 @@ def make_ell(n_dim_obs=100, n_dim_lat=10, degree=2):
     for i in range(n_dim_lat):
         percentage = int(n_dim_obs * 0.8)
         indices = np.random.randint(0, high=n_dim_obs, size=percentage)
-        K_HO[i, indices] = np.random.rand(percentage) * 0.12 / degree
+        K_HO[i, indices] = np.random.rand(percentage) * 0.12
     L = K_HO.T.dot(K_HO)
     assert(is_pos_semidef(L))
     assert np.linalg.matrix_rank(L) == n_dim_lat
@@ -220,8 +220,9 @@ def generate_dataset_L1(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     return thetas, thetas_obs, ells
 
 
-def generate_dataset_with_evolving_L(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
-    """DESCRIZIONE, PRIMA O POI."""
+def generate_dataset_with_evolving_L(
+        n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
+    """Generate dataset with evolving L."""
     degree = kwargs.get('degree', 2)
     epsilon = kwargs.get('epsilon', 1e-2)
 
@@ -233,37 +234,40 @@ def generate_dataset_with_evolving_L(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs
     ells = [L]
     K_HOs = [K_HO]
 
-    for i in range(1,T):
-        addition = np.zeros(thetas[-1].shape)
-
+    for i in range(1, T):
+        addition = np.zeros_like(theta)
         for i in range(theta.shape[0]):
-            addition[i, np.random.randint(0, theta.shape[0], size=degree)] = np.random.randn(degree)
-        addition[np.triu_indices(theta.shape[0])[::-1]] = addition[np.triu_indices(theta.shape[0])]
-        addition *= (epsilon/np.linalg.norm(addition))
+            addition[i, np.random.randint(0, n_dim_obs, size=degree)] = \
+                np.random.randn(degree)
+        addition[np.triu_indices(n_dim_obs)[::-1]] = \
+            addition[np.triu_indices(n_dim_obs)]
+        addition *= epsilon / np.linalg.norm(addition)
         np.fill_diagonal(addition, 0)
         addition *= epsilon / np.linalg.norm(addition)
         theta = thetas[-1] + addition
-        theta[np.abs(theta)<2*epsilon/(theta.shape[0])] = 0
-        for j in range(n_dim_obs):
-            indices = list(np.where(theta[j,:]!=0)[0])
-            indices.remove(j)
-            if(len(indices)>degree):
-                choice = np.random.choice(indices, len(indices)-degree)
-                theta[j,choice] = 0
-                theta[choice,j] = 0
-        # plot_graph_with_latent_variables(theta, 0, theta.shape[0], "Theta" + str(i))
+        theta[np.abs(theta) < 2 * epsilon / n_dim_obs] = 0
+
+        # for j in range(n_dim_obs):
+        #     indices = list(np.where(theta[j,:]!=0)[0])
+        #     indices.remove(j)
+        #     if(len(indices)>degree):
+        #         choice = np.random.choice(indices, len(indices)-degree)
+        #         theta[j,choice] = 0
+        #         theta[choice,j] = 0
+
         assert(is_pos_def(theta))
 
         K_HO = K_HOs[-1].copy()
         addition = np.random.rand(*K_HO.shape)
-        addition *= (epsilon / np.linalg.norm(addition))
+        addition *= epsilon / np.linalg.norm(addition)
         K_HO += addition
         K_HO = K_HO / np.sum(K_HO, axis=1)[:, None]
-        K_HO *=0.12
-        K_HO[np.abs(K_HO)<epsilon/(theta.shape[0])] = 0
+        K_HO *= 0.12
+        K_HO[np.abs(K_HO) < epsilon / n_dim_obs] = 0
         K_HOs.append(K_HO)
         L = K_HO.T.dot(K_HO)
-        assert np.linalg.matrix_rank(L) == n_dim_lat
+
+        assert(np.linalg.matrix_rank(L) == n_dim_lat)
         assert(is_pos_semidef(L))
         assert(is_pos_def(theta - L))
         thetas.append(theta)
@@ -295,13 +299,13 @@ def generate_dataset_with_fixed_L(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
         np.fill_diagonal(addition, 0)
         theta = thetas[-1] + addition
         theta[np.abs(theta) < 2 * epsilon / n_dim_obs] = 0
-        # theta[np.abs(theta)<1e-2] = 0
-        for j in range(n_dim_obs):
-            indices = list(np.where(theta[j, :] != 0)[0])
-            indices.remove(j)
-            if len(indices) > degree:
-                choice = np.random.choice(indices, len(indices) - degree)
-                theta[choice, j] = theta[j, choice] = 0
+
+        # for j in range(n_dim_obs):
+        #     indices = list(np.where(theta[j, :] != 0)[0])
+        #     indices.remove(j)
+        #     if len(indices) > degree:
+        #         choice = np.random.choice(indices, len(indices) - degree)
+        #         theta[choice, j] = theta[j, choice] = 0
 
         assert(is_pos_def(theta))
         assert(is_pos_def(theta - L))
@@ -508,6 +512,38 @@ def make_ma_xue_zou(n_dim_obs=12, n_latent=3, T=1, epsilon=1e-3, sparsity=0.1):
     assert np.linalg.matrix_rank(L) == ph
     # print(ph)
 
-    N = 5 * po * 2
+    N = 5 * po
+    print("Note that, with this method, the n_samples should be %d" % N)
+    return [K_O] * T, [K_O_tilde] * T, [L] * T
+
+
+def make_ma_xue_zou_rand_k(
+        n_dim_obs=12, n_latent=3, T=1, epsilon=1e-3, sparsity=0.1):
+    """Generate the dataset as in Ma, Xue, Zou (2012)."""
+    # p = n_dim_obs + n_latent  # int(n_dim_obs * 0.05)
+    p = n_dim_obs + int(n_dim_obs * 0.05)
+    po = n_dim_obs
+    ph = p - n_dim_obs
+    nnzr = int(sparsity * (np.triu_indices(p, 1)[0].size))
+
+    # Generate A, the original inverse covariance, with random sparsity pattern...
+    A = np.eye(p)
+    idx = np.vstack(np.triu_indices(p, 1))
+    idx = idx[:, np.random.choice(idx.shape[1], nnzr, replace=False)]
+    idx = (idx[0], idx[1])
+    A[idx] = np.sign(np.random.rand(nnzr) - .5)
+    A[np.triu_indices(p, 1)[::-1]] = A[np.triu_indices(p, 1)]
+
+    # A is the gound truth inverse covariance matrix
+    K = A.dot(A.T) + 1e-6 * np.eye(p)
+    K = A
+    K_O = K[:po, :po]
+    K_OH = K[:po, po:]
+    K_HO = K[po:, :po]
+    K_H = K[po:, po:]
+    L = np.linalg.multi_dot((K_OH, np.linalg.inv(K_H), K_HO))
+    K_O_tilde = K_O - L
+
+    N = 5 * po
     print("Note that, with this method, the n_samples should be %d" % N)
     return [K_O] * T, [K_O_tilde] * T, [L] * T

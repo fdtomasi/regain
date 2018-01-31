@@ -151,7 +151,8 @@ def error_norm_time(cov, comp_cov, norm='frobenius', scaling=True,
             cov, comp_cov)])
 
 
-def structure_error(true, pred, thresholding=False, eps=1e-2):
+def structure_error(true, pred, thresholding=False, eps=1e-2,
+                    no_diagonal=False):
     """Error in structure between a precision matrix and predicted.
 
     Parameters
@@ -176,13 +177,20 @@ def structure_error(true, pred, thresholding=False, eps=1e-2):
     pred = pred.copy()
     if thresholding:
         pred[np.abs(pred) < eps] = 0
+    if no_diagonal:
+        if true.ndim > 2:
+            true = np.array([t - np.diag(t) for t in true])
+            pred = np.array([t - np.diag(t) for t in pred])
+        else:
+            true -= np.diag(np.diag(true))
+            pred -= np.diag(np.diag(pred))
     true[true != 0] = 1
     pred[pred != 0] = 2
     res = true + pred
+    TN = np.count_nonzero((res == 0).astype(float))
     FN = np.count_nonzero((res == 1).astype(float))
     FP = np.count_nonzero((res == 2).astype(float))
     TP = np.count_nonzero((res == 3).astype(float))
-    TN = np.count_nonzero((res == 0).astype(float))
     precision = TP / float(TP + FP)
     recall = TP / float(TP + FN)
     return {'TP': TP, 'TN': TN, 'FP': FP, 'FN': FN,
