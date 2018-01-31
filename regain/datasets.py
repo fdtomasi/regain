@@ -95,6 +95,8 @@ def make_ell(n_dim_obs=100, n_dim_lat=10, degree=2):
         percentage = int(n_dim_obs * 0.8)
         indices = np.random.randint(0, high=n_dim_obs, size=percentage)
         K_HO[i, indices] = np.random.rand(percentage) * 0.12
+
+    K_HO /= np.sum(K_HO, axis=1)[:, None] / 2
     L = K_HO.T.dot(K_HO)
     assert(is_pos_semidef(L))
     assert np.linalg.matrix_rank(L) == n_dim_lat
@@ -265,7 +267,7 @@ def generate_dataset_with_evolving_L(
         addition = np.random.rand(*K_HO.shape)
         addition *= epsilon / np.linalg.norm(addition)
         K_HO += addition
-        K_HO /= np.sum(K_HO, axis=1)[:, None]
+        K_HO /= np.sum(K_HO, axis=1)[:, None] / 2.
         # K_HO *= 0.12
         K_HO[np.abs(K_HO) < epsilon / n_dim_obs] = 0
         K_HOs.append(K_HO)
