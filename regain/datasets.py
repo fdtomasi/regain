@@ -220,6 +220,20 @@ def generate_dataset_L1(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     return thetas, thetas_obs, ells
 
 
+def update_theta(theta_old, n_dim_obs, degree, epsilon):
+    addition = np.zeros_like(theta_old)
+    for i in range(n_dim_obs):
+        addition[i, np.random.randint(0, n_dim_obs, size=degree)] = \
+            np.random.randn(degree)
+    addition[np.triu_indices(n_dim_obs)[::-1]] = \
+        addition[np.triu_indices(n_dim_obs)]
+    addition *= epsilon / np.linalg.norm(addition)
+    np.fill_diagonal(addition, 0)
+    theta = theta_old + addition
+    theta[np.abs(theta) < 2 * epsilon / n_dim_obs] = 0
+    return theta
+
+
 def generate_dataset_with_evolving_L(
         n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """Generate dataset with evolving L."""
@@ -235,17 +249,7 @@ def generate_dataset_with_evolving_L(
     K_HOs = [K_HO]
 
     for i in range(1, T):
-        addition = np.zeros_like(theta)
-        for i in range(theta.shape[0]):
-            addition[i, np.random.randint(0, n_dim_obs, size=degree)] = \
-                np.random.randn(degree)
-        addition[np.triu_indices(n_dim_obs)[::-1]] = \
-            addition[np.triu_indices(n_dim_obs)]
-        addition *= epsilon / np.linalg.norm(addition)
-        np.fill_diagonal(addition, 0)
-        addition *= epsilon / np.linalg.norm(addition)
-        theta = thetas[-1] + addition
-        theta[np.abs(theta) < 2 * epsilon / n_dim_obs] = 0
+        theta = update_theta(thetas[-1], n_dim_obs, degree, epsilon)
 
         # for j in range(n_dim_obs):
         #     indices = list(np.where(theta[j,:]!=0)[0])
@@ -261,8 +265,8 @@ def generate_dataset_with_evolving_L(
         addition = np.random.rand(*K_HO.shape)
         addition *= epsilon / np.linalg.norm(addition)
         K_HO += addition
-        K_HO = K_HO / np.sum(K_HO, axis=1)[:, None]
-        K_HO *= 0.12
+        K_HO /= np.sum(K_HO, axis=1)[:, None]
+        # K_HO *= 0.12
         K_HO[np.abs(K_HO) < epsilon / n_dim_obs] = 0
         K_HOs.append(K_HO)
         L = K_HO.T.dot(K_HO)
@@ -289,16 +293,7 @@ def generate_dataset_with_fixed_L(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     thetas = [theta]
     thetas_obs = [theta_observed]
     for i in range(1, T):
-        addition = np.zeros_like(theta)
-        for i in range(n_dim_obs):
-            addition[i, np.random.randint(0, n_dim_obs, size=degree)] = \
-                np.random.randn(degree)
-        addition[np.triu_indices(n_dim_obs)[::-1]] = \
-            addition[np.triu_indices(n_dim_obs)]
-        addition *= epsilon / np.linalg.norm(addition)
-        np.fill_diagonal(addition, 0)
-        theta = thetas[-1] + addition
-        theta[np.abs(theta) < 2 * epsilon / n_dim_obs] = 0
+        theta = update_theta(thetas[-1], n_dim_obs, degree, epsilon)
 
         # for j in range(n_dim_obs):
         #     indices = list(np.where(theta[j, :] != 0)[0])
