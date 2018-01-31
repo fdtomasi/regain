@@ -1,4 +1,5 @@
 """Utils for REGAIN package."""
+from __future__ import division
 import functools
 import numpy as np
 import os
@@ -191,8 +192,30 @@ def structure_error(true, pred, thresholding=False, eps=1e-2,
     FN = np.count_nonzero((res == 1).astype(float))
     FP = np.count_nonzero((res == 2).astype(float))
     TP = np.count_nonzero((res == 3).astype(float))
+
     precision = TP / float(TP + FP)
     recall = TP / float(TP + FN)
-    return {'TP': TP, 'TN': TN, 'FP': FP, 'FN': FN,
-            'precision': precision, 'recall': recall,
-            'f1': 2 * precision * recall / (precision + recall)}
+    f1 = 2 * precision * recall / (precision + recall)
+
+    accuracy = (TP + TN) / true.size
+    prevalence = (TP + FN) / true.size
+
+    miss_rate = FN / (TP + FN)
+    fall_out = FP / (FP + TN)
+    specificity = TN / (FP + TN)
+    false_discovery_rate = FP / (TP + FP)
+    false_omission_rate = FN / (FN + TN)
+    negative_predicted_value = TN / (FN + TN)
+
+    positive_likelihood_ratio = recall / fall_out
+    negative_likelihood_ratio = miss_rate / specificity
+    diagnostic_odds_ratio = positive_likelihood_ratio / negative_likelihood_ratio
+
+    dictionary = dict(
+        tp=TP, tn=TN, fp=FP, fn=FN, precision=precision, recall=recall,
+        f1=f1, accuracy=accuracy, for=false_omission_rate,
+        fdr=false_discovery_rate, npv=negative_predicted_value,
+        prevalence=prevalence, miss_rate=miss_rate, fall_out=fall_out,
+        specificity=specificity, plr=positive_likelihood_ratio,
+        nlr=negative_likelihood_ratio, dor=diagnostic_odds_ratio)
+    return dictionary
