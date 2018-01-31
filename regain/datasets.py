@@ -222,11 +222,16 @@ def generate_dataset_L1(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     return thetas, thetas_obs, ells
 
 
-def update_theta(theta_old, n_dim_obs, degree, epsilon):
+def update_theta(
+        theta_old, n_dim_obs, degree, epsilon, keep_sparsity=False,
+        indices=None):
     addition = np.zeros_like(theta_old)
     for i in range(n_dim_obs):
-        addition[i, np.random.randint(0, n_dim_obs, size=degree)] = \
-            np.random.randn(degree)
+        if keep_sparsity:
+            ii = indices[i]
+        else:
+            ii = np.random.randint(0, n_dim_obs, size=degree)
+        addition[i, ii] = np.random.randn(degree)
     addition[np.triu_indices(n_dim_obs)[::-1]] = \
         addition[np.triu_indices(n_dim_obs)]
     addition *= epsilon / np.linalg.norm(addition)
@@ -241,6 +246,7 @@ def generate_dataset_with_evolving_L(
     """Generate dataset with evolving L."""
     degree = kwargs.get('degree', 2)
     epsilon = kwargs.get('epsilon', 1e-2)
+    keep_sparsity = kwargs.get('keep_sparsity', False)
 
     theta, theta_observed, L, K_HO = generate_starting_matrices(
         n_dim_obs, n_dim_lat, degree)
@@ -250,8 +256,10 @@ def generate_dataset_with_evolving_L(
     ells = [L]
     K_HOs = [K_HO]
 
+    idx = [np.nonzero(row)[0] for row in theta] if keep_sparsity else None
     for i in range(1, T):
-        theta = update_theta(thetas[-1], n_dim_obs, degree, epsilon)
+        theta = update_theta(thetas[-1], n_dim_obs, degree, epsilon,
+                             keep_sparsity=keep_sparsity, indices=idx)
 
         # for j in range(n_dim_obs):
         #     indices = list(np.where(theta[j,:]!=0)[0])
@@ -288,14 +296,17 @@ def generate_dataset_with_fixed_L(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """Generate precisions with a fixed L matrix."""
     degree = kwargs.get('degree', 2)
     epsilon = kwargs.get('epsilon', 1e-2)
+    keep_sparsity = kwargs.get('keep_sparsity', False)
 
     theta, theta_observed, L, K_HO = generate_starting_matrices(
         n_dim_obs, n_dim_lat, degree)
 
     thetas = [theta]
     thetas_obs = [theta_observed]
+    idx = [np.nonzero(row)[0] for row in theta] if keep_sparsity else None
     for i in range(1, T):
-        theta = update_theta(thetas[-1], n_dim_obs, degree, epsilon)
+        theta = update_theta(thetas[-1], n_dim_obs, degree, epsilon,
+                             keep_sparsity=keep_sparsity, indices=idx)
 
         # for j in range(n_dim_obs):
         #     indices = list(np.where(theta[j, :] != 0)[0])
