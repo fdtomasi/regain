@@ -1,4 +1,5 @@
 """Dataset generation module."""
+from __future__ import division
 import numpy as np
 
 from sklearn.datasets.base import Bunch
@@ -67,7 +68,9 @@ def generate_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
         sin=generate_dataset_sin_cos,
         sklearn=make_sparse_low_rank,
         fixed_sparsity=make_fixed_sparsity,
-        ma=make_ma_xue_zou, mak=make_ma_xue_zou_rand_k)
+        ma=make_ma_xue_zou, mak=make_ma_xue_zou_rand_k,
+        norm=make_evolving, l1l1=generate_dataset_l1l1,
+        l1l1fede=generate_dataset_l1l1_fede)
     func = modes.get(mode, None)
     if func is None:
         raise ValueError("Unknown mode %s. "
@@ -88,7 +91,7 @@ def generate_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
                  ells=np.array(ells))
 
 
-def make_ell(n_dim_obs=100, n_dim_lat=10, degree=2):
+def make_ell(n_dim_obs=100, n_dim_lat=10):
     """Doc."""
     K_HO = np.zeros((n_dim_lat, n_dim_obs))
     for i in range(n_dim_lat):
@@ -109,7 +112,7 @@ def make_ell(n_dim_obs=100, n_dim_lat=10, degree=2):
 
 def generate_starting_matrices(n_dim_obs=100, n_dim_lat=10, degree=2):
     """Doc."""
-    L, K_HO = make_ell(n_dim_obs, n_dim_lat, degree)
+    L, K_HO = make_ell(n_dim_obs, n_dim_lat)
     theta = np.eye(n_dim_obs)
     for i in range(n_dim_obs):
         possible_idx = list(set(range(n_dim_obs)) - (
@@ -129,7 +132,7 @@ def generate_starting_matrices(n_dim_obs=100, n_dim_lat=10, degree=2):
 
 def generate_starting_matrices_normalized(n_dim_obs=100, n_dim_lat=10, degree=2):
     """Doc."""
-    L, K_HO = make_ell(n_dim_obs, n_dim_lat, degree)
+    L, K_HO = make_ell(n_dim_obs, n_dim_lat)
     theta = np.zeros((n_dim_obs, n_dim_obs))
     for i in range(n_dim_obs):
         possible_idx = list(set(range(n_dim_obs)) - (
@@ -139,9 +142,9 @@ def generate_starting_matrices_normalized(n_dim_obs=100, n_dim_lat=10, degree=2)
             continue
         indices = np.random.choice(
             possible_idx, degree - (np.count_nonzero(theta[i, :]) - 1))
-        theta[i, indices] = theta[indices, i] = 0.5/degree
+        theta[i, indices] = theta[indices, i] = 1. / degree
 
-    theta.flat[::n_dim_obs+1] = np.sum(theta, axis=1) + 0.02
+    theta.flat[::n_dim_obs+1] = np.sum(theta, axis=1) + 0.002
 
     assert(is_pos_def(theta))
     theta_observed = theta - L
@@ -157,10 +160,84 @@ def perturb_theta_l1(theta_init, no, n_dim_obs):
         rows = np.random.randint(0, n_dim_obs, no)
         cols = np.random.randint(0, n_dim_obs, no)
     for r, c in zip(rows, cols):
-        theta[r, c] = 0.12 if theta[r, c] == 0 else 0
+        theta[r, c] = np.random.choice([0.12, 0, 0]) if theta[r, c] == 0 else .06  # np.random.rand(1) * .35
         theta[c, r] = theta[r, c]
     assert(is_pos_def(theta))
     return theta
+
+
+def generate_dataset_l1l1(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
+    degree = kwargs.get('degree', 2)
+    epsilon = kwargs.get('epsilon', 1e-2)
+    no = int(np.ceil(n_dim_obs / 20)) if kwargs.get('proportional', False) else 1
+
+    theta, theta_observed, L, K_HO = generate_starting_matrices_normalized(
+        n_dim_obs, n_dim_lat, degree)
+
+    thetas = [theta]
+    thetas_obs = [theta_observed]
+    ells = [L]
+    K_HOs = [K_HO]
+
+    for i in range(1, T):
+        theta = perturb_theta_l1(thetas[-1], no, n_dim_obs)
+
+        K_HO = K_HOs[-1].copy()
+        picks = np.random.permutation(K_HO.size)[:no]
+        K_HO = K_HO.ravel()
+        for p in picks:
+            K_HO[p] = np.random.choice([0.12,0,0]) if K_HO[p] == 0 else 0
+        K_HO = np.reshape(K_HO, (n_dim_lat, n_dim_obs))
+        L = K_HO.T.dot(K_HO)
+
+        assert np.linalg.matrix_rank(L) == n_dim_lat
+        assert(is_pos_semidef(L))
+        assert(is_pos_def(theta - L))
+
+        thetas.append(theta)
+        thetas_obs.append(theta - L)
+        ells.append(L)
+        K_HOs.append(K_HO)
+
+    return thetas, thetas_obs, ells
+
+
+def generate_dataset_l1l1_fede(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
+    degree = kwargs.get('degree', 2)
+    epsilon = kwargs.get('epsilon', 1e-2)
+    no = int(np.ceil(n_dim_obs / 20)) if kwargs.get('proportional', False) else 1
+
+    theta, theta_observed, L, K_HO = generate_starting_matrices(
+        n_dim_obs, n_dim_lat, degree)
+
+    thetas = [theta]
+    thetas_obs = [theta_observed]
+    ells = [L]
+    K_HOs = [K_HO]
+
+    for i in range(1, T):
+        theta = perturb_theta_l1(thetas[-1], no, n_dim_obs)
+        theta += thetas[-1]
+        theta /= 2.
+
+        K_HO = K_HOs[-1].copy()
+        picks = np.random.permutation(K_HO.size)[:no]
+        K_HO = K_HO.ravel()
+        for p in picks:
+            K_HO[p] = np.random.choice([0.12,0,0]) if K_HO[p] == 0 else 0
+        K_HO = np.reshape(K_HO, (n_dim_lat, n_dim_obs))
+        L = K_HO.T.dot(K_HO)
+
+        assert np.linalg.matrix_rank(L) == n_dim_lat
+        assert(is_pos_semidef(L))
+        assert(is_pos_def(theta - L))
+
+        thetas.append(theta)
+        thetas_obs.append(theta - L)
+        ells.append(L)
+        K_HOs.append(K_HO)
+
+    return thetas, thetas_obs, ells
 
 
 def generate_dataset_L1L2(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
@@ -182,17 +259,14 @@ def generate_dataset_L1L2(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
 
         K_HO = K_HOs[-1].copy()
         addition = np.random.rand(*K_HO.shape)
-        addition *= (epsilon / np.linalg.norm(addition))
+        addition *= epsilon / np.linalg.norm(addition)
         K_HO += addition
-        K_HO = K_HO / np.sum(K_HO, axis=1)[:, None]
-        K_HO *= 0.12 / (n_dim_obs/100)
-        K_HO[np.abs(K_HO) < epsilon / theta.shape[0]] = 0
+        K_HO = K_HO / np.sum(K_HO, axis=1)[:, None] / 2.
+        # K_HO *= 0.12 / (n_dim_obs/100)
+        K_HO[np.abs(K_HO) < epsilon / n_dim_obs] = 0
         K_HOs.append(K_HO)
         L = K_HO.T.dot(K_HO)
-        assert np.linalg.matrix_rank(L) == n_dim_lat
-        assert(is_pos_semidef(L))
-        assert(is_pos_def(theta - L))
-        L = K_HO.T.dot(K_HO)
+
         assert np.linalg.matrix_rank(L) == n_dim_lat
         assert(is_pos_semidef(L))
         assert(is_pos_def(theta - L))
