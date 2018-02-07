@@ -69,8 +69,7 @@ def generate_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
         sklearn=make_sparse_low_rank,
         fixed_sparsity=make_fixed_sparsity,
         ma=make_ma_xue_zou, mak=make_ma_xue_zou_rand_k,
-        norm=make_evolving, l1l1=generate_dataset_l1l1,
-        l1l1fede=generate_dataset_l1l1_fede)
+        norm=make_evolving, l1l1=generate_dataset_l1l1)
     func = modes.get(mode, None)
     if func is None:
         raise ValueError("Unknown mode %s. "
@@ -152,6 +151,25 @@ def generate_starting_matrices_normalized(n_dim_obs=100, n_dim_lat=10, degree=2)
     return theta, theta_observed, L, K_HO
 
 
+def update_theta(
+        theta_old, n_dim_obs, degree, epsilon, keep_sparsity=False,
+        indices=None):
+    addition = np.zeros_like(theta_old)
+    for i in range(n_dim_obs):
+        if keep_sparsity:
+            ii = indices[i]
+        else:
+            ii = np.random.randint(0, n_dim_obs, size=degree)
+        addition[i, ii] = np.random.randn(len(ii))
+    addition[np.triu_indices(n_dim_obs)[::-1]] = \
+        addition[np.triu_indices(n_dim_obs)]
+    addition *= epsilon / np.linalg.norm(addition)
+    np.fill_diagonal(addition, 0)
+    theta = theta_old + addition
+    theta[np.abs(theta) < 2 * epsilon / n_dim_obs] = 0
+    return theta
+
+
 def perturb_theta_l1(theta_init, no, n_dim_obs):
     theta = theta_init.copy()
     rows = np.zeros(no)
@@ -167,11 +185,14 @@ def perturb_theta_l1(theta_init, no, n_dim_obs):
 
 
 def generate_dataset_l1l1(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
+    """Generate matrices according to a l1-l1 model."""
     degree = kwargs.get('degree', 2)
-    epsilon = kwargs.get('epsilon', 1e-2)
+    start_matrix_function = generate_starting_matrices_normalized \
+        if kwargs.get('normalize_starting_matrices', True) else \
+        generate_starting_matrices
     no = int(np.ceil(n_dim_obs / 20)) if kwargs.get('proportional', False) else 1
 
-    theta, theta_observed, L, K_HO = generate_starting_matrices_normalized(
+    theta, theta_observed, L, K_HO = start_matrix_function(
         n_dim_obs, n_dim_lat, degree)
 
     thetas = [theta]
@@ -186,45 +207,7 @@ def generate_dataset_l1l1(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
         picks = np.random.permutation(K_HO.size)[:no]
         K_HO = K_HO.ravel()
         for p in picks:
-            K_HO[p] = np.random.choice([0.12,0,0]) if K_HO[p] == 0 else 0
-        K_HO = np.reshape(K_HO, (n_dim_lat, n_dim_obs))
-        L = K_HO.T.dot(K_HO)
-
-        assert np.linalg.matrix_rank(L) == n_dim_lat
-        assert(is_pos_semidef(L))
-        assert(is_pos_def(theta - L))
-
-        thetas.append(theta)
-        thetas_obs.append(theta - L)
-        ells.append(L)
-        K_HOs.append(K_HO)
-
-    return thetas, thetas_obs, ells
-
-
-def generate_dataset_l1l1_fede(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
-    degree = kwargs.get('degree', 2)
-    epsilon = kwargs.get('epsilon', 1e-2)
-    no = int(np.ceil(n_dim_obs / 20)) if kwargs.get('proportional', False) else 1
-
-    theta, theta_observed, L, K_HO = generate_starting_matrices(
-        n_dim_obs, n_dim_lat, degree)
-
-    thetas = [theta]
-    thetas_obs = [theta_observed]
-    ells = [L]
-    K_HOs = [K_HO]
-
-    for i in range(1, T):
-        theta = perturb_theta_l1(thetas[-1], no, n_dim_obs)
-        theta += thetas[-1]
-        theta /= 2.
-
-        K_HO = K_HOs[-1].copy()
-        picks = np.random.permutation(K_HO.size)[:no]
-        K_HO = K_HO.ravel()
-        for p in picks:
-            K_HO[p] = np.random.choice([0.12,0,0]) if K_HO[p] == 0 else 0
+            K_HO[p] = np.random.choice([0.12, 0, 0]) if K_HO[p] == 0 else 0
         K_HO = np.reshape(K_HO, (n_dim_lat, n_dim_obs))
         L = K_HO.T.dot(K_HO)
 
@@ -302,8 +285,8 @@ def generate_dataset_L1(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
         K_HO = K_HOs[-1].copy()
         c = np.random.randint(0, n_dim_obs, 1)
         r = np.random.randint(0, n_dim_lat, 1)
-        K_HO[r,c] = 0.12 if K_HO[r,c] == 0 else 0;
-        #K_HO[c,r] = K_HO[r,c]
+        K_HO[r, c] = 0.12 if K_HO[r, c] == 0 else 0
+        # K_HO[c,r] = K_HO[r,c]
 
         L = K_HO.T.dot(K_HO)
         assert np.linalg.matrix_rank(L) == n_dim_lat
@@ -316,25 +299,6 @@ def generate_dataset_L1(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
         K_HOs.append(K_HO)
 
     return thetas, thetas_obs, ells
-
-
-def update_theta(
-        theta_old, n_dim_obs, degree, epsilon, keep_sparsity=False,
-        indices=None):
-    addition = np.zeros_like(theta_old)
-    for i in range(n_dim_obs):
-        if keep_sparsity:
-            ii = indices[i]
-        else:
-            ii = np.random.randint(0, n_dim_obs, size=degree)
-        addition[i, ii] = np.random.randn(len(ii))
-    addition[np.triu_indices(n_dim_obs)[::-1]] = \
-        addition[np.triu_indices(n_dim_obs)]
-    addition *= epsilon / np.linalg.norm(addition)
-    np.fill_diagonal(addition, 0)
-    theta = theta_old + addition
-    theta[np.abs(theta) < 2 * epsilon / n_dim_obs] = 0
-    return theta
 
 
 def generate_dataset_with_evolving_L(
