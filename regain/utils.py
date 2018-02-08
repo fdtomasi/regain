@@ -7,6 +7,7 @@ import sys
 
 from collections import namedtuple
 from contextlib import contextmanager
+from six.moves import cPickle as pkl
 
 convergence = namedtuple('convergence',
                          ('obj', 'rnorm', 'snorm', 'e_pri', 'e_dual'))
@@ -28,6 +29,17 @@ def suppress_stdout():
             yield
         finally:
             sys.stdout = old_stdout
+
+
+def save_pickle(obj, filename):
+    with open(filename, 'wb') as f:
+        pkl.dump(obj, f)
+
+
+def load_pickle(filename):
+    with open(filename, 'rb') as f:
+        res = pkl.load(f)
+    return res
 
 
 def flatten(lst):
@@ -193,29 +205,31 @@ def structure_error(true, pred, thresholding=False, eps=1e-2,
     FP = np.count_nonzero((res == 2).astype(float))
     TP = np.count_nonzero((res == 3).astype(float))
 
-    precision = TP / float(TP + FP)
+    precision = TP / float(TP + FP) if TP + FP > 0 else 0
     recall = TP / float(TP + FN)
-    f1 = 2 * precision * recall / (precision + recall)
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0
 
     accuracy = (TP + TN) / true.size
+    balanced_accuracy = 0.5 * (TP / (TP + FN) + TN / (TN + FP))
     prevalence = (TP + FN) / true.size
 
     miss_rate = FN / (TP + FN)
     fall_out = FP / (FP + TN)
     specificity = TN / (FP + TN)
-    false_discovery_rate = FP / (TP + FP)
-    false_omission_rate = FN / (FN + TN)
-    negative_predicted_value = TN / (FN + TN)
+    false_discovery_rate = FP / (TP + FP) if TP + FP > 0 else 0
+    false_omission_rate = FN / (FN + TN) if FN + TN > 0 else 0
+    negative_predicted_value = TN / (FN + TN) if FN + TN > 0 else 0
 
-    positive_likelihood_ratio = recall / fall_out
-    negative_likelihood_ratio = miss_rate / specificity
-    diagnostic_odds_ratio = positive_likelihood_ratio / negative_likelihood_ratio
+    positive_likelihood_ratio = recall / fall_out if fall_out > 0 else 0
+    negative_likelihood_ratio = miss_rate / specificity if specificity > 0 else 0
+    diagnostic_odds_ratio = positive_likelihood_ratio / negative_likelihood_ratio if negative_likelihood_ratio > 0 else 0
 
     dictionary = dict(
         tp=TP, tn=TN, fp=FP, fn=FN, precision=precision, recall=recall,
-        f1=f1, accuracy=accuracy, for=false_omission_rate,
+        f1=f1, accuracy=accuracy, false_omission_rate=false_omission_rate,
         fdr=false_discovery_rate, npv=negative_predicted_value,
         prevalence=prevalence, miss_rate=miss_rate, fall_out=fall_out,
         specificity=specificity, plr=positive_likelihood_ratio,
-        nlr=negative_likelihood_ratio, dor=diagnostic_odds_ratio)
+        nlr=negative_likelihood_ratio, dor=diagnostic_odds_ratio,
+        balanced_accuracy=balanced_accuracy)
     return dictionary

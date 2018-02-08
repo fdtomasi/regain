@@ -13,7 +13,8 @@ from sklearn.utils.validation import check_array
 from regain.admm.time_graph_lasso_ import logl
 from regain.admm.time_graph_lasso_ import TimeGraphLasso
 from regain.norm import l1_od_norm
-from regain.prox import soft_thresholding_sign
+from regain.prox import soft_thresholding_sign as soft_thresholding
+from regain.prox import prox_logdet_ala_ma
 from regain.prox import prox_logdet
 from regain.prox import prox_trace_indicator
 from regain.update_rules import update_rho
@@ -36,7 +37,8 @@ def latent_time_graph_lasso(
         emp_cov, alpha=1., tau=1., rho=1., beta=1., eta=1., max_iter=100,
         verbose=False, psi='laplacian', phi='laplacian', mode=None,
         tol=1e-4, rtol=1e-2, assume_centered=False,
-        return_history=False, return_n_iter=True):
+        return_history=False, return_n_iter=True, update_rho_options=None,
+        compute_objective=True):
     r"""Time-varying latent variable graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -110,6 +112,8 @@ def latent_time_graph_lasso(
         A /= 2.
         A *= - rho
         A += emp_cov
+        # A = emp_cov / rho - A
+
         R = np.array([prox_logdet(a, lamda=1. / rho) for a in A])
 
         # update Z_0
@@ -122,7 +126,7 @@ def latent_time_graph_lasso(
         A += A.transpose(0, 2, 1)
         A /= 2.
 
-        Z_0 = soft_thresholding_sign(
+        Z_0 = soft_thresholding(
             A, lamda=alpha / (rho * divisor[:, None, None]))
 
         # update Z_1, Z_2
@@ -178,7 +182,7 @@ def latent_time_graph_lasso(
 
         check = convergence(
             obj=objective(emp_cov, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
-                          alpha, tau, beta, eta, psi, phi),
+                          alpha, tau, beta, eta, psi, phi) if compute_objective else np.nan,
             rnorm=rnorm, snorm=snorm,
             e_pri=np.sqrt(R.size + 4 * Z_1.size) * tol + rtol * max(
                 np.sqrt(squared_norm(R) +
@@ -208,7 +212,7 @@ def latent_time_graph_lasso(
 
         # if iteration_ % 10 == 0 and rho > 1e-6:
         #     rho /= 2.  # see Boyd, pag 21
-        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_)
+        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {}))
         # scaled dual variables should be also rescaled
         X_0 *= rho / rho_new
         X_1 *= rho / rho_new
@@ -286,7 +290,8 @@ class LatentTimeGraphLasso(TimeGraphLasso):
     def __init__(self, alpha=1., tau=1., beta=1., eta=1., mode='cd', rho=1.,
                  bypass_transpose=True, tol=1e-4, rtol=1e-4,
                  psi='laplacian', phi='laplacian', max_iter=100,
-                 verbose=False, assume_centered=False):
+                 verbose=False, assume_centered=False, update_rho_options=None,
+                 compute_objective=True):
         super(LatentTimeGraphLasso, self).__init__(
             alpha=alpha, beta=beta, mode=mode, rho=rho,
             tol=tol, rtol=rtol, psi=psi, max_iter=max_iter, verbose=verbose,
@@ -294,6 +299,8 @@ class LatentTimeGraphLasso(TimeGraphLasso):
         self.tau = tau
         self.eta = eta
         self.phi = phi
+        self.update_rho_options = update_rho_options or {}
+        self.compute_objective = compute_objective
 
     def get_observed_precision(self):
         """Getter for the observed precision matrix.
@@ -340,5 +347,6 @@ class LatentTimeGraphLasso(TimeGraphLasso):
                 beta=self.beta, eta=self.eta, mode=self.mode,
                 tol=self.tol, rtol=self.rtol, psi=self.psi, phi=self.phi,
                 max_iter=self.max_iter, verbose=self.verbose,
-                return_n_iter=True, return_history=False)
+                return_n_iter=True, return_history=False, update_rho_options=self.update_rho_options,
+                compute_objective=self.compute_objective)
         return self

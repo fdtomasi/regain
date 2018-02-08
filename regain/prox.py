@@ -89,6 +89,11 @@ def prox_logdet(a, lamda):
     return np.linalg.multi_dot((Q, np.diag(xi), Q.T))
 
 
+def prox_logdet_ala_ma(a, lamda):
+    es, Q = np.linalg.eigh(a)
+    xi = (- es + np.sqrt(np.square(es) + 4. * lamda)) / 2.
+    return np.linalg.multi_dot((Q, np.diag(xi), Q.T))
+
 def prox_trace_indicator(a, lamda):
     """Time-varying latent variable graphical lasso prox."""
     es, Q = np.linalg.eigh(a)

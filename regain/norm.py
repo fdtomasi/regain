@@ -22,6 +22,11 @@ def node_penalty(X):
         #  'fun': lambda x: 1,
         #  'jac': lambda x: np.zeros(np.prod(X.shape))}
     )
-    return minimize(
-        lambda x: np.sum(np.linalg.norm(x.reshape(X.shape), axis=0)),
-        np.random.randn(np.prod(X.shape)), constraints=cons).fun
+    try:
+        res = minimize(
+            lambda x: np.sum(np.linalg.norm(x.reshape(X.shape), axis=0)),
+            np.random.randn(np.prod(X.shape)), constraints=cons).fun
+    except ValueError:
+        res = np.nan
+
+    return res
