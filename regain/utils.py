@@ -1,12 +1,15 @@
 """Utils for REGAIN package."""
 from __future__ import division
+
 import functools
-import numpy as np
+import logging
 import os
 import sys
-
 from collections import namedtuple
 from contextlib import contextmanager
+
+import numpy as np
+import six
 from six.moves import cPickle as pkl
 
 convergence = namedtuple('convergence',
@@ -31,12 +34,49 @@ def suppress_stdout():
             sys.stdout = old_stdout
 
 
+def _ensure_filename_ending(filename, possible_extensions=['.txt']):
+    if isinstance(possible_extensions, six.string_types):
+        possible_extensions = [possible_extensions]
+
+    return filename + (
+        '' if any(filename.endswith(end) for end in possible_extensions)
+        else possible_extensions[0])
+
+
+def init_logger(filename, verbose=True):
+    """Initialise logger."""
+    logfile = _ensure_filename_ending(filename, ['.log', '.txt'])
+    logging.shutdown()
+    root_logger = logging.getLogger()
+    for _ in list(root_logger.handlers):
+        root_logger.removeHandler(_)
+        _.flush()
+        _.close()
+    for _ in list(root_logger.filters):
+        root_logger.removeFilter(_)
+        _.flush()
+        _.close()
+
+    logging.basicConfig(filename=logfile, level=logging.INFO, filemode='w',
+                        format='%(levelname)s (%(asctime)-15s): %(message)s')
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(logging.INFO if verbose else logging.ERROR)
+    stream_handler.setFormatter(
+        logging.Formatter('%(levelname)s (%(asctime)-15s): %(message)s'))
+
+    root_logger.addHandler(stream_handler)
+    return logfile
+
+
 def save_pickle(obj, filename):
+    """Save pickle utility."""
+    filename = _ensure_filename_ending(filename, '.pkl')
     with open(filename, 'wb') as f:
         pkl.dump(obj, f)
 
 
 def load_pickle(filename):
+    """Read pickle utility."""
     with open(filename, 'rb') as f:
         res = pkl.load(f)
     return res
