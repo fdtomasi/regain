@@ -24,7 +24,8 @@ setup(
     maintainer='Federico Tomasi',
     maintainer_email='federico.tomasi@dibris.unige.it',
     url='https://github.com/fdtomasi/regain',
-    download_url='https://github.com/fdtomasi/regain/archive/'+version+'.tar.gz',
+    download_url='https://github.com/fdtomasi/regain/archive/'
+                 'v%s.tar.gz' % version,
     keywords=['graph inference', 'latent variables'],
     classifiers=[
         'Development Status :: 4 - Beta',
@@ -44,12 +45,10 @@ setup(
     license='FreeBSD',
     packages=find_packages(exclude=["*.__old", "*.tests"]),
     include_package_data=True,
-    requires=['numpy (>=1.10.1)',
-              'scipy (>=0.16.1)',
+    requires=['numpy (>=1.11)',
+              'scipy (>=0.16.1,>=1.0)',
               'sklearn (>=0.17)',
-              'six',
-              # 'matplotlib (>=1.5.1)'
-              ],
+              'six'],
     # scripts=['scripts/ici_run.py', 'scripts/ici_analysis.py'],
     # ext_modules=[ssk_module],
     # include_dirs=[np.get_include()]

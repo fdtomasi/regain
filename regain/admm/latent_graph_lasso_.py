@@ -79,19 +79,17 @@ def latent_graph_lasso(
     checks = []
     for iteration_ in range(max_iter):
         # update R
-        A = emp_cov - rho * (K - L - U)
+        A = K - L - U
         A += A.T
         A /= 2.
-        R = prox_logdet(A, lamda=1. / rho)
+        R = prox_logdet(emp_cov - rho * A, lamda=1. / rho)
 
         A = L + R + U
         A += A.T
         A /= 2.
         K = soft_thresholding_sign(A, lamda=alpha / rho)
-        
+
         A = K - R - U
-        A += A.T
-        A /= 2.
         L = prox_trace_indicator(A, lamda=tau / rho)
 
         # update residuals

@@ -1,9 +1,9 @@
 """Useful proximal functions."""
-import numpy as np
 import warnings
 
-from six.moves import range, zip
+import numpy as np
 from scipy.optimize import minimize
+from six.moves import range, zip
 from sklearn.utils.extmath import squared_norm
 
 from regain.update_rules import update_rho
@@ -30,6 +30,13 @@ def soft_thresholding_sign(a, lamda):
 
 def soft_thresholding_od(a, lamda):
     """Off-diagonal soft-thresholding."""
+    if a.ndim > 2:
+        res = []
+        for i, x in enumerate(a):
+            st = soft_thresholding_sign(x, lamda[i])
+            st.flat[::x.shape[0]+1] = np.diag(x)
+            res.append(st)
+        return np.array(res)
     soft = np.sign(a) * np.maximum(np.abs(a) - lamda, 0)
     soft.flat[::a.shape[1] + 1] = np.diag(a)
     return soft
@@ -37,7 +44,7 @@ def soft_thresholding_od(a, lamda):
 
 def blockwise_soft_thresholding(a, lamda):
     """Proximal operator for l2 norm."""
-    x = np.zeros_like(a)
+    x = np.empty_like(a)
     for t in range(a.shape[0]):
         x[t] = np.array([soft_thresholding(
             a[t, :, j], lamda) for j in range(a.shape[2])]).T
@@ -47,10 +54,11 @@ def blockwise_soft_thresholding(a, lamda):
 def blockwise_soft_thresholding_symmetric(a, lamda):
     """Proximal operator for l2 norm, for symmetric matrices (last 2 axes)."""
     col_norms = np.linalg.norm(a, axis=1)
+    ones_vect = np.ones(a.shape[1])
     output = np.empty_like(a)
     for i, (x, c_norm) in enumerate(zip(a, col_norms)):
-        output[i] = np.dot(x, np.diag(
-            (np.ones(x.shape[0]) - lamda / c_norm) * (c_norm > lamda)))
+        output[i] = np.dot(
+            x, np.diag((ones_vect - lamda / c_norm) * (c_norm > lamda)))
     return output
 
 
@@ -80,6 +88,11 @@ def prox_logdet(a, lamda):
     xi = (- es + np.sqrt(np.square(es) + 4. / lamda)) * lamda / 2.
     return np.linalg.multi_dot((Q, np.diag(xi), Q.T))
 
+
+def prox_logdet_ala_ma(a, lamda):
+    es, Q = np.linalg.eigh(a)
+    xi = (- es + np.sqrt(np.square(es) + 4. * lamda)) / 2.
+    return np.linalg.multi_dot((Q, np.diag(xi), Q.T))
 
 def prox_trace_indicator(a, lamda):
     """Time-varying latent variable graphical lasso prox."""
