@@ -5,6 +5,18 @@ from numpy.testing import assert_array_equal, assert_equal
 from regain import utils
 
 
+def test_suppress_stdout():
+    """Test suppress_stdout function."""
+    with utils.suppress_stdout():
+        print("Test")
+
+
+def test_ensure_filename_ending():
+    """Test _ensure_filename_ending function."""
+    filename = utils._ensure_filename_ending('test', '.txt')
+    assert_equal(filename, 'test.txt')
+
+
 def test_flatten():
     """Test flatten function."""
     a = [[1, 2], [3, 4], [5]]
