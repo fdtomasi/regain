@@ -240,15 +240,8 @@ def generate_dataset_L1L2(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     for i in range(1, T):
         theta = perturb_theta_l1(thetas[-1], no, n_dim_obs)
 
-        K_HO = K_HOs[-1].copy()
-        addition = np.random.rand(*K_HO.shape)
-        addition *= epsilon / np.linalg.norm(addition)
-        K_HO += addition
-        K_HO = K_HO / np.sum(K_HO, axis=1)[:, None] / 2.
-        # K_HO *= 0.12 / (n_dim_obs/100)
-        K_HO[np.abs(K_HO) < epsilon / n_dim_obs] = 0
+        L, K_HO = update_ell_l2(K_HOs[-1], epsilon, n_dim_obs)
         K_HOs.append(K_HO)
-        L = K_HO.T.dot(K_HO)
 
         assert np.linalg.matrix_rank(L) == n_dim_lat
         assert(is_pos_semidef(L))
@@ -301,6 +294,17 @@ def generate_dataset_L1(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     return thetas, thetas_obs, ells
 
 
+def update_ell_l2(K_HO_old, epsilon, n_dim_obs):
+    K_HO = K_HO_old.copy()
+    addition = np.random.rand(*K_HO.shape)
+    addition *= epsilon / np.linalg.norm(addition)
+    K_HO += addition
+    K_HO /= np.sum(K_HO, axis=1)[:, None] / 2.
+    # K_HO *= 0.12
+    K_HO[np.abs(K_HO) < epsilon / n_dim_obs] = 0
+    return K_HO.T.dot(K_HO), K_HO
+
+
 def generate_dataset_with_evolving_L(
         n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """Generate dataset with evolving L."""
@@ -331,15 +335,8 @@ def generate_dataset_with_evolving_L(
 
         assert(is_pos_def(theta))
 
-        K_HO = K_HOs[-1].copy()
-        addition = np.random.rand(*K_HO.shape)
-        addition *= epsilon / np.linalg.norm(addition)
-        K_HO += addition
-        K_HO /= np.sum(K_HO, axis=1)[:, None] / 2.
-        # K_HO *= 0.12
-        K_HO[np.abs(K_HO) < epsilon / n_dim_obs] = 0
+        L, K_HO = update_ell_l2(K_HOs[-1], epsilon, n_dim_obs)
         K_HOs.append(K_HO)
-        L = K_HO.T.dot(K_HO)
 
         assert(np.linalg.matrix_rank(L) == n_dim_lat)
         assert(is_pos_semidef(L))
@@ -381,15 +378,8 @@ def make_evolving(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
 
         assert(is_pos_def(theta))
 
-        K_HO = K_HOs[-1].copy()
-        addition = np.random.rand(*K_HO.shape)
-        addition *= epsilon / np.linalg.norm(addition)
-        K_HO += addition
-        K_HO /= np.sum(K_HO, axis=1)[:, None] / 2.
-        # K_HO *= 0.12
-        K_HO[np.abs(K_HO) < epsilon / n_dim_obs] = 0
+        L, K_HO = update_ell_l2(K_HOs[-1], epsilon, n_dim_obs)
         K_HOs.append(K_HO)
-        L = K_HO.T.dot(K_HO)
 
         assert(np.linalg.matrix_rank(L) == n_dim_lat)
         assert(is_pos_semidef(L))

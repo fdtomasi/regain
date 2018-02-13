@@ -41,16 +41,52 @@ def test_error_norm_time():
 
 
 def test_structure_error():
-    """Test error_norm_time function."""
+    """Test structure_error function."""
     a = np.eye(3) + np.eye(3, k=1)
     b = np.eye(3, k=-1) + np.eye(3)
-    result = {'FN': 2, 'FP': 2, 'TN': 2, 'TP': 3, 'f1': 0.6, 'precision': 0.6,
-              'recall': 0.6}
+    result = {
+        'accuracy': 0.5555555555555556,
+        'balanced_accuracy': 0.55,
+        'dor': 1.4999999999999998,
+        'f1': 0.6,
+        'fall_out': 0.5,
+        'false_omission_rate': 0.5,
+        'fdr': 0.4,
+        'fn': 2,
+        'fp': 2,
+        'miss_rate': 0.4,
+        'nlr': 0.8,
+        'npv': 0.5,
+        'plr': 1.2,
+        'precision': 0.6,
+        'prevalence': 0.5555555555555556,
+        'recall': 0.6,
+        'specificity': 0.5,
+        'tn': 2,
+        'tp': 3}
     assert_equal(utils.structure_error(a, b), result)
 
     b = np.eye(3) + np.eye(3, k=-1) * 1e-3
-    result = {'FN': 2, 'FP': 0, 'TN': 4, 'TP': 3, 'f1': 0.7499999999999999,
-              'precision': 1.0, 'recall': 0.6}
+    result = {
+        'accuracy': 0.7777777777777778,
+        'balanced_accuracy': 0.8,
+        'dor': 0.0,
+        'f1': 0.7499999999999999,
+        'fall_out': 0.0,
+        'false_omission_rate': 0.3333333333333333,
+        'fdr': 0.0,
+        'fn': 2,
+        'fp': 0,
+        'miss_rate': 0.4,
+        'nlr': 0.4,
+        'npv': 0.6666666666666666,
+        'plr': 0,
+        'precision': 1.0,
+        'prevalence': 0.5555555555555556,
+        'recall': 0.6,
+        'specificity': 1.0,
+        'tn': 4,
+        'tp': 3}
 
     assert_equal(utils.structure_error(a, b, thresholding=True, eps=1e-2),
                  result)

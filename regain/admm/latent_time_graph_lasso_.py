@@ -1,22 +1,19 @@
 """Graphical latent variable models selection over time via ADMM."""
 from __future__ import division
 
-import numpy as np
 import warnings
-
 from functools import partial
-from six.moves import range, map, zip
+
+import numpy as np
+from six.moves import map, range, zip
 from sklearn.covariance import empirical_covariance
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_array
 
-from regain.admm.time_graph_lasso_ import logl
-from regain.admm.time_graph_lasso_ import TimeGraphLasso
+from regain.admm.time_graph_lasso_ import TimeGraphLasso, logl
 from regain.norm import l1_od_norm
+from regain.prox import prox_logdet, prox_logdet_ala_ma, prox_trace_indicator
 from regain.prox import soft_thresholding_sign as soft_thresholding
-from regain.prox import prox_logdet_ala_ma
-from regain.prox import prox_logdet
-from regain.prox import prox_trace_indicator
 from regain.update_rules import update_rho
 from regain.utils import convergence
 from regain.validation import check_norm_prox
@@ -123,9 +120,6 @@ def latent_time_graph_lasso(
         A /= divisor[:, None, None]
         # soft_thresholding_ = partial(soft_thresholding, lamda=alpha / rho)
         # Z_0 = np.array(map(soft_thresholding_, A))
-        A += A.transpose(0, 2, 1)
-        A /= 2.
-
         Z_0 = soft_thresholding(
             A, lamda=alpha / (rho * divisor[:, None, None]))
 
@@ -146,6 +140,8 @@ def latent_time_graph_lasso(
         A[:-1] += W_1 - U_1
         A[1:] += W_2 - U_2
         A /= divisor[:, None, None]
+        A += A.transpose(0, 2, 1)
+        A /= 2.
 
         W_0 = np.array([prox_trace_indicator(a, lamda=tau / (rho * div))
                         for a, div in zip(A, divisor)])

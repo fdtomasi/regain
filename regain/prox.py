@@ -1,9 +1,9 @@
 """Useful proximal functions."""
-import numpy as np
 import warnings
 
-from six.moves import range, zip
+import numpy as np
 from scipy.optimize import minimize
+from six.moves import range, zip
 from sklearn.utils.extmath import squared_norm
 
 from regain.update_rules import update_rho
