@@ -45,15 +45,7 @@ deploy:
     user: fdtomasi
     password:
       secure: RPxVhYOg6P4Q8mFWrUH7k1SIdoPMplxsrreItBC/GFFnMEzq7R3Is3gv+XWUJ2ced+i8+X42xKYQJL0P1kULCWvA6K26CNVmuAssOhv9rEFGh5om6J7Y2X7qu1pRd2z4iLKe4C2YVcLgNdMCyuIdj/B/TicRdYWdRVhP8gShfXs9pYwgweYrTvMnG0F7PP+hwrn3aDixcCBlumP3dRhmUP01y+GikgO+v5VQ0Z/OOp9EGG3I68/vdjpLHLwjZ8BAvWceSlVvjBs4OtjH5szbKzFqOyZKqISNdaIe47qtFjSDY3LbhZu2FNh20RpogoIFLFNgdJJIt0KWAyKkd0YjjS5S/eIWT/bFbfXnI+ohTJmgA9LtOhJ8F61WuU4VlaN8WeITvEUT0cTEDEnnKQmxhLwwyZFk/IHjn4AM2NG1Bz2Do2zkFiTWb00kDasDN1z+3D0h2Ndf9/DemhckPEJegACPGXUmzdqCrG1sMel3OC/E7xL/UDPTpI318RvSJ9VKj5H8pviBdygj45W5p10ZXnmxmEOL4UQ5Iw77pINwQOaxROy6u48o7dUTzxCbWyDV7MlRHz3rLi19fC7aBeVj1NPY08cRaFsHJPMMpeD/6YhHo+osYxX/ayEyB5eSzmpQI/8KsyTvD11Dysmd06qSTsTAAqPxDsgAcWkTz9gvxu0=
-    distributions: sdist
-    on:
-      repo: fdtomasi/regain
-      tags: true
-  - provider: pypi
-    user: fdtomasi
-    password:
-      secure: RPxVhYOg6P4Q8mFWrUH7k1SIdoPMplxsrreItBC/GFFnMEzq7R3Is3gv+XWUJ2ced+i8+X42xKYQJL0P1kULCWvA6K26CNVmuAssOhv9rEFGh5om6J7Y2X7qu1pRd2z4iLKe4C2YVcLgNdMCyuIdj/B/TicRdYWdRVhP8gShfXs9pYwgweYrTvMnG0F7PP+hwrn3aDixcCBlumP3dRhmUP01y+GikgO+v5VQ0Z/OOp9EGG3I68/vdjpLHLwjZ8BAvWceSlVvjBs4OtjH5szbKzFqOyZKqISNdaIe47qtFjSDY3LbhZu2FNh20RpogoIFLFNgdJJIt0KWAyKkd0YjjS5S/eIWT/bFbfXnI+ohTJmgA9LtOhJ8F61WuU4VlaN8WeITvEUT0cTEDEnnKQmxhLwwyZFk/IHjn4AM2NG1Bz2Do2zkFiTWb00kDasDN1z+3D0h2Ndf9/DemhckPEJegACPGXUmzdqCrG1sMel3OC/E7xL/UDPTpI318RvSJ9VKj5H8pviBdygj45W5p10ZXnmxmEOL4UQ5Iw77pINwQOaxROy6u48o7dUTzxCbWyDV7MlRHz3rLi19fC7aBeVj1NPY08cRaFsHJPMMpeD/6YhHo+osYxX/ayEyB5eSzmpQI/8KsyTvD11Dysmd06qSTsTAAqPxDsgAcWkTz9gvxu0=
-    distributions: bdist_wheel
+    distributions: sdist bdist_wheel
     on:
       repo: fdtomasi/regain
       tags: true
