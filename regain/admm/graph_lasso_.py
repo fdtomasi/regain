@@ -5,17 +5,16 @@ http://www.stanford.edu/~boyd/papers/distr_opt_stat_learning_admm.html
 """
 from __future__ import division
 
-import numpy as np
 import warnings
 
+import numpy as np
 from six.moves import range
-from sklearn.covariance import empirical_covariance, GraphLasso
+from sklearn.covariance import GraphLasso, empirical_covariance
 from sklearn.utils.extmath import fast_logdet
 from sklearn.utils.validation import check_array
 
 from regain.norm import l1_od_norm
-from regain.prox import soft_thresholding_sign
-from regain.prox import prox_logdet
+from regain.prox import prox_logdet, soft_thresholding_sign
 from regain.update_rules import update_rho
 from regain.utils import convergence
 
@@ -31,8 +30,9 @@ def objective(S, X, Z, alpha):
 
 
 def graph_lasso(
-        emp_cov, alpha=.01, rho=1, over_relax=1, max_iter=100, verbose=False,
-        tol=1e-4, rtol=1e-2, return_history=False, return_n_iter=True):
+        emp_cov, alpha=0.01, rho=1, over_relax=1, max_iter=100, verbose=False,
+        tol=1e-4, rtol=1e-4, return_history=False, return_n_iter=True,
+        update_rho_options=None, compute_objective=True, mode='admm'):
     """Graph lasso solver via ADMM.
 
     Solves the following problem via ADMM:
@@ -98,11 +98,11 @@ def graph_lasso(
         U += K_hat - Z
 
         # diagnostics, reporting, termination checks
+        obj = objective(emp_cov, K, Z, alpha) if compute_objective else np.nan
         rnorm = np.linalg.norm(K - Z, 'fro')
         snorm = rho * np.linalg.norm(Z - Z_old, 'fro')
         check = convergence(
-            obj=objective(emp_cov, K, Z, alpha),
-            rnorm=rnorm, snorm=snorm,
+            obj=obj, rnorm=rnorm, snorm=snorm,
             e_pri=np.sqrt(K.size) * tol + rtol * max(
                 np.linalg.norm(K, 'fro'), np.linalg.norm(Z, 'fro')),
             e_dual=np.sqrt(K.size) * tol + rtol * rho * np.linalg.norm(U)
@@ -117,7 +117,8 @@ def graph_lasso(
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
 
-        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_)
+        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_,
+                             **(update_rho_options or {}))
         # scaled dual variables should be also rescaled
         U *= rho / rho_new
         rho = rho_new
@@ -135,41 +136,47 @@ def graph_lasso(
 class GraphLasso(GraphLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
-    Read more in the :ref:`User Guide <sparse_inverse_covariance>`.
-
     Parameters
     ----------
     alpha : positive float, default 0.01
         The regularization parameter: the higher alpha, the more
         regularization, the sparser the inverse covariance.
 
-    mode : {'cd', 'lars'}, default 'cd'
-        The Lasso solver to use: coordinate descent or LARS. Use LARS for
-        very sparse underlying graphs, where p > n. Elsewhere prefer cd
-        which is more numerically stable.
+    rho : positive float, default 1
+        Augmented Lagrangian parameter.
+
+    over_relax : positive float, deafult 1
+        Over-relaxation parameter (typically between 1.0 and 1.8).
 
     tol : positive float, default 1e-4
-        The tolerance to declare convergence: if the dual gap goes below
-        this value, iterations are stopped.
+        Absolute tolerance to declare convergence.
 
-    enet_tol : positive float, optional
-        The tolerance for the elastic net solver used to calculate the descent
-        direction. This parameter controls the accuracy of the search direction
-        for a given column update, not of the overall parameter estimate. Only
-        used for mode='cd'.
+    rtol : positive float, default 1e-4
+        Relative tolerance to declare convergence.
 
     max_iter : integer, default 100
         The maximum number of iterations.
 
     verbose : boolean, default False
-        If verbose is True, the objective function and dual gap are
-        plotted at each iteration.
+        If verbose is True, the objective function, rnorm and snorm are
+        printed at each iteration.
 
     assume_centered : boolean, default False
         If True, data are not centered before computation.
         Useful when working with data whose mean is almost, but not exactly
         zero.
         If False, data are centered before computation.
+
+    update_rho_options : dict, default None
+        Options for the update of rho. See `update_rho` function for details.
+
+    compute_objective : boolean, default True
+        Choose if compute the objective function during iterations
+        (only useful if `verbose=True`).
+
+    mode : {'admm'}, default 'admm'
+        Minimisation algorithm. At the moment, only 'admm' is available,
+        so this is ignored.
 
     Attributes
     ----------
@@ -182,20 +189,20 @@ class GraphLasso(GraphLasso):
     n_iter_ : int
         Number of iterations run.
 
-    See Also
-    --------
-    graph_lasso, GraphLassoCV
-
     """
 
-    def __init__(self, alpha=.01, rho=1., over_relax=1., max_iter=100,
-                 tol=1e-4, rtol=1e-2, verbose=False, assume_centered=False):
+    def __init__(self, alpha=0.01, rho=1., over_relax=1., max_iter=100,
+                 mode='admm', tol=1e-4, rtol=1e-4, verbose=False,
+                 assume_centered=False, update_rho_options=None,
+                 compute_objective=True):
         super(GraphLasso, self).__init__(
             alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
-            assume_centered=assume_centered)
+            assume_centered=assume_centered, mode=mode)
         self.rho = rho
         self.rtol = rtol
         self.over_relax = over_relax
+        self.update_rho_options = update_rho_options or {}
+        self.compute_objective = compute_objective
 
     def fit(self, X, y=None):
         """Fits the GraphLasso model to X.
@@ -219,5 +226,7 @@ class GraphLasso(GraphLasso):
         self.precision_, self.covariance_, self.n_iter_ = graph_lasso(
             emp_cov, alpha=self.alpha, tol=self.tol, rtol=self.rtol,
             max_iter=self.max_iter, over_relax=self.over_relax, rho=self.rho,
-            verbose=self.verbose, return_n_iter=True, return_history=False)
+            verbose=self.verbose, return_n_iter=True, return_history=False,
+            mode=self.mode, update_rho_options=self.update_rho_options,
+            compute_objective=self.compute_objective)
         return self
