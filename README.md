@@ -51,7 +51,7 @@ theta = data.thetas
 mdl = LatentTimeGraphLasso(max_iter=50).fit(X)
 print("Error: %.2f" % error_norm_time(theta, mdl.precision_))
 ```
-Note that the input of `LatentTimeGraphLasso` is a three-dimensional matrix with shape (n_times, n_samples, n_dimensions).
+Note that the input of `LatentTimeGraphLasso` is a three-dimensional matrix with shape `(n_times, n_samples, n_dimensions)`.
 If you have a single time (`n_times = 1`), ensure a `X = X.reshape(1, *X.shape)` before using `LatentTimeGraphLasso`, or, alternatively, use `LatentGraphLasso`.
 
 
