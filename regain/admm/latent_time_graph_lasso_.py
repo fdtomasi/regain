@@ -10,13 +10,13 @@ from sklearn.covariance import empirical_covariance
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_array
 
-from regain.admm.time_graph_lasso_ import TimeGraphLasso, logl
+from regain.admm import TimeGraphLasso, logl
 from regain.norm import l1_od_norm
-from regain.prox import prox_logdet, prox_logdet_ala_ma, prox_trace_indicator
+from regain.prox import prox_logdet, prox_trace_indicator
 from regain.prox import soft_thresholding_sign as soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence
-from regain.validation import check_norm_prox
+from regain.validation import check_norm_prox, check_array_dimensions
 
 
 def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
@@ -31,11 +31,11 @@ def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
 
 
 def latent_time_graph_lasso(
-        emp_cov, alpha=1., tau=1., rho=1., beta=1., eta=1., max_iter=100,
-        verbose=False, psi='laplacian', phi='laplacian', mode=None,
-        tol=1e-4, rtol=1e-2, assume_centered=False,
-        return_history=False, return_n_iter=True, update_rho_options=None,
-        compute_objective=True):
+        emp_cov, alpha=0.01, tau=1., rho=1., beta=1., eta=1., max_iter=100,
+        verbose=False, psi='laplacian', phi='laplacian', mode='admm',
+        tol=1e-4, rtol=1e-4, assume_centered=False,
+        return_history=False, return_n_iter=True,
+        update_rho_options=None, compute_objective=True):
     r"""Time-varying latent variable graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -176,10 +176,12 @@ def latent_time_graph_lasso(
             squared_norm(Z_1 - Z_1_old) + squared_norm(Z_2 - Z_2_old) +
             squared_norm(W_1 - W_1_old) + squared_norm(W_2 - W_2_old))
 
+        obj = objective(emp_cov, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
+                        alpha, tau, beta, eta, psi, phi) \
+            if compute_objective else np.nan
+
         check = convergence(
-            obj=objective(emp_cov, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
-                          alpha, tau, beta, eta, psi, phi) if compute_objective else np.nan,
-            rnorm=rnorm, snorm=snorm,
+            obj=obj, rnorm=rnorm, snorm=snorm,
             e_pri=np.sqrt(R.size + 4 * Z_1.size) * tol + rtol * max(
                 np.sqrt(squared_norm(R) +
                         squared_norm(Z_1) + squared_norm(Z_2) +
@@ -206,9 +208,8 @@ def latent_time_graph_lasso(
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
 
-        # if iteration_ % 10 == 0 and rho > 1e-6:
-        #     rho /= 2.  # see Boyd, pag 21
-        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {}))
+        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_,
+                             **(update_rho_options or {}))
         # scaled dual variables should be also rescaled
         X_0 *= rho / rho_new
         X_1 *= rho / rho_new
@@ -230,35 +231,50 @@ def latent_time_graph_lasso(
 class LatentTimeGraphLasso(TimeGraphLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
-    Read more in the :ref:`User Guide <sparse_inverse_covariance>`.
-
     Parameters
     ----------
     alpha : positive float, default 0.01
-        The regularization parameter: the higher alpha, the more
-        regularization, the sparser the inverse covariance.
+        Regularization parameter for precision matrix. The higher alpha,
+        the more regularization, the sparser the inverse covariance.
 
-    mode : {'cd', 'lars'}, default 'cd'
-        The Lasso solver to use: coordinate descent or LARS. Use LARS for
-        very sparse underlying graphs, where p > n. Elsewhere prefer cd
-        which is more numerically stable.
+    tau : positive float, default 1
+        Regularization parameter for latent variables matrix. The higher tau,
+        the more regularization, the lower rank of the latent matrix.
+
+    beta : positive float, default 1
+        Regularization parameter to constrain precision matrices in time.
+        The higher beta, the more regularization,
+        and consecutive precision matrices in time are more similar.
+
+    psi : {'laplacian', 'l1', 'l2', 'linf', 'node'}, default 'laplacian'
+        Type of norm to enforce for consecutive precision matrices in time.
+
+    eta : positive float, default 1
+        Regularization parameter to constrain latent matrices in time.
+        The higher eta, the more regularization,
+        and consecutive latent matrices in time are more similar.
+
+    phi : {'laplacian', 'l1', 'l2', 'linf', 'node'}, default 'laplacian'
+        Type of norm to enforce for consecutive latent matrices in time.
+
+    rho : positive float, default 1
+        Augmented Lagrangian parameter.
+
+    over_relax : positive float, deafult 1
+        Over-relaxation parameter (typically between 1.0 and 1.8).
 
     tol : positive float, default 1e-4
-        The tolerance to declare convergence: if the dual gap goes below
-        this value, iterations are stopped.
+        Absolute tolerance to declare convergence.
 
-    enet_tol : positive float, optional
-        The tolerance for the elastic net solver used to calculate the descent
-        direction. This parameter controls the accuracy of the search direction
-        for a given column update, not of the overall parameter estimate. Only
-        used for mode='cd'.
+    rtol : positive float, default 1e-4
+        Relative tolerance to declare convergence.
 
     max_iter : integer, default 100
         The maximum number of iterations.
 
     verbose : boolean, default False
-        If verbose is True, the objective function and dual gap are
-        plotted at each iteration.
+        If verbose is True, the objective function, rnorm and snorm are
+        printed at each iteration.
 
     assume_centered : boolean, default False
         If True, data are not centered before computation.
@@ -266,37 +282,51 @@ class LatentTimeGraphLasso(TimeGraphLasso):
         zero.
         If False, data are centered before computation.
 
+    bypass_transpose : boolean, default True
+        If data have time as the last dimension, set this to False.
+
+    update_rho_options : dict, default None
+        Options for the update of rho. See `update_rho` function for details.
+
+    compute_objective : boolean, default True
+        Choose if compute the objective function during iterations
+        (only useful if `verbose=True`).
+
+    mode : {'admm'}, default 'admm'
+        Minimisation algorithm. At the moment, only 'admm' is available,
+        so this is ignored.
+
     Attributes
     ----------
-    covariance_ : array-like, shape (n_features, n_features)
+    covariance_ : array-like, shape (n_times, n_features, n_features)
         Estimated covariance matrix
 
-    precision_ : array-like, shape (n_features, n_features)
+    precision_ : array-like, shape (n_times, n_features, n_features)
         Estimated pseudo inverse matrix.
+
+    latent_ : array-like, shape (n_times, n_features, n_features)
+        Estimated latent variable matrix.
 
     n_iter_ : int
         Number of iterations run.
 
-    See Also
-    --------
-    graph_lasso, GraphLassoCV
-
     """
 
-    def __init__(self, alpha=1., tau=1., beta=1., eta=1., mode='cd', rho=1.,
+    def __init__(self, alpha=0.01, tau=1., beta=1., eta=1., mode='admm', rho=1.,
                  bypass_transpose=True, tol=1e-4, rtol=1e-4,
                  psi='laplacian', phi='laplacian', max_iter=100,
                  verbose=False, assume_centered=False, update_rho_options=None,
                  compute_objective=True):
         super(LatentTimeGraphLasso, self).__init__(
-            alpha=alpha, beta=beta, mode=mode, rho=rho,
-            tol=tol, rtol=rtol, psi=psi, max_iter=max_iter, verbose=verbose,
-            bypass_transpose=bypass_transpose, assume_centered=assume_centered)
+            alpha=alpha, beta=beta, mode=mode, rho=rho, tol=tol, rtol=rtol,
+            psi=psi, max_iter=max_iter, verbose=verbose,
+            bypass_transpose=bypass_transpose,
+            assume_centered=assume_centered,
+            update_rho_options=update_rho_options,
+            compute_objective=compute_objective)
         self.tau = tau
         self.eta = eta
         self.phi = phi
-        self.update_rho_options = update_rho_options or {}
-        self.compute_objective = compute_objective
 
     def get_observed_precision(self):
         """Getter for the observed precision matrix.
@@ -324,10 +354,7 @@ class LatentTimeGraphLasso(TimeGraphLasso):
         if not self.bypass_transpose:
             X = X.transpose(2, 0, 1)  # put time as first dimension
         # Covariance does not make sense for a single feature
-        # X = check_array(X, allow_nd=True, estimator=self)
-        # if X.ndim != 3:
-        #     raise ValueError("Found array with dim %d. %s expected <= 2."
-        #                      % (X.ndim, self.__class__.__name__))
+        check_array_dimensions(X, n_dimensions=3)
         X = np.array([check_array(x, ensure_min_features=2,
                       ensure_min_samples=2, estimator=self) for x in X])
 
@@ -343,6 +370,7 @@ class LatentTimeGraphLasso(TimeGraphLasso):
                 beta=self.beta, eta=self.eta, mode=self.mode,
                 tol=self.tol, rtol=self.rtol, psi=self.psi, phi=self.phi,
                 max_iter=self.max_iter, verbose=self.verbose,
-                return_n_iter=True, return_history=False, update_rho_options=self.update_rho_options,
+                return_n_iter=True, return_history=False,
+                update_rho_options=self.update_rho_options,
                 compute_objective=self.compute_objective)
         return self

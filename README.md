@@ -36,9 +36,38 @@ python setup.py develop
 ```
 
 ## Quickstart
-TODO
+A simple example for how to use LTGL.
+```python
+import numpy as np
+from regain.admm import LatentTimeGraphLasso
+from regain.datasets import generate_dataset
+from regain.utils import error_norm_time
+
+np.random.seed(42)
+data = generate_dataset(mode='l1l2', n_dim_lat=1, n_dim_obs=10)
+X = data.data
+theta = data.thetas
+
+mdl = LatentTimeGraphLasso(max_iter=50).fit(X)
+print("Error: %.2f" % error_norm_time(theta, mdl.precision_))
+```
+Note that the input of `LatentTimeGraphLasso` is a three-dimensional matrix with shape `(n_times, n_samples, n_dimensions)`.
+If you have a single time (`n_times = 1`), ensure a `X = X.reshape(1, *X.shape)` before using `LatentTimeGraphLasso`, or, alternatively, use `LatentGraphLasso`.
+
 
 ## Citation
 ```latex
-@{coming soon}
+@ARTICLE{2018arXiv180203987T,
+   author = {{Tomasi}, F. and {Tozzo}, V. and {Salzo}, S. and {Verri}, A.},
+    title = "{Latent variable time-varying network inference}",
+  journal = {ArXiv e-prints},
+archivePrefix = "arXiv",
+   eprint = {1802.03987},
+ primaryClass = "stat.ML",
+ keywords = {Statistics - Machine Learning, Computer Science - Learning},
+     year = 2018,
+    month = feb,
+   adsurl = {http://adsabs.harvard.edu/abs/2018arXiv180203987T},
+  adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+}
 ```
