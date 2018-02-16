@@ -10,7 +10,7 @@ from sklearn.covariance import empirical_covariance
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_array
 
-from regain.admm import TimeGraphLasso, logl
+from regain.admm.time_graph_lasso_ import TimeGraphLasso, logl
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, prox_trace_indicator
 from regain.prox import soft_thresholding_sign as soft_thresholding

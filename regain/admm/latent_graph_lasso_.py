@@ -8,7 +8,7 @@ from six.moves import range
 from sklearn.covariance import empirical_covariance
 from sklearn.utils.validation import check_array
 
-from regain.admm import GraphLasso, logl
+from regain.admm.graph_lasso_ import GraphLasso, logl
 from regain.norm import l1_od_norm
 from regain.prox import (prox_logdet, prox_trace_indicator,
                          soft_thresholding_sign)
