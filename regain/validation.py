@@ -30,3 +30,10 @@ def check_norm_prox(function):
     else:
         raise ValueError("Value of %s not understood.", function)
     return norm, prox, function == 'node'
+
+
+def check_array_dimensions(X, n_dimensions=3):
+    """Validate input matrix."""
+    if X.ndim != n_dimensions:
+        raise ValueError("Input data should have %d"
+                         " dimensions, found %d." % (n_dimensions, X.ndim))

@@ -13,12 +13,12 @@ from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_array
 
-from regain.admm.graph_lasso_ import GraphLasso, logl
+from regain.admm import GraphLasso, logl
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding_sign
 from regain.update_rules import update_rho
 from regain.utils import convergence, error_norm_time
-from regain.validation import check_norm_prox
+from regain.validation import check_array_dimensions, check_norm_prox
 
 
 def objective(S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
@@ -294,10 +294,8 @@ class TimeGraphLasso(GraphLasso):
         if not self.bypass_transpose:
             X = X.transpose(2, 0, 1)  # put time as first dimension
         # Covariance does not make sense for a single feature
-        # X = check_array(X, allow_nd=True, estimator=self)
-        # if X.ndim != 3:
-        #     raise ValueError("Found array with dim %d. %s expected <= 2."
-        #                      % (X.ndim, self.__class__.__name__))
+
+        check_array_dimensions(X, n_dimensions=3)
         X = np.array([check_array(x, ensure_min_features=2,
                       ensure_min_samples=2, estimator=self) for x in X])
 

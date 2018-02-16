@@ -10,13 +10,13 @@ from sklearn.covariance import empirical_covariance
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_array
 
-from regain.admm.time_graph_lasso_ import TimeGraphLasso, logl
+from regain.admm import TimeGraphLasso, logl
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, prox_trace_indicator
 from regain.prox import soft_thresholding_sign as soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence
-from regain.validation import check_norm_prox
+from regain.validation import check_norm_prox, check_array_dimensions
 
 
 def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
@@ -354,6 +354,7 @@ class LatentTimeGraphLasso(TimeGraphLasso):
         if not self.bypass_transpose:
             X = X.transpose(2, 0, 1)  # put time as first dimension
         # Covariance does not make sense for a single feature
+        check_array_dimensions(X, n_dimensions=3)
         X = np.array([check_array(x, ensure_min_features=2,
                       ensure_min_samples=2, estimator=self) for x in X])
 
