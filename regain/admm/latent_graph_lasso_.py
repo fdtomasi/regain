@@ -220,26 +220,15 @@ class LatentGraphLasso(GraphLasso):
         """
         return self.precision_ - self.latent_
 
-    def fit(self, X, y=None):
+    def _fit(self, emp_cov):
         """Fit the LatentGraphLasso model to X.
 
         Parameters
         ----------
-        X : ndarray, shape (n_samples, n_features)
-            Data from which to compute the covariance estimate
-        y : (ignored)
-        """
-        # Covariance does not make sense for a single feature
-        # X = check_array(X, ensure_min_features=2, ensure_min_samples=2,
-        #                 estimator=self)
-        X = check_array(X, ensure_min_features=2, ensure_min_samples=2,
-                        estimator=self)
-        if self.assume_centered:
-            self.location_ = np.zeros(X.shape[1])
-        else:
-            self.location_ = X.mean(0)
+        emp_cov : ndarray, shape (n_features, n_features)
+            Empirical covariance of data.
 
-        emp_cov = empirical_covariance(X, assume_centered=self.assume_centered)
+        """
         self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
             latent_graph_lasso(
                 emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
