@@ -1,13 +1,13 @@
 """Validation module for REGAIN."""
-import numpy as np
-
+import warnings
 from functools import partial
+
+import numpy as np
 from sklearn.utils.extmath import squared_norm
 
 from regain.norm import l1_norm, node_penalty
-from regain.prox import soft_thresholding_sign
-from regain.prox import blockwise_soft_thresholding, prox_linf
-from regain.prox import prox_laplacian, prox_node_penalty
+from regain.prox import (blockwise_soft_thresholding, prox_laplacian,
+                         prox_linf, prox_node_penalty, soft_thresholding_sign)
 
 
 def check_norm_prox(function):
@@ -32,8 +32,19 @@ def check_norm_prox(function):
     return norm, prox, function == 'node'
 
 
-def check_array_dimensions(X, n_dimensions=3):
+def check_array_dimensions(X, n_dimensions=3, time_on_axis='first'):
     """Validate input matrix."""
-    if X.ndim != n_dimensions:
+    if X.ndim == n_dimensions - 1:
+        warnings.warn("Input data should have %d"
+                      " dimensions, found %d. Reshaping input into %s"
+                      % (n_dimensions, X.ndim, (1,) + X.shape))
+        return X[None, ...]
+
+    elif X.ndim != n_dimensions:
         raise ValueError("Input data should have %d"
                          " dimensions, found %d." % (n_dimensions, X.ndim))
+
+    if time_on_axis == 'last':
+        return X.transpose(2, 0, 1)  # put time as first dimension
+
+    return X

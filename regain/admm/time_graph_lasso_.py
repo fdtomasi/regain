@@ -8,6 +8,7 @@ from __future__ import division
 import warnings
 
 import numpy as np
+import scipy.sparse as sp
 from six.moves import map, range, zip
 from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
@@ -224,8 +225,9 @@ class TimeGraphLasso(GraphLasso):
         zero.
         If False, data are centered before computation.
 
-    bypass_transpose : boolean, default True
-        If data have time as the last dimension, set this to False.
+    time_on_axis : {'first', 'last'}, default 'first'
+        If data have time as the last dimension, set this to 'last'.
+        Useful to use scikit-learn functions as train_test_split.
 
     update_rho_options : dict, default None
         Options for the update of rho. See `update_rho` function for details.
@@ -252,7 +254,7 @@ class TimeGraphLasso(GraphLasso):
     """
 
     def __init__(self, alpha=0.01, beta=1., mode='admm', rho=1.,
-                 bypass_transpose=True, tol=1e-4, rtol=1e-4,
+                 time_on_axis='first', tol=1e-4, rtol=1e-4,
                  psi='laplacian', max_iter=100,
                  verbose=False, assume_centered=False,
                  update_rho_options=None, compute_objective=True):
@@ -263,10 +265,7 @@ class TimeGraphLasso(GraphLasso):
             compute_objective=compute_objective)
         self.beta = beta
         self.psi = psi
-        # for splitting purposes, data may come transposed, with time in the
-        # last index. Set bypass_transpose=True if X comes with time in the
-        # first dimension already
-        self.bypass_transpose = bypass_transpose
+        self.time_on_axis = time_on_axis
 
     def get_observed_precision(self):
         """Getter for the observed precision matrix.
@@ -279,32 +278,15 @@ class TimeGraphLasso(GraphLasso):
         """
         return self.get_precision()
 
-    def fit(self, X, y=None):
-        """Fit the GraphLasso model to X.
+    def _fit(self, emp_cov):
+        """Fit the TimeGraphLasso model to X.
 
         Parameters
         ----------
-        X : ndarray, shape (n_time, n_samples, n_features), or
-                (n_samples, n_features, n_time)
-            Data from which to compute the covariance estimate.
-            If shape is (n_samples, n_features, n_time), then set
-            `bypass_transpose = False`.
-        y : (ignored)
+        emp_cov : ndarray, shape (n_features, n_features)
+            Empirical covariance of data.
+
         """
-        if not self.bypass_transpose:
-            X = X.transpose(2, 0, 1)  # put time as first dimension
-        # Covariance does not make sense for a single feature
-
-        check_array_dimensions(X, n_dimensions=3)
-        X = np.array([check_array(x, ensure_min_features=2,
-                      ensure_min_samples=2, estimator=self) for x in X])
-
-        if self.assume_centered:
-            self.location_ = np.zeros((X.shape[0], 1, X.shape[2]))
-        else:
-            self.location_ = X.mean(1).reshape(X.shape[0], 1, X.shape[2])
-        emp_cov = np.array([empirical_covariance(
-            x, assume_centered=self.assume_centered) for x in X])
         self.precision_, self.covariance_, self.n_iter_ = \
             time_graph_lasso(
                 emp_cov, alpha=self.alpha, rho=self.rho,
@@ -315,6 +297,38 @@ class TimeGraphLasso(GraphLasso):
                 update_rho_options=self.update_rho_options,
                 compute_objective=self.compute_objective)
         return self
+
+    def fit(self, X, y=None):
+        """Fit the TimeGraphLasso model to X.
+
+        Parameters
+        ----------
+        X : ndarray, shape (n_time, n_samples, n_features), or
+                (n_samples, n_features, n_time)
+            Data from which to compute the covariance estimate.
+            If shape is (n_samples, n_features, n_time), then set
+            `time_on_axis = 'last'`.
+        y : (ignored)
+
+        """
+        if sp.issparse(X):
+            raise TypeError("sparse matrices not supported.")
+
+        X = check_array_dimensions(
+            X, n_dimensions=3, time_on_axis=self.time_on_axis)
+
+        # Covariance does not make sense for a single feature
+        X = np.array([check_array(x, ensure_min_features=2,
+                      ensure_min_samples=2, estimator=self) for x in X])
+
+        if self.assume_centered:
+            self.location_ = np.zeros((X.shape[0], 1, X.shape[2]))
+        else:
+            self.location_ = X.mean(1).reshape(X.shape[0], 1, X.shape[2])
+        emp_cov = np.array([empirical_covariance(
+            x, assume_centered=self.assume_centered) for x in X])
+
+        return self._fit(emp_cov)
 
     def score(self, X_test, y=None):
         """Computes the log-likelihood of a Gaussian data set with
@@ -337,8 +351,17 @@ class TimeGraphLasso(GraphLasso):
             estimator of its covariance matrix.
 
         """
-        if not self.bypass_transpose:
-            X_test = X_test.transpose(2, 0, 1)  # put time as first dimension
+        if sp.issparse(X_test):
+            raise TypeError("sparse matrices not supported.")
+
+        X_test = check_array_dimensions(
+            X_test, n_dimensions=3, time_on_axis=self.time_on_axis)
+
+        # Covariance does not make sense for a single feature
+        X_test = np.array([
+            check_array(x, ensure_min_features=2,
+                        ensure_min_samples=2, estimator=self) for x in X_test])
+
         # compute empirical covariance of the test set
         test_cov = np.array([empirical_covariance(
             x, assume_centered=True) for x in X_test - self.location_])
@@ -402,7 +425,7 @@ class TimeGraphLasso(GraphLasso):
             Squared Mahalanobis distances of the observations.
 
         """
-        if not self.bypass_transpose:
+        if self.time_on_axis == 'last':
             # put time as first dimension
             observations = observations.transpose(2, 0, 1)
         precision = self.get_observed_precision()

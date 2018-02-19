@@ -5,8 +5,10 @@ import warnings
 from functools import partial
 
 import numpy as np
+import scipy.sparse as sp
 from six.moves import map, range, zip
 from sklearn.covariance import empirical_covariance
+from sklearn.utils import assert_all_finite
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_array
 
@@ -16,7 +18,7 @@ from regain.prox import prox_logdet, prox_trace_indicator
 from regain.prox import soft_thresholding_sign as soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence
-from regain.validation import check_norm_prox, check_array_dimensions
+from regain.validation import check_array_dimensions, check_norm_prox
 
 
 def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
@@ -282,8 +284,9 @@ class LatentTimeGraphLasso(TimeGraphLasso):
         zero.
         If False, data are centered before computation.
 
-    bypass_transpose : boolean, default True
-        If data have time as the last dimension, set this to False.
+    time_on_axis : {'first', 'last'}, default 'first'
+        If data have time as the last dimension, set this to 'last'.
+        Useful to use scikit-learn functions as train_test_split.
 
     update_rho_options : dict, default None
         Options for the update of rho. See `update_rho` function for details.
@@ -313,14 +316,14 @@ class LatentTimeGraphLasso(TimeGraphLasso):
     """
 
     def __init__(self, alpha=0.01, tau=1., beta=1., eta=1., mode='admm', rho=1.,
-                 bypass_transpose=True, tol=1e-4, rtol=1e-4,
+                 time_on_axis='first', tol=1e-4, rtol=1e-4,
                  psi='laplacian', phi='laplacian', max_iter=100,
                  verbose=False, assume_centered=False, update_rho_options=None,
                  compute_objective=True):
         super(LatentTimeGraphLasso, self).__init__(
             alpha=alpha, beta=beta, mode=mode, rho=rho, tol=tol, rtol=rtol,
             psi=psi, max_iter=max_iter, verbose=verbose,
-            bypass_transpose=bypass_transpose,
+            time_on_axis=time_on_axis,
             assume_centered=assume_centered,
             update_rho_options=update_rho_options,
             compute_objective=compute_objective)
@@ -335,35 +338,20 @@ class LatentTimeGraphLasso(TimeGraphLasso):
         -------
         precision_ : array-like,
             The precision matrix associated to the current covariance object.
+            Note that this is the observed precision matrix.
 
         """
         return self.precision_ - self.latent_
 
-    def fit(self, X, y=None):
-        """Fit the GraphLasso model to X.
+    def _fit(self, emp_cov):
+        """Fit the LatentTimeGraphLasso model to X.
 
         Parameters
         ----------
-        X : ndarray, shape (n_time, n_samples, n_features), or
-                (n_samples, n_features, n_time)
-            Data from which to compute the covariance estimate.
-            If shape is (n_samples, n_features, n_time), then set
-            `bypass_transpose = False`.
-        y : (ignored)
-        """
-        if not self.bypass_transpose:
-            X = X.transpose(2, 0, 1)  # put time as first dimension
-        # Covariance does not make sense for a single feature
-        check_array_dimensions(X, n_dimensions=3)
-        X = np.array([check_array(x, ensure_min_features=2,
-                      ensure_min_samples=2, estimator=self) for x in X])
+        emp_cov : ndarray, shape (n_features, n_features)
+            Empirical covariance of data.
 
-        if self.assume_centered:
-            self.location_ = np.zeros((X.shape[0], 1, X.shape[2]))
-        else:
-            self.location_ = X.mean(1).reshape(X.shape[0], 1, X.shape[2])
-        emp_cov = np.array([empirical_covariance(
-            x, assume_centered=self.assume_centered) for x in X])
+        """
         self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
             latent_time_graph_lasso(
                 emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,

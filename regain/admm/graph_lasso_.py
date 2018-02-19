@@ -201,11 +201,28 @@ class GraphLasso(GraphLasso):
         self.rho = rho
         self.rtol = rtol
         self.over_relax = over_relax
-        self.update_rho_options = update_rho_options or {}
+        self.update_rho_options = update_rho_options
         self.compute_objective = compute_objective
 
+    def _fit(self, emp_cov):
+        """Fit the GraphLasso model to X.
+
+        Parameters
+        ----------
+        emp_cov : ndarray, shape (n_features, n_features)
+            Empirical covariance of data.
+
+        """
+        self.precision_, self.covariance_, self.n_iter_ = graph_lasso(
+            emp_cov, alpha=self.alpha, tol=self.tol, rtol=self.rtol,
+            max_iter=self.max_iter, over_relax=self.over_relax, rho=self.rho,
+            verbose=self.verbose, return_n_iter=True, return_history=False,
+            mode=self.mode, update_rho_options=self.update_rho_options,
+            compute_objective=self.compute_objective)
+        return self
+
     def fit(self, X, y=None):
-        """Fits the GraphLasso model to X.
+        """Fit the GraphLasso model to X.
 
         Parameters
         ----------
@@ -223,10 +240,4 @@ class GraphLasso(GraphLasso):
             self.location_ = X.mean(0)
 
         emp_cov = empirical_covariance(X, assume_centered=self.assume_centered)
-        self.precision_, self.covariance_, self.n_iter_ = graph_lasso(
-            emp_cov, alpha=self.alpha, tol=self.tol, rtol=self.rtol,
-            max_iter=self.max_iter, over_relax=self.over_relax, rho=self.rho,
-            verbose=self.verbose, return_n_iter=True, return_history=False,
-            mode=self.mode, update_rho_options=self.update_rho_options,
-            compute_objective=self.compute_objective)
-        return self
+        return self._fit(emp_cov)

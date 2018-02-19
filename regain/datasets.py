@@ -28,7 +28,7 @@ def is_pos_semidef(x, tol=1e-15):
 
 
 def generate_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
-                     mode="evolving", **kwargs):
+                     mode="evolving", time_on_axis='first', **kwargs):
     """Generate a synthetic dataset.
 
     Parameters
@@ -83,9 +83,12 @@ def generate_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
     sigmas = map(np.linalg.inv, thetas_obs)
     # map(normalize_matrix, sigmas)  # in place
 
-    data_list = np.array([np.random.multivariate_normal(
+    data = np.array([np.random.multivariate_normal(
         np.zeros(n_dim_obs), sigma, size=n_samples) for sigma in sigmas])
-    return Bunch(data=data_list, thetas=np.array(thetas),
+
+    if time_on_axis == "last":
+        data = data.transpose(1, 2, 0)
+    return Bunch(data=data, thetas=np.array(thetas),
                  thetas_observed=np.array(thetas_obs),
                  ells=np.array(ells))
 
