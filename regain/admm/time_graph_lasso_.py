@@ -1,7 +1,7 @@
 """Sparse inverse covariance selection over time via ADMM.
 
 More information can be found in the paper linked at:
-[cite Hallac]
+https://arxiv.org/abs/1703.01958
 """
 from __future__ import division
 
@@ -45,14 +45,12 @@ def time_graph_lasso(
 
     Parameters
     ----------
-    data_list : list of 2-dimensional matrices.
-        Input matrices.
-    lamda : float, optional
+    emp_cov : ndarray, shape (n_features, n_features)
+        Empirical covariance of data.
+    alpha, beta : float, optional
         Regularisation parameter.
     rho : float, optional
         Augmented Lagrangian parameter.
-    alpha : float, optional
-        Over-relaxation parameter (typically between 1.0 and 1.8).
     max_iter : int, optional
         Maximum number of iterations.
     tol : float, optional

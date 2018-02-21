@@ -5,22 +5,26 @@ import warnings
 from functools import partial
 
 import numpy as np
+import scipy.sparse as sp
 from six.moves import map, range, zip
+from sklearn.utils import check_array
 from sklearn.utils.extmath import squared_norm
 
-from regain.admm.time_graph_lasso_ import TimeGraphLasso, logl
+from regain.admm.latent_time_graph_lasso_ import LatentTimeGraphLasso
 from regain.norm import l1_od_norm
-from regain.prox import prox_logdet, prox_trace_indicator
+from regain.prox import prox_trace_indicator
 from regain.prox import soft_thresholding_sign as soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence
-from regain.validation import check_norm_prox
+from regain.validation import check_array_dimensions, check_norm_prox
 
 
 def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
               alpha, tau, beta, eta, psi, phi):
     """Objective function for latent variable time-varying graphical lasso."""
-    obj = sum(- logl(s, r) for s, r in zip(S, R))
+    obj = sum(squared_norm(x) for x in S - R)
+    assert obj == squared_norm(S - R)
+    assert obj == ((S - R) ** 2).sum()
     obj += alpha * sum(map(l1_od_norm, Z_0))
     obj += tau * sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
     obj += beta * sum(map(psi, Z_2 - Z_1))
@@ -28,27 +32,26 @@ def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
     return obj
 
 
-def latent_time_graph_lasso(
+def latent_time_matrix_decomposition(
         emp_cov, alpha=0.01, tau=1., rho=1., beta=1., eta=1., max_iter=100,
         verbose=False, psi='laplacian', phi='laplacian', mode='admm',
         tol=1e-4, rtol=1e-4, assume_centered=False,
         return_history=False, return_n_iter=True,
         update_rho_options=None, compute_objective=True):
-    r"""Time-varying latent variable graphical lasso solver.
+    r"""Latent variable time-varying matrix decomposition solver.
 
     Solves the following problem via ADMM:
-        min sum_{i=1}^T -n_i log_likelihood(K_i-L_i) + alpha ||K_i||_{od,1}
+        min sum_{i=1}^T || S_i-(K_i+L_i)||^2 + alpha ||K_i||_{od,1}
             + tau ||L_i||_*
             + beta sum_{i=2}^T Psi(K_i - K_{i-1})
             + eta sum_{i=2}^T Phi(L_i - L_{i-1})
 
-    where S is the empirical covariance of the data
-    matrix D (training observations by features).
+    where S is the matrix to decompose.
 
     Parameters
     ----------
     emp_cov : ndarray, shape (n_features, n_features)
-        Empirical covariance of data.
+        Matrix to decompose.
     alpha, tau, beta, eta : float, optional
         Regularisation parameters.
     rho : float, optional
@@ -103,13 +106,7 @@ def latent_time_graph_lasso(
     for iteration_ in range(max_iter):
         # update R
         A = Z_0 - W_0 - X_0
-        A += A.transpose(0, 2, 1)
-        A /= 2.
-        A *= - rho
-        A += emp_cov
-        # A = emp_cov / rho - A
-
-        R = np.array([prox_logdet(a, lamda=1. / rho) for a in A])
+        R = (rho * A + 2 * emp_cov) / (2 + rho)
 
         # update Z_0
         A = R + W_0 + X_0
@@ -218,7 +215,7 @@ def latent_time_graph_lasso(
     else:
         warnings.warn("Objective did not converge.")
 
-    return_list = [Z_0, W_0, emp_cov]
+    return_list = [Z_0, W_0]
     if return_history:
         return_list.append(checks)
     if return_n_iter:
@@ -226,7 +223,7 @@ def latent_time_graph_lasso(
     return return_list
 
 
-class LatentTimeGraphLasso(TimeGraphLasso):
+class LatentTimeMatrixDecomposition(LatentTimeGraphLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Parameters
@@ -297,9 +294,6 @@ class LatentTimeGraphLasso(TimeGraphLasso):
 
     Attributes
     ----------
-    covariance_ : array-like, shape (n_times, n_features, n_features)
-        Estimated covariance matrix
-
     precision_ : array-like, shape (n_times, n_features, n_features)
         Estimated pseudo inverse matrix.
 
@@ -316,41 +310,28 @@ class LatentTimeGraphLasso(TimeGraphLasso):
                  psi='laplacian', phi='laplacian', max_iter=100,
                  verbose=False, assume_centered=False, update_rho_options=None,
                  compute_objective=True):
-        super(LatentTimeGraphLasso, self).__init__(
-            alpha=alpha, beta=beta, mode=mode, rho=rho, tol=tol, rtol=rtol,
-            psi=psi, max_iter=max_iter, verbose=verbose,
+        super(LatentTimeMatrixDecomposition, self).__init__(
+            alpha=alpha, beta=beta, tau=tau, eta=eta,
+            mode=mode, rho=rho, tol=tol, rtol=rtol,
+            psi=psi, phi=phi, max_iter=max_iter, verbose=verbose,
             time_on_axis=time_on_axis,
             assume_centered=assume_centered,
             update_rho_options=update_rho_options,
             compute_objective=compute_objective)
-        self.tau = tau
-        self.eta = eta
-        self.phi = phi
 
-    def get_observed_precision(self):
-        """Getter for the observed precision matrix.
-
-        Returns
-        -------
-        precision_ : array-like,
-            The precision matrix associated to the current covariance object.
-            Note that this is the observed precision matrix.
-
-        """
-        return self.precision_ - self.latent_
-
-    def _fit(self, emp_cov):
-        """Fit the LatentTimeGraphLasso model to X.
+    def _fit(self, X):
+        """Fit the LatentTimeMatrixDecomposition model to X.
 
         Parameters
         ----------
-        emp_cov : ndarray, shape (n_features, n_features)
-            Empirical covariance of data.
+        X : ndarray, shape (n_time, n_samples, n_features), or
+                (n_samples, n_features, n_time)
+            Matrix to decompose.
 
         """
-        self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
-            latent_time_graph_lasso(
-                emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
+        self.precision_, self.latent_, self.n_iter_ = \
+            latent_time_matrix_decomposition(
+                X, alpha=self.alpha, tau=self.tau, rho=self.rho,
                 beta=self.beta, eta=self.eta, mode=self.mode,
                 tol=self.tol, rtol=self.rtol, psi=self.psi, phi=self.phi,
                 max_iter=self.max_iter, verbose=self.verbose,
@@ -358,3 +339,28 @@ class LatentTimeGraphLasso(TimeGraphLasso):
                 update_rho_options=self.update_rho_options,
                 compute_objective=self.compute_objective)
         return self
+
+    def fit(self, X, y=None):
+        """Fit the LatentTimeMatrixDecomposition model to X.
+
+        Parameters
+        ----------
+        X : ndarray, shape (n_time, n_samples, n_features), or
+                (n_samples, n_features, n_time)
+            Matrix to decompose.
+            If shape is (n_samples, n_features, n_time), then set
+            `time_on_axis = 'last'`.
+        y : (ignored)
+
+        """
+        if sp.issparse(X):
+            raise TypeError("sparse matrices not supported.")
+
+        X = check_array_dimensions(
+            X, n_dimensions=3, time_on_axis=self.time_on_axis)
+
+        # Covariance does not make sense for a single feature
+        X = np.array([check_array(x, ensure_min_features=2,
+                      ensure_min_samples=2, estimator=self) for x in X])
+
+        return self._fit(X)
