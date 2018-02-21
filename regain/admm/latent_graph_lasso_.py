@@ -5,8 +5,6 @@ import warnings
 
 import numpy as np
 from six.moves import range
-from sklearn.covariance import empirical_covariance
-from sklearn.utils.validation import check_array
 
 from regain.admm.graph_lasso_ import GraphLasso, logl
 from regain.norm import l1_od_norm
