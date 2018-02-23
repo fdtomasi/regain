@@ -22,9 +22,7 @@ from regain.validation import check_array_dimensions, check_norm_prox
 def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
               alpha, tau, beta, eta, psi, phi):
     """Objective function for latent variable time-varying graphical lasso."""
-    obj = sum(squared_norm(x) for x in S - R)
-    assert obj == squared_norm(S - R)
-    assert obj == ((S - R) ** 2).sum()
+    obj = squared_norm(S - R)
     obj += alpha * sum(map(l1_od_norm, Z_0))
     obj += tau * sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
     obj += beta * sum(map(psi, Z_2 - Z_1))
@@ -338,6 +336,7 @@ class LatentTimeMatrixDecomposition(LatentTimeGraphLasso):
                 return_n_iter=True, return_history=False,
                 update_rho_options=self.update_rho_options,
                 compute_objective=self.compute_objective)
+        self.reconstruction_err_ = squared_norm(X - self.precision_ + self.latent_)
         return self
 
     def fit(self, X, y=None):
