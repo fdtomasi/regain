@@ -6,7 +6,7 @@ import warnings
 import numpy as np
 from six.moves import range
 
-from regain.admm.graph_lasso_ import GraphLasso, logl
+from regain.covariance.graph_lasso_ import GraphLasso, logl
 from regain.norm import l1_od_norm
 from regain.prox import (prox_logdet, prox_trace_indicator,
                          soft_thresholding_sign)
