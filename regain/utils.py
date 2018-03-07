@@ -34,7 +34,7 @@ def suppress_stdout():
             sys.stdout = old_stdout
 
 
-def _ensure_filename_ending(filename, possible_extensions=['.txt']):
+def _ensure_filename_ending(filename, possible_extensions='.txt'):
     if isinstance(possible_extensions, six.string_types):
         possible_extensions = [possible_extensions]
 

@@ -1,4 +1,5 @@
 """Update rules."""
+from __future__ import division
 
 
 def update_rho(rho, rnorm, snorm, iteration=None, mu=10, tau_inc=2, tau_dec=2):

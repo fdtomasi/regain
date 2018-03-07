@@ -1,17 +1,17 @@
 from __future__ import division
-import numpy as np
-import six
+
 import warnings
 
+import numpy as np
+import six
 from scipy import sparse
-
-from sklearn.preprocessing import LabelBinarizer
 from sklearn.base import RegressorMixin
-from sklearn.linear_model.base import LinearModel, _pre_fit
-from sklearn.linear_model.base import LinearClassifierMixin
+from sklearn.linear_model.base import (LinearClassifierMixin, LinearModel,
+                                       _pre_fit)
+from sklearn.preprocessing import LabelBinarizer
+from sklearn.utils import check_array, check_X_y, deprecated
 from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.utils.validation import check_is_fitted
-from sklearn.utils import check_array, check_X_y, deprecated
 
 from regain.prox import soft_thresholding
 from regain.wrapper.paspal.wrapper import group_lasso_overlap_paspal

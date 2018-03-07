@@ -4,7 +4,7 @@ import warnings
 
 from numpy.testing import assert_array_equal
 
-from regain.admm.latent_time_graph_lasso_ import LatentTimeGraphLasso
+from regain.covariance.latent_time_graph_lasso_ import LatentTimeGraphLasso
 
 
 def test_ltgl_zero():
@@ -14,7 +14,7 @@ def test_ltgl_zero():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         mdl = LatentTimeGraphLasso(
-            bypass_transpose=False, max_iter=1, assume_centered=True).fit(a)
+            time_on_axis='last', max_iter=1, assume_centered=True).fit(a)
 
     for p in mdl.precision_:
         # remove the diagonal

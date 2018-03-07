@@ -28,7 +28,7 @@ def check_norm_prox(function):
         prox = prox_node_penalty
         norm = node_penalty
     else:
-        raise ValueError("Value of %s not understood.", function)
+        raise ValueError("Value of %s not understood." % function)
     return norm, prox, function == 'node'
 
 
