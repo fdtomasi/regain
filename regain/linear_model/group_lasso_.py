@@ -6,7 +6,7 @@ http://www.stanford.edu/~boyd/papers/distr_opt_stat_learning_admm.html
 import numpy as np
 from six.moves import range
 
-from regain.admm.lasso_ import lu_factor
+from regain.linear_model.lasso_ import lu_factor
 from regain.prox import soft_thresholding
 from regain.utils import flatten
 
