@@ -232,8 +232,8 @@ def structure_error(true, pred, thresholding=False, eps=1e-2,
         pred[np.abs(pred) < eps] = 0
     if no_diagonal:
         if true.ndim > 2:
-            true = np.array([t - np.diag(t) for t in true])
-            pred = np.array([t - np.diag(t) for t in pred])
+            true = np.array([t - np.diag(np.diag(t)) for t in true])
+            pred = np.array([t - np.diag(np.diag(t)) for t in pred])
         else:
             true -= np.diag(np.diag(true))
             pred -= np.diag(np.diag(pred))
@@ -250,12 +250,12 @@ def structure_error(true, pred, thresholding=False, eps=1e-2,
     f1 = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0
 
     accuracy = (TP + TN) / true.size
-    balanced_accuracy = 0.5 * (TP / (TP + FN) + TN / (TN + FP))
     prevalence = (TP + FN) / true.size
 
     miss_rate = FN / (TP + FN)
-    fall_out = FP / (FP + TN)
-    specificity = TN / (FP + TN)
+    fall_out = FP / (FP + TN) if (FP + TN) > 0 else 1
+    specificity = TN / (FP + TN) if (FP + TN) > 0 else 1
+    balanced_accuracy = 0.5 * (recall + specificity)
     false_discovery_rate = FP / (TP + FP) if TP + FP > 0 else 0
     false_omission_rate = FN / (FN + TN) if FN + TN > 0 else 0
     negative_predicted_value = TN / (FN + TN) if FN + TN > 0 else 0

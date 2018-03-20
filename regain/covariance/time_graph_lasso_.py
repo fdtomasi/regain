@@ -39,6 +39,7 @@ def time_graph_lasso(
 
     Solves the following problem via ADMM:
         minimize  trace(S*X) - log det X + lambda*||X||_1
+            + beta sum_{i=2}^T Psi(K_i - K_{i-1})
 
     where S is the empirical covariance of the data
     matrix D (training observations by features).
