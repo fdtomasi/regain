@@ -215,7 +215,7 @@ def structure_error(true, pred, thresholding=False, eps=1e-2,
         it is consider as an edge (inverse covariance).
 
     pred: array-like, shape=(d,d)
-        Predicted matrix. In grpahical inference, if an entry is different
+        Predicted matrix. In graphical inference, if an entry is different
         from 0 it is consider as an edge (inverse covariance).
 
     thresholding: bool, default False,

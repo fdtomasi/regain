@@ -24,9 +24,9 @@ def logl(emp_cov, precision):
     return fast_logdet(precision) - np.sum(emp_cov * precision)
 
 
-def objective(S, X, Z, alpha):
+def objective(emp_cov, x, z, alpha):
     """Graph lasso objective."""
-    return - logl(S, X) + alpha * l1_od_norm(Z)
+    return - logl(emp_cov, x) + alpha * l1_od_norm(z)
 
 
 def graph_lasso(
