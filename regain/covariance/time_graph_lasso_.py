@@ -22,16 +22,24 @@ from regain.utils import convergence, error_norm_time
 from regain.validation import check_array_dimensions, check_norm_prox
 
 
-def objective(S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
+def loss(S, K, n_samples=None):
+    """Loss function for time-varying graphical lasso."""
+    if n_samples is None:
+        n_samples = np.ones(S.shape[0])
+    return sum(-ni * logl(emp_cov, precision)
+               for emp_cov, precision, ni in zip(S, K, n_samples))
+
+
+def objective(n_samples, S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
     """Objective function for time-varying graphical lasso."""
-    obj = sum(- logl(emp_cov, precision) for emp_cov, precision in zip(S, K))
+    obj = loss(S, K, n_samples=n_samples)
     obj += alpha * sum(map(l1_od_norm, Z_0))
     obj += beta * sum(map(psi, Z_2 - Z_1))
     return obj
 
 
 def time_graph_lasso(
-        emp_cov, alpha=0.01, rho=1, beta=1, max_iter=100,
+        emp_cov, alpha=0.01, rho=1, beta=1, max_iter=100, n_samples=None,
         verbose=False, psi='laplacian', tol=1e-4, rtol=1e-4,
         return_history=False, return_n_iter=True, mode='admm',
         update_rho_options=None, compute_objective=True):
@@ -91,6 +99,9 @@ def time_graph_lasso(
     divisor[0] -= 1
     divisor[-1] -= 1
 
+    if n_samples is None:
+        n_samples = np.ones(emp_cov.shape[0])
+
     checks = []
     for iteration_ in range(max_iter):
         # update K
@@ -103,11 +114,11 @@ def time_graph_lasso(
         A += A.transpose(0, 2, 1)
         A /= 2.
 
-        A *= - rho * divisor[:, None, None]
+        A *= - rho * divisor[:, None, None] / n_samples[:, None, None]
         A += emp_cov
 
-        K = np.array([prox_logdet(a, lamda=1. / (rho * div))
-                      for a, div in zip(A, divisor)])
+        K = np.array([prox_logdet(a, lamda=ni / (rho * div))
+                      for a, div, ni in zip(A, divisor, n_samples)])
 
         # update Z_0
         A = K + U_0
@@ -141,7 +152,8 @@ def time_graph_lasso(
                               squared_norm(Z_1 - Z_1_old) +
                               squared_norm(Z_2 - Z_2_old))
 
-        obj = objective(emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi) \
+        obj = objective(
+            n_samples, emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi) \
             if compute_objective else np.nan
 
         check = convergence(
@@ -282,14 +294,14 @@ class TimeGraphLasso(GraphLasso):
 
         Parameters
         ----------
-        emp_cov : ndarray, shape (n_features, n_features)
+        emp_cov : ndarray, shape (n_time, n_features, n_features)
             Empirical covariance of data.
 
         """
         self.precision_, self.covariance_, self.n_iter_ = \
             time_graph_lasso(
                 emp_cov, alpha=self.alpha, rho=self.rho,
-                beta=self.beta, mode=self.mode,
+                beta=self.beta, mode=self.mode, n_samples=None,
                 tol=self.tol, rtol=self.rtol, psi=self.psi,
                 max_iter=self.max_iter, verbose=self.verbose,
                 return_n_iter=True, return_history=False,

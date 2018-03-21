@@ -31,7 +31,7 @@ def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
 def latent_time_graph_lasso(
         emp_cov, alpha=0.01, tau=1., rho=1., beta=1., eta=1., max_iter=100,
         verbose=False, psi='laplacian', phi='laplacian', mode='admm',
-        tol=1e-4, rtol=1e-4, assume_centered=False,
+        tol=1e-4, rtol=1e-4, assume_centered=False, n_samples=None,
         return_history=False, return_n_iter=True,
         update_rho_options=None, compute_objective=True):
     r"""Time-varying latent variable graphical lasso solver.
@@ -99,17 +99,21 @@ def latent_time_graph_lasso(
     divisor[0] -= 1
     divisor[-1] -= 1
 
+    if n_samples is None:
+        n_samples = np.ones(emp_cov.shape[0])
+
     checks = []
     for iteration_ in range(max_iter):
         # update R
         A = Z_0 - W_0 - X_0
         A += A.transpose(0, 2, 1)
         A /= 2.
-        A *= - rho
+        A *= - rho / n_samples[:, None, None]
         A += emp_cov
         # A = emp_cov / rho - A
 
-        R = np.array([prox_logdet(a, lamda=1. / rho) for a in A])
+        R = np.array([prox_logdet(a, lamda=ni / rho)
+                      for a, ni in zip(A, n_samples)])
 
         # update Z_0
         A = R + W_0 + X_0

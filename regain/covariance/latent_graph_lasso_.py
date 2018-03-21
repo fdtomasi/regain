@@ -14,9 +14,9 @@ from regain.update_rules import update_rho
 from regain.utils import convergence
 
 
-def objective(S, R, K, L, alpha, tau):
+def objective(emp_cov, R, K, L, alpha, tau):
     """Objective function for latent graphical lasso."""
-    obj = - logl(S, R)
+    obj = - logl(emp_cov, R)
     obj += alpha * l1_od_norm(K)
     obj += tau * np.linalg.norm(L, ord='nuc')
     return obj

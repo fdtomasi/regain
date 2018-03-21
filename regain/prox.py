@@ -1,5 +1,6 @@
 """Useful proximal functions."""
 import warnings
+from functools import partial
 
 import numpy as np
 from scipy.optimize import minimize
@@ -10,7 +11,7 @@ from regain.update_rules import update_rho
 from regain.utils import convergence
 
 try:
-    from prox_tv import tv1_1d
+    from prox_tv import tv1_1d, tvp_1d
 except:
     # fused lasso prox cannot be used
     pass
@@ -172,7 +173,7 @@ def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
     return Y_1, Y_2
 
 
-def prox_FL(a, beta, lamda):
+def prox_FL(a, beta, lamda, p=1):
     """Fused Lasso prox.
 
     It is calculated as the Total variation prox + soft thresholding
@@ -180,12 +181,22 @@ def prox_FL(a, beta, lamda):
     http://ieeexplore.ieee.org/abstract/document/6579659/
     """
     Y = np.empty_like(a)
+    func = tv1_1d if p == 1 else partial(tvp_1d, p=p)
     for i in range(np.power(a.shape[1], 2)):
-        solution = tv1_1d(a.flat[i::np.power(a.shape[1], 2)], beta)
+        solution = func(a.flat[i::np.power(a.shape[1], 2)], beta)
         # fused-lasso (soft-thresholding on the solution)
         solution = soft_thresholding_sign(solution, lamda)
         Y.flat[i::np.power(a.shape[1], 2)] = solution
     return Y
+    # Y = np.empty_like(a)
+    # for i in range(a.shape[1]):
+    #     for j in range(i, a.shape[2]):
+    #         solution = tv1_1d(a[:, i, j], beta)
+    #         # fused-lasso (soft-thresholding on the solution)
+    #         if i != j:
+    #             solution = soft_thresholding_sign(solution, lamda)
+    #         Y[:, i, j] = solution
+    # return Y
 
     # not work
     # x = np.vstack(a.transpose((2, 1, 0)))  # each row is the time evolution

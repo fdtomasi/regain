@@ -14,3 +14,10 @@ def update_rho(rho, rnorm, snorm, iteration=None, mu=10, tau_inc=2, tau_dec=2):
     elif snorm > mu * rnorm:
         return rho / tau_dec
     return rho
+
+
+def update_gamma(gamma, iteration):
+    """Update `gamma` for forward-backward splitting."""
+    if iteration % 10 == 0:
+        return gamma / 2.
+    return gamma
