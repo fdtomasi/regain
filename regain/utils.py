@@ -230,39 +230,51 @@ def structure_error(true, pred, thresholding=False, eps=1e-2,
     pred = pred.copy()
     if thresholding:
         pred[np.abs(pred) < eps] = 0
+    tn_to_remove = 0
     if no_diagonal:
         if true.ndim > 2:
             true = np.array([t - np.diag(np.diag(t)) for t in true])
             pred = np.array([t - np.diag(np.diag(t)) for t in pred])
+            tn_to_remove = np.prod(true.shape[:2])
         else:
             true -= np.diag(np.diag(true))
             pred -= np.diag(np.diag(pred))
+            tn_to_remove = true.shape[0]
     true[true != 0] = 1
     pred[pred != 0] = 2
     res = true + pred
-    TN = np.count_nonzero((res == 0).astype(float))
+    # from collections import Counter
+    # c = Counter(res.flat)
+    # tn, fn, fp, tp = c[0], c[1], c[2], c[3]
+    TN = np.count_nonzero((res == 0).astype(float)) - tn_to_remove
     FN = np.count_nonzero((res == 1).astype(float))
     FP = np.count_nonzero((res == 2).astype(float))
     TP = np.count_nonzero((res == 3).astype(float))
 
-    precision = TP / float(TP + FP) if TP + FP > 0 else 0
-    recall = TP / float(TP + FN)
-    f1 = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0
+    precision = TP / (TP + FP) if TP + FP > 0 else 0
+    recall = TP / (TP + FN)
+    miss_rate = FN / (TP + FN) or 1 - recall
+    f1 = 2 * precision * recall / (precision + recall) \
+        if precision + recall > 0 else 0
 
     accuracy = (TP + TN) / true.size
     prevalence = (TP + FN) / true.size
 
-    miss_rate = FN / (TP + FN)
     fall_out = FP / (FP + TN) if (FP + TN) > 0 else 1
-    specificity = TN / (FP + TN) if (FP + TN) > 0 else 1
+    specificity = TN / (FP + TN) if (FP + TN) > 0 else 1. - fall_out
+
     balanced_accuracy = 0.5 * (recall + specificity)
-    false_discovery_rate = FP / (TP + FP) if TP + FP > 0 else 0
+    false_discovery_rate = FP / (TP + FP) if TP + FP > 0 else 1 - precision
     false_omission_rate = FN / (FN + TN) if FN + TN > 0 else 0
-    negative_predicted_value = TN / (FN + TN) if FN + TN > 0 else 0
+    negative_predicted_value = TN / (FN + TN) if FN + TN > 0 else \
+        1 - false_omission_rate
 
     positive_likelihood_ratio = recall / fall_out if fall_out > 0 else 0
-    negative_likelihood_ratio = miss_rate / specificity if specificity > 0 else 0
-    diagnostic_odds_ratio = positive_likelihood_ratio / negative_likelihood_ratio if negative_likelihood_ratio > 0 else 0
+    negative_likelihood_ratio = miss_rate / specificity \
+        if specificity > 0 else 0
+    diagnostic_odds_ratio = \
+        positive_likelihood_ratio / negative_likelihood_ratio if \
+        negative_likelihood_ratio > 0 else 0
 
     dictionary = dict(
         tp=TP, tn=TN, fp=FP, fn=FN, precision=precision, recall=recall,
