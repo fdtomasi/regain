@@ -5,15 +5,18 @@ import warnings
 from functools import partial
 
 import numpy as np
+import scipy.sparse as sp
 from six.moves import map, range, zip
-from sklearn.covariance import empirical_covariance
+from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
+from sklearn.utils.validation import check_array
 
-from regain.covariance.time_graph_lasso_ import loss
-from regain.norm import l1_norm, l1_od_norm
+from regain.covariance.time_graph_lasso_ import TimeGraphLasso, loss
+from regain.norm import l1_od_norm, vector_p_norm
 from regain.prox import prox_FL
 from regain.update_rules import update_gamma
 from regain.utils import convergence
+from regain.validation import check_array_dimensions
 
 
 def penalty(precision, alpha, beta, psi):
@@ -35,15 +38,15 @@ def grad_loss(x, emp_cov, n_samples):
     return grad * n_samples[:, None, None]
 
 
-def _J(x, beta, alpha, gamma, lamda, S, n_samples):
+def _J(x, beta, alpha, gamma, lamda, S, n_samples, p=1):
     """Grad + prox + line search for the new point."""
     grad = grad_loss(x, S, n_samples)
-    prox = prox_FL(x - gamma * grad, beta * gamma, alpha * gamma)
+    prox = prox_FL(x - gamma * grad, beta * gamma, alpha * gamma, p=p)
     return x + lamda * (prox - x)
 
 
 def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
-                 eps=0.5, max_iter=1000, criterion='a'):
+                 eps=0.5, max_iter=1000, criterion='a', p=1):
     """Choose alpha for backtracking.
 
     References
@@ -52,11 +55,11 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
     """
     # lamda = 1.
     partial_J = partial(_J, x, beta=beta, alpha=alpha, gamma=gamma, S=emp_cov,
-                        n_samples=n_samples)
+                        n_samples=n_samples, p=p)
     partial_f = partial(loss, n_samples=n_samples, S=emp_cov)
     fx = partial_f(K=x)
     gradx = grad_loss(x, emp_cov, n_samples)
-    gx = penalty(x, lamda, beta, l1_norm)
+    gx = penalty(x, lamda, beta, partial(vector_p_norm, p=p))
     for i in range(max_iter):
         x1 = partial_J(lamda=lamda)
         iter_diff = x1 - x
@@ -77,10 +80,12 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
                 return lamda
         elif criterion == 'c':
             obj_diff = objective(
-                n_samples, emp_cov, x1, lamda, beta, l1_norm) - \
-                objective(n_samples, emp_cov, x, lamda, beta, l1_norm)
-            y = _J(x, beta, alpha, gamma, 1, emp_cov, n_samples)
-            gy = penalty(y, lamda, beta, l1_norm)
+                n_samples, emp_cov, x1, lamda, beta,
+                partial(vector_p_norm, p=p)) - \
+                objective(n_samples, emp_cov, x, lamda,
+                          beta, partial(vector_p_norm, p=p))
+            y = _J(x, beta, alpha, gamma, 1, emp_cov, n_samples, p=p)
+            gy = penalty(y, lamda, beta, partial(vector_p_norm, p=p))
             tolerance = (1 - delta) * lamda * (
                 gy - gx + (y - x).ravel().dot(gradx.ravel()))
             if obj_diff <= tolerance:
@@ -98,10 +103,10 @@ def fista_step(Y, Y_diff, t):
 
 
 def time_graph_lasso(
-        data_list, alpha=1., beta=1., max_iter=100, verbose=False,
+        emp_cov, n_samples, alpha=0.01, beta=1., max_iter=100, verbose=False,
         tol=1e-4, delta=1e-4, gamma=1.,
         return_history=False, return_n_iter=True,
-        lamda_criterion='b'):
+        lamda_criterion='b', time_norm=1, compute_objective=True):
     """Time-varying graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -138,50 +143,57 @@ def time_graph_lasso(
         objective value, the primal and dual residual norms, and tolerances
         for the primal and dual residual norms at each iteration.
     """
-    emp_cov = np.array(list(map(empirical_covariance, data_list)))
-    n_samples = np.array([s.shape[0] for s in data_list])
+    # emp_cov = np.array(list(map(empirical_covariance, data_list)))
+    # n_samples = np.array([s.shape[0] for s in data_list])
     # n_samples = np.array([1. for s in data_list])
 
     K = np.array([np.eye(s.shape[0]) for s in emp_cov])
-    Y = K.copy()
+    # Y = K.copy()
 
     checks = []
     lamda = 1
-    t = 1
+    # t = 1
+    obj_partial = partial(
+        objective, n_samples=n_samples, emp_cov=emp_cov,
+        alpha=alpha, beta=beta, psi=partial(vector_p_norm, p=time_norm))
     for iteration_ in range(max_iter):
-        K_old = K.copy()  # np.ones_like(S) + 5000
-        Y_old = Y.copy()
+        k_previous = K.copy()  # np.ones_like(S) + 5000
+        # Y_old = Y.copy()
 
         # choose a gamma
         gamma = update_gamma(gamma, iteration_)
 
         # total variation
         # Y = _J(K, beta, alpha, gamma, 1, S, n_samples)
-        Y = prox_FL(K - gamma * grad_loss(K, emp_cov, n_samples),
-                    beta * gamma, alpha * gamma)
+        y = prox_FL(K - gamma * grad_loss(K, emp_cov, n_samples),
+                    beta * gamma, alpha * gamma, p=time_norm)
 
-        lamda_n = choose_lamda(lamda, K, emp_cov, n_samples, beta, alpha, gamma,
-                             delta=delta, criterion=lamda_criterion,
-                             max_iter=50)
-        K += lamda_n * (Y - K)
-        # K = K + choose_lamda(lamda, K, emp_cov, n_samples, beta, alpha, gamma,
-        #                      delta=delta, criterion=lamda_criterion,
+        lamda_n = choose_lamda(
+            lamda, K, emp_cov, n_samples, beta, alpha, gamma, delta=delta,
+            criterion=lamda_criterion, max_iter=50, p=time_norm)
+        K += lamda_n * (y - K)
+        # K = K + choose_lamda(lamda, K, emp_cov, n_samples, beta, alpha,
+        #                      gamma, delta=delta, criterion=lamda_criterion,
         #                      max_iter=50) * (Y - K)
 
         # K, t = fista_step(Y, Y - Y_old, t)
 
         check = convergence(
-            obj=objective(n_samples, emp_cov, K, alpha, beta, l1_norm),
-            rnorm=np.linalg.norm(K - K_old),
-            snorm=np.abs(objective(n_samples, emp_cov, K, alpha, beta, l1_norm) -
-                         objective(n_samples, emp_cov, K_old, alpha, beta, l1_norm)),
+            obj=obj_partial(precision=K),
+            rnorm=np.linalg.norm(K - k_previous),
+            snorm=np.linalg.norm(
+                obj_partial(precision=K) - obj_partial(precision=k_previous)),
             e_pri=tol, e_dual=tol)
 
         if verbose:
             print("obj: %.4f, rnorm: %.4f, snorm: %.4f,"
                   "eps_pri: %.4f, eps_dual: %.4f" % check)
+            # print("K: %s" % K)
+            # print("Kold: %s" % k_previous)
 
-        checks.append(check)
+        if return_history:
+            checks.append(check)
+
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
     else:
@@ -193,3 +205,184 @@ def time_graph_lasso(
     if return_n_iter:
         return_list.append(iteration_)
     return return_list
+
+class TimeGraphLassoForwardBackward(TimeGraphLasso):
+    """Sparse inverse covariance estimation with an l1-penalized estimator.
+
+    Parameters
+    ----------
+    alpha : positive float, default 0.01
+        Regularization parameter for precision matrix. The higher alpha,
+        the more regularization, the sparser the inverse covariance.
+
+    beta : positive float, default 1
+        Regularization parameter to constrain precision matrices in time.
+        The higher beta, the more regularization,
+        and consecutive precision matrices in time are more similar.
+
+    psi : {'laplacian', 'l1', 'l2', 'linf', 'node'}, default 'laplacian'
+        Type of norm to enforce for consecutive precision matrices in time.
+
+    rho : positive float, default 1
+        Augmented Lagrangian parameter.
+
+    over_relax : positive float, deafult 1
+        Over-relaxation parameter (typically between 1.0 and 1.8).
+
+    tol : positive float, default 1e-4
+        Absolute tolerance to declare convergence.
+
+    rtol : positive float, default 1e-4
+        Relative tolerance to declare convergence.
+
+    max_iter : integer, default 100
+        The maximum number of iterations.
+
+    verbose : boolean, default False
+        If verbose is True, the objective function, rnorm and snorm are
+        printed at each iteration.
+
+    assume_centered : boolean, default False
+        If True, data are not centered before computation.
+        Useful when working with data whose mean is almost, but not exactly
+        zero.
+        If False, data are centered before computation.
+
+    time_on_axis : {'first', 'last'}, default 'first'
+        If data have time as the last dimension, set this to 'last'.
+        Useful to use scikit-learn functions as train_test_split.
+
+    update_rho_options : dict, default None
+        Options for the update of rho. See `update_rho` function for details.
+
+    compute_objective : boolean, default True
+        Choose if compute the objective function during iterations
+        (only useful if `verbose=True`).
+
+    mode : {'admm'}, default 'admm'
+        Minimisation algorithm. At the moment, only 'admm' is available,
+        so this is ignored.
+
+    Attributes
+    ----------
+    covariance_ : array-like, shape (n_times, n_features, n_features)
+        Estimated covariance matrix
+
+    precision_ : array-like, shape (n_times, n_features, n_features)
+        Estimated pseudo inverse matrix.
+
+    n_iter_ : int
+        Number of iterations run.
+
+    """
+
+    def __init__(self, alpha=0.01, beta=1., time_on_axis='first', tol=1e-4,
+                 max_iter=100, verbose=False, assume_centered=False,
+                 compute_objective=True,
+                 delta=1e-4, gamma=1., lamda_criterion='b', time_norm=1):
+        super(TimeGraphLassoForwardBackward, self).__init__(
+            alpha=alpha, tol=tol, max_iter=max_iter,
+            verbose=verbose, assume_centered=assume_centered,
+            compute_objective=compute_objective, beta=beta,
+            time_on_axis=time_on_axis)
+        self.delta = delta
+        self.gamma = gamma
+        self.lamda_criterion = lamda_criterion
+        self.time_norm = time_norm
+
+    def _fit(self, emp_cov, n_samples):
+        """Fit the TimeGraphLasso model to X.
+
+        Parameters
+        ----------
+        emp_cov : ndarray, shape (n_time, n_features, n_features)
+            Empirical covariance of data.
+
+        """
+        self.precision_, self.covariance_, self.n_iter_ = \
+            time_graph_lasso(
+                emp_cov, n_samples=n_samples, alpha=self.alpha, beta=self.beta,
+                tol=self.tol, max_iter=self.max_iter, verbose=self.verbose,
+                return_n_iter=True, return_history=False,
+                compute_objective=self.compute_objective,
+                time_norm=self.time_norm, lamda_criterion=self.lamda_criterion,
+                gamma=self.gamma, delta=self.delta)
+        return self
+
+    def fit(self, X, y=None):
+        """Fit the TimeGraphLasso model to X.
+
+        Parameters
+        ----------
+        X : ndarray, shape (n_time, n_samples, n_features), or
+                (n_samples, n_features, n_time)
+            Data from which to compute the covariance estimate.
+            If shape is (n_samples, n_features, n_time), then set
+            `time_on_axis = 'last'`.
+        y : (ignored)
+
+        """
+        if sp.issparse(X):
+            raise TypeError("sparse matrices not supported.")
+
+        X = check_array_dimensions(
+            X, n_dimensions=3, time_on_axis=self.time_on_axis)
+
+        # Covariance does not make sense for a single feature
+        X = np.array([check_array(x, ensure_min_features=2,
+                      ensure_min_samples=2, estimator=self) for x in X])
+
+        if self.assume_centered:
+            self.location_ = np.zeros((X.shape[0], 1, X.shape[2]))
+        else:
+            self.location_ = X.mean(1).reshape(X.shape[0], 1, X.shape[2])
+        emp_cov = np.array([empirical_covariance(
+            x, assume_centered=self.assume_centered) for x in X])
+        n_samples = np.array([x.shape[0] for x in X])
+        return self._fit(emp_cov, n_samples)
+
+    def score(self, X_test, y=None):
+        """Computes the log-likelihood of a Gaussian data set with
+        `self.covariance_` as an estimator of its covariance matrix.
+
+        Parameters
+        ----------
+        X_test : array-like, shape = [n_samples, n_features]
+            Test data of which we compute the likelihood, where n_samples is
+            the number of samples and n_features is the number of features.
+            X_test is assumed to be drawn from the same distribution than
+            the data used in fit (including centering).
+
+        y : not used, present for API consistence purpose.
+
+        Returns
+        -------
+        res : float
+            The likelihood of the data set with `self.covariance_` as an
+            estimator of its covariance matrix.
+
+        """
+        if sp.issparse(X_test):
+            raise TypeError("sparse matrices not supported.")
+
+        X_test = check_array_dimensions(
+            X_test, n_dimensions=3, time_on_axis=self.time_on_axis)
+
+        # Covariance does not make sense for a single feature
+        X_test = np.array([
+            check_array(x, ensure_min_features=2,
+                        ensure_min_samples=2, estimator=self) for x in X_test])
+
+        # compute empirical covariance of the test set
+        test_cov = np.array([empirical_covariance(
+            x, assume_centered=True) for x in X_test - self.location_])
+
+        n_samples = np.array([x.shape[0] for x in X_test])
+        res = sum(ni * log_likelihood(S, K) for S, K, ni in zip(
+            test_cov, self.get_observed_precision(), n_samples))
+
+        # ALLA  MATLAB1
+        # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
+        # scores_ranks = np.square(ranks-np.sqrt(L.shape[1]))
+
+        return res  # - np.sum(scores_ranks)
