@@ -62,6 +62,9 @@ def make_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
                 that differs for a small l2 norm
         "sin": generate a dataset with fixed latent variables and evolving
                 observed variables that are generated from sin functions.
+        func : use the user-defined function to generate the dataset. Such
+            function should return, in this order, "thetas, thetas_obs, ells".
+            See the other functions for an example.
     *kwargs: other arguments related to each specific data generation mode
 
     """
@@ -79,15 +82,13 @@ def make_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
         norm=make_l2l2_norm, l1l1=generate_dataset_l1l1,
 
         # the previous are deprecated
-        fixed_sparsity=make_fixed_sparsity,
-        sin=generate_dataset_sin_cos,
-        fede=generate_dataset_fede,
-        sklearn=make_sparse_low_rank,
+        fixed_sparsity=make_fixed_sparsity, sin=make_sin_cos,
+        fede=make_fede, sklearn=make_sparse_low_rank,
         ma=make_ma_xue_zou, mak=make_ma_xue_zou_rand_k)
 
     if mode is not None:
         # mode overrides other parameters, for back compatibility
-        func = modes.get(mode, None)
+        func = mode if callable(mode) else modes.get(mode, None)
         if func is None:
             raise ValueError("Unknown mode %s. "
                              "Choices are: %s" % (mode, modes.keys()))
@@ -131,41 +132,35 @@ def make_ell(n_dim_obs=100, n_dim_lat=10):
     return L, K_HO
 
 
-def generate_starting_matrices(n_dim_obs=100, n_dim_lat=10, degree=2):
-    """Doc."""
+def make_starting(n_dim_obs=100, n_dim_lat=10, degree=2, normalize=False):
+    """Generate starting theta, theta_observed, L, K_HO."""
     L, K_HO = make_ell(n_dim_obs, n_dim_lat)
-    theta = np.eye(n_dim_obs)
-    for i in range(n_dim_obs):
-        possible_idx = list(set(range(n_dim_obs)) - (
-            set(np.nonzero(theta[i, :])[0]) |
-            set(np.where(np.count_nonzero(theta, axis=1) > degree)[0])))
-        if not possible_idx:
-            continue
-        indices = np.random.choice(
-            possible_idx, degree - (np.count_nonzero(theta[i, :]) - 1))
-        theta[i, indices] = theta[indices, i] = .5 / degree
 
-    assert(is_pos_def(theta))
-    theta_observed = theta - L
-    assert(is_pos_def(theta_observed))
-    return theta, theta_observed, L, K_HO
+    if normalize:
+        theta = np.zeros((n_dim_obs, n_dim_obs))
+        for i in range(n_dim_obs):
+            possible_idx = list(set(range(n_dim_obs)) - (
+                set(np.nonzero(theta[i, :])[0]) |
+                set(np.where(np.count_nonzero(theta, axis=1) > degree)[0])))
+            if not possible_idx:
+                continue
+            indices = np.random.choice(
+                possible_idx, degree - (np.count_nonzero(theta[i, :]) - 1))
+            theta[i, indices] = theta[indices, i] = 1. / degree
 
+        theta.flat[::n_dim_obs+1] = np.sum(theta, axis=1) + 0.002
 
-def generate_starting_matrices_normalized(n_dim_obs=100, n_dim_lat=10, degree=2):
-    """Doc."""
-    L, K_HO = make_ell(n_dim_obs, n_dim_lat)
-    theta = np.zeros((n_dim_obs, n_dim_obs))
-    for i in range(n_dim_obs):
-        possible_idx = list(set(range(n_dim_obs)) - (
-            set(np.nonzero(theta[i, :])[0]) |
-            set(np.where(np.count_nonzero(theta, axis=1) > degree)[0])))
-        if not possible_idx:
-            continue
-        indices = np.random.choice(
-            possible_idx, degree - (np.count_nonzero(theta[i, :]) - 1))
-        theta[i, indices] = theta[indices, i] = 1. / degree
-
-    theta.flat[::n_dim_obs+1] = np.sum(theta, axis=1) + 0.002
+    else:
+        theta = np.eye(n_dim_obs)
+        for i in range(n_dim_obs):
+            possible_idx = list(set(range(n_dim_obs)) - (
+                set(np.nonzero(theta[i, :])[0]) |
+                set(np.where(np.count_nonzero(theta, axis=1) > degree)[0])))
+            if not possible_idx:
+                continue
+            indices = np.random.choice(
+                possible_idx, degree - (np.count_nonzero(theta[i, :]) - 1))
+            theta[i, indices] = theta[indices, i] = .5 / degree
 
     assert(is_pos_def(theta))
     theta_observed = theta - L
@@ -223,11 +218,8 @@ def make_covariance(
         keep_sparsity=False, proportional=False):
     no = int(np.ceil(n_dim_obs / 20)) if proportional else 1
 
-    start_matrix_function = generate_starting_matrices_normalized \
-        if normalize_starting_matrices else generate_starting_matrices
-
-    theta, theta_observed, L, K_HO = start_matrix_function(
-        n_dim_obs, n_dim_lat, degree)
+    theta, theta_observed, L, K_HO = make_starting(
+        n_dim_obs, n_dim_lat, degree, normalize=normalize_starting_matrices)
 
     thetas = [theta]
     thetas_obs = [theta_observed]
@@ -344,8 +336,8 @@ def make_fixed_sparsity(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     degree = kwargs.get('degree', 2)
     epsilon = kwargs.get('epsilon', 1e-2)
     t = kwargs.get('changing_time', T / 2.)
-    theta, theta_observed, L, K_HO = generate_starting_matrices(
-        n_dim_obs, n_dim_lat, degree)
+    theta, theta_observed, L, K_HO = make_starting(
+        n_dim_obs, n_dim_lat, degree, normalize=False)
 
     theta = np.abs(theta)
     theta_observed = theta - L
@@ -362,14 +354,12 @@ def make_fixed_sparsity(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
             theta[nonzeros] -= np.random.randn(nonzeros[0].size) * 0.1
         theta = np.abs(theta)
         theta = (theta + theta.T) / 2.
-        print(theta)
         theta[theta < epsilon] = 0
         theta.flat[::n_dim_obs + 1] = np.sum(np.abs(theta), axis=1) \
                                     + np.sum(np.abs(L), axis=1) + .1
         nonzeros = np.nonzero(theta-np.diag(theta))
 
         theta_observed = theta - L
-        print(theta_observed)
         assert is_pos_def(theta_observed)
         thetas.append(theta)
         thetas_obs.append(theta_observed)
@@ -377,23 +367,24 @@ def make_fixed_sparsity(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     return thetas, thetas_obs, np.array([L] * T)
 
 
-def generate_dataset_sin_cos(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
-    """Aggiungi descrizione."""
+def make_sin_cos(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
+    """Variables follow sin and cos evolution. L is fixed."""
     degree = kwargs.get('degree', 2)
     eps = kwargs.get('epsilon', 1e-2)
-    L, K_HO = make_ell(n_dim_obs, n_dim_lat, degree)
+    L, K_HO = make_ell(n_dim_obs, n_dim_lat)
 
     phase = np.random.randn(n_dim_obs, n_dim_obs) * np.pi
-    phase[np.triu_indices(n_dim_obs)[::-1]] = phase[np.triu_indices(n_dim_obs)]
+    upper_idx_diag = np.triu_indices(n_dim_obs)
+    phase[upper_idx_diag[::-1]] = phase[upper_idx_diag]
 
+    upper_idx = np.triu_indices(n_dim_obs, 1)
     clip = np.zeros((n_dim_obs, n_dim_obs))
-    picks = np.random.permutation(len(np.triu_indices(n_dim_obs, 1)[0]))
-    dim = int(len(np.triu_indices(n_dim_obs, 1)[0]) * degree)
+    picks = np.random.permutation(len(upper_idx[0]))
+    dim = int(len(upper_idx[0]) * degree)
     picks = picks[:dim]
-    clip1 = clip[np.triu_indices(n_dim_obs, 1)].ravel()
+    clip1 = clip[upper_idx].ravel()
     clip1[picks] = 1
-    clip[np.triu_indices(n_dim_obs, 1)[::-1]] = clip1
-    clip[np.triu_indices(n_dim_obs, 1)] = clip1
+    clip[upper_idx[::-1]] = clip[upper_idx] = clip1
 
     thetas = np.array([np.eye(n_dim_obs) for i in range(T)])
 
@@ -418,7 +409,7 @@ def generate_dataset_sin_cos(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     return thetas, thetas_obs, np.array([L]*T)
 
 
-def generate_dataset_fede(
+def make_fede(
         n_dim_obs=3, n_dim_lat=2, T=10, epsilon=1e-3, n_samples=50, **kwargs):
     """Generate dataset (new version)."""
     b = np.random.rand(1, n_dim_obs)
