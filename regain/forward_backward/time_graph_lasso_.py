@@ -6,11 +6,13 @@ from functools import partial
 
 import numpy as np
 import scipy.sparse as sp
+from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_array
 
+from regain.covariance.graph_lasso_ import fast_logdet
 from regain.covariance.time_graph_lasso_ import TimeGraphLasso, loss
 from regain.norm import l1_od_norm, vector_p_norm
 from regain.prox import prox_FL
@@ -34,7 +36,7 @@ def objective(n_samples, emp_cov, precision, alpha, beta, psi):
 
 def grad_loss(x, emp_cov, n_samples):
     """Gradient of the loss function for the time-varying graphical lasso."""
-    grad = emp_cov - np.array([np.linalg.inv(_) for _ in x])
+    grad = emp_cov - np.array([linalg.pinvh(_) for _ in x])
     return grad * n_samples[:, None, None]
 
 
@@ -54,14 +56,14 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
     Salzo S. (2017). https://doi.org/10.1137/16M1073741
     """
     # lamda = 1.
-    partial_J = partial(_J, x, beta=beta, alpha=alpha, gamma=gamma, S=emp_cov,
+    partial_j = partial(_J, x, beta=beta, alpha=alpha, gamma=gamma, S=emp_cov,
                         n_samples=n_samples, p=p)
     partial_f = partial(loss, n_samples=n_samples, S=emp_cov)
     fx = partial_f(K=x)
     gradx = grad_loss(x, emp_cov, n_samples)
     gx = penalty(x, lamda, beta, partial(vector_p_norm, p=p))
     for i in range(max_iter):
-        x1 = partial_J(lamda=lamda)
+        x1 = partial_j(lamda=lamda)
         iter_diff = x1 - x
         loss_diff = partial_f(K=x1) - fx
         iter_diff_gradient = iter_diff.ravel().dot(gradx.ravel())
@@ -104,7 +106,7 @@ def fista_step(Y, Y_diff, t):
 
 def time_graph_lasso(
         emp_cov, n_samples, alpha=0.01, beta=1., max_iter=100, verbose=False,
-        tol=1e-4, delta=1e-4, gamma=1.,
+        tol=1e-4, delta=1e-4, gamma=1., eps=0.5,
         return_history=False, return_n_iter=True,
         lamda_criterion='b', time_norm=1, compute_objective=True):
     """Time-varying graphical lasso solver.
@@ -143,11 +145,17 @@ def time_graph_lasso(
         objective value, the primal and dual residual norms, and tolerances
         for the primal and dual residual norms at each iteration.
     """
-    # emp_cov = np.array(list(map(empirical_covariance, data_list)))
-    # n_samples = np.array([s.shape[0] for s in data_list])
-    # n_samples = np.array([1. for s in data_list])
+    n_times, _, n_features = emp_cov.shape
+    covariance_ = emp_cov.copy()
+    covariance_ *= 0.95
 
-    K = np.array([np.eye(s.shape[0]) for s in emp_cov])
+    K = []
+    for c, e in zip(covariance_, emp_cov):
+        c.flat[::n_features + 1] = e.flat[::n_features + 1]
+        K.append(linalg.pinvh(c))
+
+    # K = np.array([np.eye(s.shape[0]) for s in emp_cov])
+    K = np.array(K)
     # Y = K.copy()
 
     checks = []
@@ -161,7 +169,7 @@ def time_graph_lasso(
         # Y_old = Y.copy()
 
         # choose a gamma
-        gamma = update_gamma(gamma, iteration_)
+        gamma = update_gamma(gamma, iteration_, eps=1e-4)
 
         # total variation
         # Y = _J(K, beta, alpha, gamma, 1, S, n_samples)
@@ -169,9 +177,11 @@ def time_graph_lasso(
                     beta * gamma, alpha * gamma, p=time_norm)
 
         lamda_n = choose_lamda(
-            lamda, K, emp_cov, n_samples, beta, alpha, gamma, delta=delta,
-            criterion=lamda_criterion, max_iter=50, p=time_norm)
-        K += lamda_n * (y - K)
+            lamda, K, emp_cov, n_samples=n_samples, beta=beta, alpha=alpha,
+            gamma=gamma, delta=delta, eps=eps,
+            criterion=lamda_criterion, max_iter=40, p=time_norm)
+
+        K += np.maximum(lamda_n, 1e-3) * (y - K)
         # K = K + choose_lamda(lamda, K, emp_cov, n_samples, beta, alpha,
         #                      gamma, delta=delta, criterion=lamda_criterion,
         #                      max_iter=50) * (Y - K)
@@ -194,6 +204,10 @@ def time_graph_lasso(
         if return_history:
             checks.append(check)
 
+        if np.isnan(check.rnorm) or np.isnan(check.snorm):
+            # raise ValueError("%f %f" % (check.rnorm, check.snorm))
+            warnings.warn("precision is not positive definite.")
+
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
     else:
@@ -205,6 +219,7 @@ def time_graph_lasso(
     if return_n_iter:
         return_list.append(iteration_)
     return return_list
+
 
 class TimeGraphLassoForwardBackward(TimeGraphLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
@@ -278,7 +293,7 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
 
     def __init__(self, alpha=0.01, beta=1., time_on_axis='first', tol=1e-4,
                  max_iter=100, verbose=False, assume_centered=False,
-                 compute_objective=True,
+                 compute_objective=True, eps=0.5,
                  delta=1e-4, gamma=1., lamda_criterion='b', time_norm=1):
         super(TimeGraphLassoForwardBackward, self).__init__(
             alpha=alpha, tol=tol, max_iter=max_iter,
@@ -289,6 +304,7 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
         self.gamma = gamma
         self.lamda_criterion = lamda_criterion
         self.time_norm = time_norm
+        self.eps = eps
 
     def _fit(self, emp_cov, n_samples):
         """Fit the TimeGraphLasso model to X.
@@ -306,7 +322,7 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
                 return_n_iter=True, return_history=False,
                 compute_objective=self.compute_objective,
                 time_norm=self.time_norm, lamda_criterion=self.lamda_criterion,
-                gamma=self.gamma, delta=self.delta)
+                gamma=self.gamma, delta=self.delta, eps=self.eps)
         return self
 
     def fit(self, X, y=None):
@@ -339,6 +355,15 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
         emp_cov = np.array([empirical_covariance(
             x, assume_centered=self.assume_centered) for x in X])
         n_samples = np.array([x.shape[0] for x in X])
+
+        if self.alpha == 'max':
+            # use sklearn alpha max
+            from sklearn.covariance.graph_lasso_ import alpha_max
+            self.alpha = max(alpha_max(e) for e in emp_cov) + 0.4
+        if self.gamma == 'max':
+            lipschitz_constant = max(get_lipschitz(e) for e in emp_cov)
+            self.gamma = 1.98 / lipschitz_constant
+
         return self._fit(emp_cov, n_samples)
 
     def score(self, X_test, y=None):
@@ -378,11 +403,32 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
             x, assume_centered=True) for x in X_test - self.location_])
 
         n_samples = np.array([x.shape[0] for x in X_test])
-        res = sum(ni * log_likelihood(S, K) for S, K, ni in zip(
-            test_cov, self.get_observed_precision(), n_samples))
+        res = sum(log_likelihood(S, K) for S, K in zip(
+            test_cov, self.get_observed_precision()))
 
-        # ALLA  MATLAB1
-        # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
-        # scores_ranks = np.square(ranks-np.sqrt(L.shape[1]))
+        return res
 
-        return res  # - np.sum(scores_ranks)
+
+def get_lipschitz(data):
+    """Get the Lipschitz constant for a specific loss function.
+
+    Only square loss implemented.
+
+    Parameters
+    ----------
+    data : (n, d) float ndarray
+        data matrix
+    loss : string
+        the selected loss function in {'square', 'logit'}
+    Returns
+    ----------
+    L : float
+        the Lipschitz constant
+    """
+    n, p = data.shape
+
+    if p > n:
+        tmp = np.dot(data, data.T)
+    else:
+        tmp = np.dot(data.T, data)
+    return np.linalg.norm(tmp, 2)

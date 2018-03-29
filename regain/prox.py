@@ -17,14 +17,14 @@ except:
     pass
 
 
-def soft_thresholding(a, lamda):
+def soft_thresholding_vector(a, lamda):
     """Soft-thresholding for vectors."""
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         return np.maximum(0, 1 - lamda / np.linalg.norm(a)) * a
 
 
-def soft_thresholding_sign(a, lamda):
+def soft_thresholding(a, lamda):
     """Soft-thresholding."""
     return np.sign(a) * np.maximum(np.abs(a) - lamda, 0)
 
@@ -34,7 +34,7 @@ def soft_thresholding_od(a, lamda):
     if a.ndim > 2:
         res = []
         for i, x in enumerate(a):
-            st = soft_thresholding_sign(x, lamda[i])
+            st = soft_thresholding(x, lamda[i])
             st.flat[::x.shape[0]+1] = np.diag(x)
             res.append(st)
         return np.array(res)
@@ -94,6 +94,7 @@ def prox_logdet_ala_ma(a, lamda):
     es, Q = np.linalg.eigh(a)
     xi = (- es + np.sqrt(np.square(es) + 4. * lamda)) / 2.
     return np.linalg.multi_dot((Q, np.diag(xi), Q.T))
+
 
 def prox_trace_indicator(a, lamda):
     """Time-varying latent variable graphical lasso prox."""
@@ -184,10 +185,10 @@ def prox_FL(a, beta, lamda, p=1):
     func = tv1_1d if p == 1 else partial(tvp_1d, p=p)
     for i in range(np.power(a.shape[1], 2)):
         solution = func(a.flat[i::np.power(a.shape[1], 2)], beta)
-        # fused-lasso (soft-thresholding on the solution)
-        solution = soft_thresholding_sign(solution, lamda)
         Y.flat[i::np.power(a.shape[1], 2)] = solution
-    return Y
+    # fused-lasso (soft-thresholding on the solution)
+    return soft_thresholding(Y, lamda)
+
     # Y = np.empty_like(a)
     # for i in range(a.shape[1]):
     #     for j in range(i, a.shape[2]):

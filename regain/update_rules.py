@@ -16,8 +16,8 @@ def update_rho(rho, rnorm, snorm, iteration=None, mu=10, tau_inc=2, tau_dec=2):
     return rho
 
 
-def update_gamma(gamma, iteration):
+def update_gamma(gamma, iteration, eps=1e-4):
     """Update `gamma` for forward-backward splitting."""
-    if iteration % 10 == 0:
-        return gamma / 2.
-    return gamma
+    if iteration % 20 == 0:
+        gamma /= 2.
+    return max(gamma, eps)
