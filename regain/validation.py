@@ -7,7 +7,7 @@ from sklearn.utils.extmath import squared_norm
 
 from regain.norm import l1_norm, node_penalty
 from regain.prox import (blockwise_soft_thresholding, prox_laplacian,
-                         prox_linf, prox_node_penalty, soft_thresholding_sign)
+                         prox_linf, prox_node_penalty, soft_thresholding)
 
 
 def check_norm_prox(function):
@@ -16,7 +16,7 @@ def check_norm_prox(function):
         prox = prox_laplacian
         norm = squared_norm
     elif function == 'l1':
-        prox = soft_thresholding_sign
+        prox = soft_thresholding
         norm = l1_norm
     elif function == 'l2':
         prox = blockwise_soft_thresholding

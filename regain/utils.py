@@ -285,3 +285,23 @@ def structure_error(true, pred, thresholding=False, eps=1e-2,
         nlr=negative_likelihood_ratio, dor=diagnostic_odds_ratio,
         balanced_accuracy=balanced_accuracy)
     return dictionary
+
+
+def is_pos_semidef(x, tol=1e-15):
+    """Check if x is positive semi-definite."""
+    eigs = np.linalg.eigvalsh(x)
+    eigs[np.abs(eigs) < tol] = 0
+    return np.all(eigs >= 0)
+
+
+def is_pos_def(x, tol=1e-15):
+    """Check if x is positive definite."""
+    eigs = np.linalg.eigvalsh(x)
+    eigs[np.abs(eigs) < tol] = 0
+    return np.all(eigs > 0)
+
+
+def positive_definite(x, tol=1e-15):
+    if x.ndim == 2:
+        return is_pos_def(x)
+    return all(is_pos_def(y) for y in x)

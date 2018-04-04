@@ -8,6 +8,8 @@ import numpy as np
 from sklearn.datasets.base import Bunch
 from sklearn.utils import deprecated
 
+from regain.utils import is_pos_def, is_pos_semidef
+
 
 def normalize_matrix(x):
     """Normalize a matrix so to have 1 on the diagonal, in-place."""
@@ -15,20 +17,6 @@ def normalize_matrix(x):
     d = 1. / np.sqrt(d)
     x *= d
     x *= d.T
-
-
-def is_pos_def(x, tol=1e-15):
-    """Check if x is positive definite."""
-    eigs = np.linalg.eigvalsh(x)
-    eigs[np.abs(eigs) < tol] = 0
-    return np.all(eigs > 0)
-
-
-def is_pos_semidef(x, tol=1e-15):
-    """Check if x is positive semi-definite."""
-    eigs = np.linalg.eigvalsh(x)
-    eigs[np.abs(eigs) < tol] = 0
-    return np.all(eigs >= 0)
 
 
 def make_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,

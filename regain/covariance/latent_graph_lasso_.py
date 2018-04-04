@@ -8,8 +8,7 @@ from six.moves import range
 
 from regain.covariance.graph_lasso_ import GraphLasso, logl
 from regain.norm import l1_od_norm
-from regain.prox import (prox_logdet, prox_trace_indicator,
-                         soft_thresholding_sign)
+from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence
 
@@ -84,7 +83,7 @@ def latent_graph_lasso(
         R = prox_logdet(emp_cov - rho * A, lamda=1. / rho)
 
         A = L + R + U
-        K = soft_thresholding_sign(A, lamda=alpha / rho)
+        K = soft_thresholding(A, lamda=alpha / rho)
 
         A = K - R - U
         A += A.T

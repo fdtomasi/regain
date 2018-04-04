@@ -181,13 +181,23 @@ def prox_FL(a, beta, lamda, p=1):
     on the solution, as in
     http://ieeexplore.ieee.org/abstract/document/6579659/
     """
+    # if any([any(np.diag(x) < 0) for x in a]):
+    #     for a_i in a:
+    #         np.fill_diagonal(a_i, np.sum(np.abs(a_i), axis=1))
+
     Y = np.empty_like(a)
     func = tv1_1d if p == 1 else partial(tvp_1d, p=p)
     for i in range(np.power(a.shape[1], 2)):
         solution = func(a.flat[i::np.power(a.shape[1], 2)], beta)
         Y.flat[i::np.power(a.shape[1], 2)] = solution
+
     # fused-lasso (soft-thresholding on the solution)
-    return soft_thresholding(Y, lamda)
+    Y_soft = soft_thresholding(Y, lamda)
+
+    # restore diagonal
+    for y_s, y_fv in zip(Y_soft, Y):
+        np.fill_diagonal(y_s, np.diag(y_fv))
+    return Y_soft
 
     # Y = np.empty_like(a)
     # for i in range(a.shape[1]):

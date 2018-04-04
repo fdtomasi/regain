@@ -16,7 +16,7 @@ from sklearn.utils.validation import check_array
 
 from regain.covariance.graph_lasso_ import GraphLasso, logl
 from regain.norm import l1_od_norm
-from regain.prox import prox_logdet, soft_thresholding_sign
+from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence, error_norm_time
 from regain.validation import check_array_dimensions, check_norm_prox
@@ -124,7 +124,7 @@ def time_graph_lasso(
         A = K + U_0
         A += A.transpose(0, 2, 1)
         A /= 2.
-        Z_0 = soft_thresholding_sign(A, lamda=alpha / rho)
+        Z_0 = soft_thresholding(A, lamda=alpha / rho)
 
         # other Zs
         A_1 = K[:-1] + U_1
