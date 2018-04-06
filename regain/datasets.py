@@ -5,10 +5,12 @@ import warnings
 from functools import partial
 
 import numpy as np
+from scipy import signal
+from scipy.spatial.distance import squareform
 from sklearn.datasets.base import Bunch
 from sklearn.utils import deprecated
 
-from regain.utils import is_pos_def, is_pos_semidef
+from regain.utils import is_pos_def, is_pos_semidef, positive_definite
 
 
 def normalize_matrix(x):
@@ -70,7 +72,8 @@ def make_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
         norm=make_l2l2_norm, l1l1=generate_dataset_l1l1,
 
         # the previous are deprecated
-        fixed_sparsity=make_fixed_sparsity, sin=make_sin_cos,
+        sin=make_sin,
+        fixed_sparsity=make_fixed_sparsity, sincos=make_sin_cos,
         fede=make_fede, sklearn=make_sparse_low_rank,
         ma=make_ma_xue_zou, mak=make_ma_xue_zou_rand_k)
 
@@ -353,6 +356,33 @@ def make_fixed_sparsity(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
         thetas_obs.append(theta_observed)
 
     return thetas, thetas_obs, np.array([L] * T)
+
+
+def make_sin(n_dim_obs, n_dim_lat, T, shape='smooth', closeness=1,
+             normalize=False):
+    upper_idx = np.triu_indices(n_dim_obs, 1)
+    n_interactions = len(upper_idx[0])
+    x = np.tile(np.linspace(0, (T-1.) / closeness, T), (n_interactions, 1))
+    phase = np.random.rand(n_interactions, 1)
+    freq = np.random.rand(n_interactions, 1) - .50
+    A = (np.random.rand(n_interactions, 1) + 1) / 2.
+
+    if shape == 'smooth':
+        y = A * np.sin(2. * np.pi * freq * x + phase)
+    else:
+        y = A * signal.square(2 * np.pi * freq * x + phase, duty=.5)
+
+    # threshold
+    y = np.maximum(y, 0)
+
+    Y = np.array([squareform(y[:, j]) + np.diag(np.sum(squareform(y[:, j]), axis=1))
+                  for j in range(y.shape[1])])
+
+    if normalize:
+        map(normalize_matrix, Y)  # in place
+    assert positive_definite(Y)
+
+    return Y, Y, np.zeros_like(Y)
 
 
 def make_sin_cos(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):

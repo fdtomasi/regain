@@ -16,7 +16,7 @@ from regain.covariance.time_graph_lasso_ import TimeGraphLasso, loss
 from regain.norm import l1_od_norm, vector_p_norm
 from regain.prox import prox_FL
 from regain.update_rules import update_gamma
-from regain.utils import convergence
+from regain.utils import convergence, positive_definite
 from regain.validation import check_array_dimensions
 
 
@@ -84,7 +84,8 @@ def choose_gamma(gamma, x, emp_cov, n_samples, beta, alpha, lamda, grad, delta=1
 
 
 def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
-                 eps=0.5, max_iter=1000, criterion='a', p=1, x_inv=None):
+                 eps=0.5, max_iter=1000, criterion='a', p=1, x_inv=None,
+                 grad=None):
     """Choose alpha for backtracking.
 
     References
@@ -96,7 +97,7 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
     if x_inv is None:
         x_inv = np.array([linalg.pinvh(_) for _ in x])
     prox = _J(x, beta=beta, alpha=alpha, lamda=1, gamma=gamma, S=emp_cov,
-              n_samples=n_samples, p=p, x_inv=x_inv)
+              n_samples=n_samples, p=p, x_inv=x_inv, grad=grad)
     partial_f = partial(loss, n_samples=n_samples, S=emp_cov)
     fx = partial_f(K=x)
     gradx = grad_loss(x, emp_cov, n_samples)
@@ -218,6 +219,9 @@ def time_graph_lasso(
         # while not positive_definite(
         #         K - gamma * grad_loss(K, emp_cov, n_samples, x_inv=x_inv)):
         #     gamma *= 0.9
+        if not positive_definite(K):
+            warnings.warn("precision is not positive definite.")
+            break
 
         # total variation
         # Y = _J(K, beta, alpha, gamma, 1, S, n_samples)
@@ -237,7 +241,7 @@ def time_graph_lasso(
                 lamda, K, emp_cov, n_samples=n_samples, beta=beta, alpha=alpha,
                 gamma=gamma, delta=delta, eps=eps,
                 criterion=lamda_criterion, max_iter=1000, p=time_norm,
-                x_inv=x_inv)
+                x_inv=x_inv, grad=grad)
         else:
             lamda_n = lamda
 
