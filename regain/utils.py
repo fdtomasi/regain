@@ -10,7 +10,9 @@ from contextlib import contextmanager
 
 import numpy as np
 import six
+from scipy.spatial.distance import squareform
 from six.moves import cPickle as pkl
+from sklearn.metrics import average_precision_score
 
 convergence = namedtuple('convergence',
                          ('obj', 'rnorm', 'snorm', 'e_pri', 'e_dual'))
@@ -228,6 +230,16 @@ def structure_error(true, pred, thresholding=False, eps=1e-2,
     # avoid inplace modifications
     true = true.copy()
     pred = pred.copy()
+
+    if true.ndim > 2:
+        y_true = np.array(flatten([squareform(x, checks=None) for x in true]))
+        y_pred = np.array(flatten([squareform(x, checks=None) for x in pred]))
+    else:
+        y_true = squareform(true, checks=None)
+        y_pred = squareform(pred, checks=None)
+
+    average_precision = average_precision_score(y_true > 0, y_pred)
+
     if thresholding:
         pred[np.abs(pred) < eps] = 0
     tn_to_remove = 0
@@ -283,7 +295,8 @@ def structure_error(true, pred, thresholding=False, eps=1e-2,
         prevalence=prevalence, miss_rate=miss_rate, fall_out=fall_out,
         specificity=specificity, plr=positive_likelihood_ratio,
         nlr=negative_likelihood_ratio, dor=diagnostic_odds_ratio,
-        balanced_accuracy=balanced_accuracy)
+        balanced_accuracy=balanced_accuracy,
+        average_precision=average_precision)
     return dictionary
 
 
@@ -305,3 +318,17 @@ def positive_definite(x, tol=1e-15):
     if x.ndim == 2:
         return is_pos_def(x)
     return all(is_pos_def(y) for y in x)
+
+
+def threshold(a, threshmin=None, threshmax=None, newval=0):
+    """Threshold. Replaces the deprecated scipy function."""
+    a = np.ma.array(a, copy=True)
+    mask = np.zeros(a.shape, dtype=bool)
+    if threshmin is not None:
+        mask |= (a < threshmin).filled(False)
+
+    if threshmax is not None:
+        mask |= (a > threshmax).filled(False)
+
+    a[mask] = newval
+    return a
