@@ -101,7 +101,7 @@ def group_lasso_overlap(A, b, lamda=1.0, groups=None, rho=1.0,
 class GroupLassoOverlap(LinearModel, RegressorMixin):
 
     def __init__(self, alpha=1.0, fit_intercept=True,
-                 groups=None, rho=1.0,
+                 groups=None, rho=1.0, n_jobs=1,
                  tol=1e-4, verbose=False, rtol=1e-2,
                  normalize=False, precompute=False, max_iter=1000,
                  copy_X=True, warm_start=False, positive=False,
@@ -126,6 +126,7 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
         self.selection = selection
         self.mode = mode
         self.matlab_engine = matlab_engine
+        self.n_jobs = n_jobs
 
     def fit(self, X, y, check_input=True):
         """Fit model with coordinate descent.
@@ -196,26 +197,45 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
                 coef_ = coef_[None, :]
 
         dual_gaps_ = np.zeros(n_targets, dtype=X.dtype)
-        self.n_iter_ = []
-        history = []
-
-        for k in xrange(n_targets):
+        if self.n_jobs == 1:
+            self.n_iter_ = []
+            history = []
+            for k in xrange(n_targets):
+                if self.mode == 'admm':
+                    this_coef, hist, this_iter = \
+                        group_lasso_overlap(
+                            X, y[:, k], lamda=self.alpha, groups=self.groups,
+                            rho=self.rho, max_iter=self.max_iter, tol=self.tol,
+                            verbose=self.verbose, rtol=self.rtol)
+                else:  # paspal wrapper
+                    this_coef, hist, this_iter = \
+                        group_lasso_overlap_paspal(
+                            X, y[:, k], lamda=self.alpha, groups=self.groups,
+                            rho=self.rho, max_iter=self.max_iter, tol=self.tol,
+                            verbose=self.verbose, rtol=self.rtol,
+                            matlab_engine=self.matlab_engine)
+                coef_[k] = this_coef.ravel()
+                history.append(hist)
+                self.n_iter_.append(this_iter)
+        else:
+            import joblib as jl
             if self.mode == 'admm':
-                this_coef, hist, this_iter = \
-                    group_lasso_overlap(
-                        X, y[:, k], lamda=self.alpha, groups=self.groups,
-                        rho=self.rho, max_iter=self.max_iter, tol=self.tol,
-                        verbose=self.verbose, rtol=self.rtol)
+                coef_, history, self.n_iter_ = \
+                    zip(*jl.Parallel(n_jobs=self.n_jobs)(
+                        jl.delayed(group_lasso_overlap)(
+                            X, y[:, k], lamda=self.alpha, groups=self.groups,
+                            rho=self.rho, max_iter=self.max_iter, tol=self.tol,
+                            verbose=self.verbose, rtol=self.rtol)
+                        for k in xrange(n_targets)))
             else:  # paspal wrapper
-                this_coef, hist, this_iter = \
-                    group_lasso_overlap_paspal(
-                        X, y[:, k], lamda=self.alpha, groups=self.groups,
-                        rho=self.rho, max_iter=self.max_iter, tol=self.tol,
-                        verbose=self.verbose, rtol=self.rtol,
-                        matlab_engine=self.matlab_engine)
-            coef_[k] = this_coef.ravel()
-            history.append(hist)
-            self.n_iter_.append(this_iter)
+                coef_, history, self.n_iter_ = \
+                    zip(*jl.Parallel(n_jobs=self.n_jobs)(
+                        jl.delayed(group_lasso_overlap)(
+                            X, y[:, k], lamda=self.alpha, groups=self.groups,
+                            rho=self.rho, max_iter=self.max_iter, tol=self.tol,
+                            verbose=self.verbose, rtol=self.rtol,
+                            matlab_engine=self.matlab_engine)
+                        for k in xrange(n_targets)))
 
         if n_targets == 1:
             self.n_iter_ = self.n_iter_[0]
