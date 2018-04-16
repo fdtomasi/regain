@@ -15,6 +15,7 @@ from sklearn.utils.validation import check_is_fitted
 
 from regain.prox import soft_thresholding
 from regain.wrapper.paspal.wrapper import group_lasso_overlap_paspal
+from regain.wrapper.paspal.glopridu import glopridu_algorithm
 
 
 def D_function(d, groups):
@@ -207,13 +208,21 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
                             X, y[:, k], lamda=self.alpha, groups=self.groups,
                             rho=self.rho, max_iter=self.max_iter, tol=self.tol,
                             verbose=self.verbose, rtol=self.rtol)
-                else:  # paspal wrapper
+                elif self.mode == 'paspal-matlab':
                     this_coef, hist, this_iter = \
                         group_lasso_overlap_paspal(
                             X, y[:, k], lamda=self.alpha, groups=self.groups,
                             rho=self.rho, max_iter=self.max_iter, tol=self.tol,
                             verbose=self.verbose, rtol=self.rtol,
                             matlab_engine=self.matlab_engine)
+                elif self.mode == 'paspal':  # paspal wrapper
+                    this_coef, hist, this_iter = \
+                        glopridu_algorithm(
+                            X, y[:, k], tau=self.alpha, blocks=self.groups,
+                            max_iter_ext=self.max_iter, tol_ext=self.tol,
+                            verbose=self.verbose, tol_int=self.rtol)
+                else:
+                    raise ValueError(self.mode)
                 coef_[k] = this_coef.ravel()
                 history.append(hist)
                 self.n_iter_.append(this_iter)
@@ -227,15 +236,25 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
                             rho=self.rho, max_iter=self.max_iter, tol=self.tol,
                             verbose=self.verbose, rtol=self.rtol)
                         for k in xrange(n_targets)))
-            else:  # paspal wrapper
+            elif self.mode == 'paspal-matlab':  # paspal wrapper
                 coef_, history, self.n_iter_ = \
                     zip(*jl.Parallel(n_jobs=self.n_jobs)(
-                        jl.delayed(group_lasso_overlap)(
+                        jl.delayed(group_lasso_overlap_paspal)(
                             X, y[:, k], lamda=self.alpha, groups=self.groups,
                             rho=self.rho, max_iter=self.max_iter, tol=self.tol,
                             verbose=self.verbose, rtol=self.rtol,
                             matlab_engine=self.matlab_engine)
                         for k in xrange(n_targets)))
+            elif self.mode == 'paspal':  # paspal wrapper
+                coef_, history, self.n_iter_ = \
+                    zip(*jl.Parallel(n_jobs=self.n_jobs)(
+                        jl.delayed(glopridu_algorithm)(
+                            X, y[:, k], tau=self.alpha, blocks=self.groups,
+                            max_iter_ext=self.max_iter, tol_ext=self.tol,
+                            verbose=self.verbose, tol_int=self.rtol)
+                        for k in xrange(n_targets)))
+            else:
+                raise ValueError(self.mode)
 
         if n_targets == 1:
             self.n_iter_ = self.n_iter_[0]
