@@ -91,10 +91,10 @@ def glo_prox(w0,tau,blocks,weights,lamda0,tol,max_iter):
         p_active = grad[I_active] / B_active
 
         x_inactive = grad[I_inactive].T.dot(p_inactive)
-        test = 1;
+        test = 1
         m = 0;
         while test:
-            m = m+1;
+            m += 1
             step = beta**m * s_beta
             lamda_m = np.zeros(B)
             lamda_m[I_active] = np.maximum(0, lamda_prev[I_active] - step*p_active)
@@ -103,13 +103,13 @@ def glo_prox(w0,tau,blocks,weights,lamda0,tol,max_iter):
             fdiff = (w0**2).T.dot(I.dot((lamda_m-lamda)) / ((1.+s_m)*(1+s))) \
                 + np.sum(weights * (lamda - lamda_m))
             x_active = grad[I_active].T*(lamda[I_active]-lamda_m[I_active])
-            test = fdiff < sigma*(step*x_inactive+x_active)
+            test = any(fdiff < sigma*(step*x_inactive+x_active))
 
         lamda = lamda_m.copy()
         if all(grad[lamda == 0] >= 0) and all(abs(grad[lamda > 0]) < tol):
             break
 
-    # % given the solution of the dual problem, lamda, compute the primal solution w
+    # given the solution of the dual problem, lamda, compute the primal solution w
     s = I.dot(lamda)
     w = w0 * (1 - 1./(1+s))
 
@@ -120,8 +120,8 @@ def glo_prox(w0,tau,blocks,weights,lamda0,tol,max_iter):
 def glopridu_algorithm(
     X, Y, blocks, tau, weights=None, smooth_par=0, beta0=None, lamda0=None,
     sigma0=None, max_iter_ext=1e4, max_iter_int=100, tol_ext=1e-6,
-        tol_int=1e-4):
-    """blabla"""
+        tol_int=1e-4, verbose=0):
+    """Blabla."""
     n, d = X.shape
     blocks = np.array(blocks)
 
@@ -133,15 +133,15 @@ def glopridu_algorithm(
 
     # % if sigma is not specified in input, set  it to as a/n
     if not sigma0:
-        sigma0 = np.linalg.norm(X, 2) ** 2 / n  #; %step size for smooth_par=0
+        sigma0 = np.linalg.norm(X, 2) ** 2 / n  # step size for smooth_par=0
 
     # % if weights are not specified in input, set them to 1
     if not weights:
         weights = np.ones(len(blocks))
         # weights = np.ones(d)
 
-    mu = smooth_par * sigma0 #; % smoothness parameter is rescaled
-    sigma = sigma0 + mu # ; % step size
+    mu = smooth_par * sigma0  # smoothness parameter is rescaled
+    sigma = sigma0 + mu  # step size
 
     # % useful normalization that avoid computing the same computations for
     # % each iteration
@@ -153,9 +153,9 @@ def glopridu_algorithm(
     if not beta0:
         beta0 = np.zeros(d)
 
-    beta = beta0.copy()  #; % initialization for iterate n_iter-1
-    h = beta0.copy()  #; % initialization for combination of the previous 2 iterates (iteratations n_iter_1 and n_iter-2)
-    t = 1  #; %initialization for the adaptive parameter used to combine the previous 2 iterates when building h
+    beta = beta0.copy()  # initialization for iterate n_iter-1
+    h = beta0.copy()  # initialization for combination of the previous 2 iterates (iteratations n_iter_1 and n_iter-2)
+    t = 1  # initialization for the adaptive parameter used to combine the previous 2 iterates when building h
     # % precomputes X*beta and X*h to avoid computing them twice
     Xb = X.dot(beta)
     Xh = Xb.copy()
