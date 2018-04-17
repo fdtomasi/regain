@@ -184,7 +184,8 @@ def glopridu_algorithm(
         Xh = Xb * (1. + (t-1.)/(t_new)) + (1.-t)/(t_new) * Xb_prev
         t = t_new
 
-        if np.linalg.norm(Xb-Xb_prev) <= np.linalg.norm(Xb_prev)*tol_ext and n_iter > 1:
-                break
+        if np.linalg.norm(Xb-Xb_prev) <= np.linalg.norm(Xb_prev)*tol_ext and \
+                n_iter > 1:
+            break
 
-    return [beta, lamda, n_iter]
+    return beta, lamda, n_iter
