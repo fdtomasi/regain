@@ -214,7 +214,6 @@ def time_graph_lasso(
         # Y_old = Y.copy()
 
         # choose a gamma
-
         x_inv = np.array([linalg.pinvh(x) for x in K])
         # while not positive_definite(
         #         K - gamma * grad_loss(K, emp_cov, n_samples, x_inv=x_inv)):
@@ -238,7 +237,8 @@ def time_graph_lasso(
 
         if choose == 'lamda':
             lamda_n = choose_lamda(
-                lamda, K, emp_cov, n_samples=n_samples, beta=beta, alpha=alpha,
+                lamda / eps, K, emp_cov, n_samples=n_samples,
+                beta=beta, alpha=alpha,
                 gamma=gamma, delta=delta, eps=eps,
                 criterion=lamda_criterion, max_iter=1000, p=time_norm,
                 x_inv=x_inv, grad=grad)
