@@ -23,10 +23,10 @@ def glo_prox(w0,tau,blocks,weights,lamda0,tol,max_iter):
     if lamda0 == []:
         lamda0 = np.zeros(B)
 
-    beta = .5;
-    sigma = .1;
-    s_beta = 1;
-    epsilon = 0.001;
+    beta = .5
+    sigma = .1
+    s_beta = 1
+    epsilon = 0.001
 
     lamda_tot = np.zeros(B)
 
@@ -38,13 +38,11 @@ def glo_prox(w0,tau,blocks,weights,lamda0,tol,max_iter):
 
     weights = weights[to_be_projected]
     blocks = blocks[to_be_projected]
-    B = len(blocks)
     lamda = lamda0[to_be_projected]
 
-    q = 0
+    B = len(blocks)
     if B == 0:
-        w = np.zeros(d)
-        return [w, q, lamda_tot]
+        return np.zeros(d), 0, lamda_tot
 
     I = np.zeros((d, B))
     for g in range(B):
@@ -67,17 +65,16 @@ def glo_prox(w0,tau,blocks,weights,lamda0,tol,max_iter):
         for g in range(n_inactive):
             B_inactive[g, g] = np.sum(tmp[blocks[I_inactive[g]]])
             for k in range(g+1, n_inactive):
-                B_inactive[g, k] = np.sum(tmp[
+                B_inactive[k, g] = B_inactive[g, k] = np.sum(tmp[
                     np.intersect1d(blocks[I_inactive[g]],
                                    blocks[I_inactive[k]])])
-                B_inactive[k, g] = B_inactive[g, k]
 
         p_inactive = np.linalg.pinv(B_inactive).dot(grad[I_inactive])
 
         I_active = np.where(np.logical_and(grad > 0, lamda <= epsk))[0]
         n_active = I_active.size
         if n_inactive == 0:
-            i_null = i_null+1
+            i_null += 1
         else:
             i_null = 0
 
@@ -92,29 +89,31 @@ def glo_prox(w0,tau,blocks,weights,lamda0,tol,max_iter):
 
         x_inactive = grad[I_inactive].T.dot(p_inactive)
         test = 1
-        m = 0;
+        m = 0
+        lamda_m = np.zeros(B)
         while test:
             m += 1
             step = beta**m * s_beta
-            lamda_m = np.zeros(B)
-            lamda_m[I_active] = np.maximum(0, lamda_prev[I_active] - step*p_active)
-            lamda_m[I_inactive] = np.maximum(0, lamda_prev[I_inactive] - step*p_inactive)
+            lamda_m[I_active] = np.maximum(
+                0, lamda_prev[I_active] - step * p_active)
+            lamda_m[I_inactive] = np.maximum(
+                0, lamda_prev[I_inactive] - step * p_inactive)
             s_m = I.dot(lamda_m)
-            fdiff = (w0**2).T.dot(I.dot((lamda_m-lamda)) / ((1.+s_m)*(1+s))) \
+            fdiff = (w0**2).T.dot(I.dot(lamda_m - lamda) / ((1+s_m)*(1+s))) \
                 + np.sum(weights * (lamda - lamda_m))
-            x_active = grad[I_active].T*(lamda[I_active]-lamda_m[I_active])
-            test = any(fdiff < sigma*(step*x_inactive+x_active))
+            x_active = grad[I_active].T.dot(lamda[I_active]-lamda_m[I_active])
+            test = fdiff < sigma * (step * x_inactive + x_active)
 
         lamda = lamda_m.copy()
         if all(grad[lamda == 0] >= 0) and all(abs(grad[lamda > 0]) < tol):
             break
 
-    # given the solution of the dual problem, lamda, compute the primal solution w
+    # given the solution of dual problem, lamda, compute the primal solution w
     s = I.dot(lamda)
     w = w0 * (1 - 1./(1+s))
-
     lamda_tot[to_be_projected] = lamda
-    return [w, q, lamda_tot]
+
+    return w, q, lamda_tot
 
 
 def glopridu_algorithm(
