@@ -96,11 +96,14 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
     # lamda = 1.
     if x_inv is None:
         x_inv = np.array([linalg.pinvh(_) for _ in x])
+    if grad is None:
+        grad = grad_loss(x, emp_cov, n_samples, x_inv=x_inv)
+
     prox = _J(x, beta=beta, alpha=alpha, lamda=1, gamma=gamma, S=emp_cov,
               n_samples=n_samples, p=p, x_inv=x_inv, grad=grad)
     partial_f = partial(loss, n_samples=n_samples, S=emp_cov)
     fx = partial_f(K=x)
-    gradx = grad_loss(x, emp_cov, n_samples)
+
     if criterion == 'c':
         gx = penalty(x, lamda, beta, partial(vector_p_norm, p=p))
     for i in range(max_iter):
@@ -110,13 +113,13 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
         iter_diff = x1 - x
         loss_diff = partial_f(K=x1) - fx
         # iter_diff_gradient = iter_diff.ravel().dot(gradx.ravel())
-        iter_diff_gradient = np.hstack(iter_diff).dot(np.hstack(gradx).T).sum()
-        # iter_diff_gradient = np.vstack(iter_diff).dot(np.vstack(gradx).T).sum()
+        iter_diff_gradient = np.hstack(iter_diff).dot(np.hstack(grad).T).sum()
+        # iter_diff_grad = np.vstack(iter_diff).dot(np.vstack(grad).T).sum()
 
         if criterion == 'a':
             tolerance = delta * np.linalg.norm(iter_diff) / (gamma * lamda)
             gradx1 = grad_loss(x1, emp_cov, n_samples)
-            grad_diff = gradx1.ravel() - gradx.ravel()
+            grad_diff = gradx1.ravel() - grad.ravel()
             if np.linalg.norm(grad_diff) <= tolerance:
                 # print("Choose lamda = %.2f" % lamda)
                 return lamda
@@ -134,7 +137,7 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
             y = _J(x, beta, alpha, gamma, 1, emp_cov, n_samples, p=p)
             gy = penalty(y, lamda, beta, partial(vector_p_norm, p=p))
             tolerance = (1 - delta) * lamda * (
-                gy - gx + (y - x).ravel().dot(gradx.ravel()))
+                gy - gx + (y - x).ravel().dot(grad.ravel()))
             if obj_diff <= tolerance:
                 # print("Choose lamda = %.2f" % lamda)
                 return lamda
@@ -151,7 +154,7 @@ def fista_step(Y, Y_diff, t):
 
 def time_graph_lasso(
         emp_cov, n_samples, alpha=0.01, beta=1., max_iter=100, verbose=False,
-        tol=1e-4, delta=1e-4, gamma=1., eps=0.5, lamda_init=1,
+        tol=1e-4, delta=1e-4, gamma=1., lamda=1., eps=0.5,
         return_history=False, return_n_iter=True, choose='gamma',
         lamda_criterion='b', time_norm=1, compute_objective=True):
     """Time-varying graphical lasso solver.
@@ -204,23 +207,18 @@ def time_graph_lasso(
     # Y = K.copy()
 
     checks = []
-    lamda = lamda_init
-    # t = 1
     obj_partial = partial(
         objective, n_samples=n_samples, emp_cov=emp_cov,
         alpha=alpha, beta=beta, psi=partial(vector_p_norm, p=time_norm))
     for iteration_ in range(max_iter):
-        k_previous = K.copy()  # np.ones_like(S) + 5000
-        # Y_old = Y.copy()
-
-        # choose a gamma
-        x_inv = np.array([linalg.pinvh(x) for x in K])
-        # while not positive_definite(
-        #         K - gamma * grad_loss(K, emp_cov, n_samples, x_inv=x_inv)):
-        #     gamma *= 0.9
         if not positive_definite(K):
             warnings.warn("precision is not positive definite.")
             break
+
+        k_previous = K.copy()
+
+        # choose a gamma
+        x_inv = np.array([linalg.pinvh(x) for x in K])
 
         # total variation
         # Y = _J(K, beta, alpha, gamma, 1, S, n_samples)
@@ -229,23 +227,23 @@ def time_graph_lasso(
             gamma = choose_gamma(
                 gamma, K, emp_cov, n_samples, beta, alpha, lamda, grad,
                 delta=delta, eps=eps, max_iter=1000, p=time_norm, x_inv=x_inv)
-        else:
-            gamma = update_gamma(gamma, iteration_, eps=1e-4)
+        # else:
+        #     gamma = update_gamma(gamma, iteration_, eps=1e-4)
 
         y = prox_FL(K - gamma * grad,
                     beta * gamma, alpha * gamma, p=time_norm)
 
         if choose == 'lamda':
-            lamda_n = choose_lamda(
+            lamda = choose_lamda(
                 lamda / eps, K, emp_cov, n_samples=n_samples,
                 beta=beta, alpha=alpha,
                 gamma=gamma, delta=delta, eps=eps,
                 criterion=lamda_criterion, max_iter=1000, p=time_norm,
                 x_inv=x_inv, grad=grad)
-        else:
-            lamda_n = lamda
+        # else:
+        #     lamda_n = lamda
 
-        K += np.maximum(lamda_n, 1e-8) * (y - K)
+        K += np.maximum(lamda, 1e-8) * (y - K)
         # K = K + choose_lamda(lamda, K, emp_cov, n_samples, beta, alpha,
         #                      gamma, delta=delta, criterion=lamda_criterion,
         #                      max_iter=50) * (Y - K)
@@ -360,7 +358,7 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
 
     def __init__(self, alpha=0.01, beta=1., time_on_axis='first', tol=1e-4,
                  max_iter=100, verbose=False, assume_centered=False,
-                 compute_objective=True, eps=0.5, choose='gamma', lamda_init=1,
+                 compute_objective=True, eps=0.5, choose='gamma', lamda=1,
                  delta=1e-4, gamma=1., lamda_criterion='b', time_norm=1):
         super(TimeGraphLassoForwardBackward, self).__init__(
             alpha=alpha, tol=tol, max_iter=max_iter,
@@ -373,7 +371,7 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
         self.time_norm = time_norm
         self.eps = eps
         self.choose = choose
-        self.lamda_init = lamda_init
+        self.lamda = lamda
 
     def _fit(self, emp_cov, n_samples):
         """Fit the TimeGraphLasso model to X.
@@ -392,7 +390,7 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
                 compute_objective=self.compute_objective,
                 time_norm=self.time_norm, lamda_criterion=self.lamda_criterion,
                 gamma=self.gamma, delta=self.delta, eps=self.eps,
-                choose=self.choose, lamda_init=self.lamda_init)
+                choose=self.choose, lamda=self.lamda)
         return self
 
     def fit(self, X, y=None):
