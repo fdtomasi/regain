@@ -1,5 +1,5 @@
 """Time graph lasso via forward_backward (for now only in case of l1 norm)."""
-from __future__ import division
+from __future__ import division, print_function
 
 import warnings
 from functools import partial
@@ -59,28 +59,22 @@ def choose_gamma(gamma, x, emp_cov, n_samples, beta, alpha, lamda, grad,
     Salzo S. (2017). https://doi.org/10.1137/16M1073741
 
     """
-    # lamda = 1.
-    if x_inv is None:
-        x_inv = np.array([linalg.pinvh(_) for _ in x])
     if grad is None:
         grad = grad_loss(x, emp_cov, n_samples, x_inv=x_inv)
 
     partial_f = partial(loss, n_samples=n_samples, S=emp_cov)
     fx = partial_f(K=x)
     for i in range(max_iter):
-        x1 =_J(x, beta, alpha, gamma, lamda, emp_cov, n_samples, p=p,
-               grad=grad, x_inv=x_inv)
+        prox = prox_FL(x - gamma * grad, beta * gamma, alpha * gamma, p=p)
+        x1 = x + lamda * (prox - x)
         iter_diff = x1 - x
         loss_diff = partial_f(K=x1) - fx
         # iter_diff_gradient_2 = iter_diff.ravel().dot(gradx.ravel())
         iter_diff_gradient = np.hstack(iter_diff).dot(np.hstack(grad).T).sum()
         # iter_diff_gradient = np.vstack(iter_diff).dot(np.vstack(gradx).T).sum()
-        # print(iter_diff_gradient)
-        # print(iter_diff_gradient_2)
 
         tolerance = delta * squared_norm(iter_diff) / (gamma * lamda)
         if loss_diff - iter_diff_gradient <= tolerance:
-            # print("Choose gamma = %f" % gamma)
             return gamma
         gamma *= eps
     return gamma
@@ -238,7 +232,7 @@ def time_graph_lasso(
             gamma = choose_gamma(
                 gamma / eps, K, emp_cov, n_samples=n_samples,
                 beta=beta, alpha=alpha, lamda=lamda, grad=grad,
-                delta=delta, eps=eps, max_iter=1000, p=time_norm, x_inv=x_inv)
+                delta=delta, eps=eps, max_iter=200, p=time_norm, x_inv=x_inv)
         # else:
         #     gamma = update_gamma(gamma, iteration_, eps=1e-4)
 
@@ -285,27 +279,29 @@ def time_graph_lasso(
 
         if choose == 'gamma':
             # use this convergence criterion
-            norm = np.linalg.norm
             subgrad = (x_hat - K) / gamma
             if 0:
                 grad = grad_loss(K, emp_cov, n_samples)
                 # grad = upper_diag_3d(grad)
                 # subgrad = upper_diag_3d(subgrad)
-                res_norm = norm(grad + subgrad)
+                res_norm = np.linalg.norm(grad + subgrad)
 
                 if iteration_ == 0:
                     normalizer = res_norm + 1e-4
-                max_residual = max(norm(grad), norm(subgrad)) + 1e-4
+                max_residual = max(np.linalg.norm(grad),
+                                   np.linalg.norm(subgrad)) + 1e-4
             else:
-                res_norm = norm(K - k_previous) / gamma
+                res_norm = np.linalg.norm(K - k_previous) / gamma
                 max_residual = max(max_residual, res_norm)
-                normalizer = max(norm(grad), norm(subgrad)) + 1e-4
+                normalizer = max(np.linalg.norm(grad),
+                                 np.linalg.norm(subgrad)) + 1e-4
 
             r_rel = res_norm / max_residual
             r_norm = res_norm / normalizer
             # print(r_rel, r_norm)
 
-            if r_rel <= tol or r_norm <= tol:
+            if (r_rel <= tol or r_norm <= tol): # or (
+                    # check.rnorm <= check.e_pri and iteration_ > 0):
                 break
         elif check.rnorm <= check.e_pri and iteration_ > 0:
             # and check.snorm <= check.e_dual:
@@ -464,13 +460,24 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
 
         if self.alpha == 'max':
             # use sklearn alpha max
-            from sklearn.covariance.graph_lasso_ import alpha_max
-            self.alpha = max(alpha_max(e) for e in emp_cov)
-        if self.gamma == 'max':
-            lipschitz_constant = max(get_lipschitz(e) for e in emp_cov)
-            self.gamma = 1.98 / lipschitz_constant
+            self.alpha = self.alpha_max(emp_cov, is_covariance=True)
+
+        # if self.gamma == 'max':
+        #     lipschitz_constant = max(get_lipschitz(e) for e in emp_cov)
+        #     self.gamma = 1.98 / lipschitz_constant
 
         return self._fit(emp_cov, n_samples)
+
+    def alpha_max(self, X, is_covariance=False):
+        """Compute the alpha_max for the problem at hand, based on sklearn."""
+        from sklearn.covariance.graph_lasso_ import alpha_max
+        if is_covariance:
+            emp_cov = X
+        else:
+            emp_cov = np.array([empirical_covariance(
+                x, assume_centered=self.assume_centered) for x in X])
+        return max(alpha_max(e) for e in emp_cov)
+
 
     def score(self, X_test, y=None):
         """Computes the log-likelihood of a Gaussian data set with
