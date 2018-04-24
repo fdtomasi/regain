@@ -131,11 +131,6 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
                 return lamda
         elif criterion == 'b':
             loss_diff = partial_f(K=x1) - fx
-            # tolerance = delta * squared_norm(iter_diff) / (gamma * lamda)
-            # if loss_diff - iter_diff_gradient <= tolerance:
-            #     return lamda
-
-            # after some mathematical reductions ...
             if loss_diff <= lamda * tolerance:
                 return lamda
         elif criterion == 'c':
@@ -232,20 +227,13 @@ def time_graph_lasso(
             break
 
         k_previous = K.copy()
-
-        # choose a gamma
         x_inv = np.array([linalg.pinvh(x) for x in K])
-
-        # total variation
-        # Y = _J(K, beta, alpha, gamma, 1, S, n_samples)
         grad = grad_loss(K, emp_cov, n_samples, x_inv=x_inv)
         if choose == 'gamma':
             gamma = choose_gamma(
                 gamma / eps, K, emp_cov, n_samples=n_samples,
                 beta=beta, alpha=alpha, lamda=lamda, grad=grad,
                 delta=delta, eps=eps, max_iter=200, p=time_norm, x_inv=x_inv)
-        # else:
-        #     gamma = update_gamma(gamma, iteration_, eps=1e-4)
 
         x_hat = K - gamma * grad
         y = prox_FL(x_hat, beta * gamma, alpha * gamma, p=time_norm)
@@ -259,10 +247,6 @@ def time_graph_lasso(
                 x_inv=x_inv, grad=grad, prox=y)
 
         K = K + np.maximum(lamda, 0) * (y - K)
-        # K = K + choose_lamda(lamda, K, emp_cov, n_samples, beta, alpha,
-        #                      gamma, delta=delta, criterion=lamda_criterion,
-        #                      max_iter=50) * (Y - K)
-
         # K, t = fista_step(Y, Y - Y_old, t)
 
         check = convergence(
@@ -289,8 +273,6 @@ def time_graph_lasso(
         subgrad = (x_hat - K) / gamma
         if 1:
             grad = grad_loss(K, emp_cov, n_samples)
-            # grad = upper_diag_3d(grad)
-            # subgrad = upper_diag_3d(subgrad)
             res_norm = np.linalg.norm(grad + subgrad)
 
             if iteration_ == 0:
