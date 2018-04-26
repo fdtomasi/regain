@@ -9,7 +9,6 @@ import scipy.sparse as sp
 from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.covariance import empirical_covariance, log_likelihood
-from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_array
 
 from regain.covariance.time_graph_lasso_ import TimeGraphLasso, loss
@@ -23,7 +22,7 @@ from regain.validation import check_array_dimensions
 def penalty(precision, alpha, beta, psi):
     """Penalty for time-varying graphical lasso."""
     obj = alpha * sum(map(l1_od_norm, precision))
-    obj += beta * sum(map(psi, precision[1:] - precision[:-1]))
+    obj += beta * psi(precision[1:] - precision[:-1])
     return obj
 
 
@@ -51,12 +50,16 @@ def _J(x, beta, alpha, gamma, lamda, S, n_samples, p=1, x_inv=None, grad=None):
 
 
 def _scalar_product(x, y):
-    return np.hstack(x).dot(np.hstack(y).T).sum()
+    # return np.hstack(x).dot(np.hstack(y).T).sum()
+    # return x.reshape(np.prod(x.shape[:-1]), x.shape[-1]).ravel().dot((y).ravel()).sum()
+    x = np.array([b.flatten() for b in x]).T
+    y = np.array([b.flatten() for b in y]).T
+    return (x.dot(y.T).sum())
 
 
 def choose_gamma(gamma, x, emp_cov, n_samples, beta, alpha, lamda, grad,
                  delta=1e-4, eps=0.5, max_iter=1000, p=1, x_inv=None):
-    """Choose alpha for backtracking.
+    """Choose gamma for backtracking.
 
     References
     ----------
@@ -97,8 +100,7 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
     if grad is None:
         grad = grad_loss(x, emp_cov, n_samples, x_inv=x_inv)
     if prox is None:
-        prox = _J(x, beta=beta, alpha=alpha, lamda=1, gamma=gamma, S=emp_cov,
-                  n_samples=n_samples, p=p, x_inv=x_inv, grad=grad)
+        prox = prox_FL(x - gamma * grad, beta * gamma, alpha * gamma, p=p)
 
     partial_f = partial(loss, n_samples=n_samples, S=emp_cov)
     fx = partial_f(K=x)
@@ -120,10 +122,8 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
 
         if criterion == 'a':
             iter_diff = x1 - x
-            # iter_diff_gradient = np.hstack(iter_diff).dot(np.hstack(grad).T).sum()
             gradx1 = grad_loss(x1, emp_cov, n_samples)
             grad_diff = gradx1 - grad
-            # if np.linalg.norm(grad_diff) <= tolerance:
             norm_grad_diff = np.sqrt(_scalar_product(grad_diff, grad_diff))
             norm_iter_diff = np.sqrt(_scalar_product(iter_diff, iter_diff))
             tolerance = delta * norm_iter_diff / (gamma * lamda)
@@ -137,7 +137,6 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
             obj_diff = objective(
                 n_samples, emp_cov, x1, alpha, beta,
                 partial(vector_p_norm, p=p)) - objective_x
-
             if obj_diff <= lamda * tolerance:
                 return lamda
         else:
@@ -240,9 +239,9 @@ def time_graph_lasso(
 
         if choose == 'lamda':
             lamda = choose_lamda(
-                lamda / eps, K, emp_cov, n_samples=n_samples,
-                beta=beta, alpha=alpha,
-                gamma=gamma, delta=delta, eps=eps,
+                lamda / eps if iteration_ > 0 else lamda,
+                K, emp_cov, n_samples=n_samples,
+                beta=beta, alpha=alpha, gamma=gamma, delta=delta, eps=eps,
                 criterion=lamda_criterion, max_iter=200, p=time_norm,
                 x_inv=x_inv, grad=grad, prox=y)
 
@@ -271,7 +270,7 @@ def time_graph_lasso(
 
         # use this convergence criterion
         subgrad = (x_hat - K) / gamma
-        if 1:
+        if 0:
             grad = grad_loss(K, emp_cov, n_samples)
             res_norm = np.linalg.norm(grad + subgrad)
 
@@ -287,7 +286,6 @@ def time_graph_lasso(
 
         r_rel = res_norm / max_residual
         r_norm = res_norm / normalizer
-        # print(r_rel, r_norm)
 
         if (r_rel <= tol or r_norm <= tol): # or (
                 # check.rnorm <= check.e_pri and iteration_ > 0):
