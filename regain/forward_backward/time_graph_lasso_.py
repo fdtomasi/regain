@@ -380,7 +380,8 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
     def __init__(self, alpha=0.01, beta=1., time_on_axis='first', tol=1e-4,
                  max_iter=100, verbose=False, assume_centered=False,
                  compute_objective=True, eps=0.5, choose='gamma', lamda=1,
-                 delta=1e-4, gamma=1., lamda_criterion='b', time_norm=1):
+                 delta=1e-4, gamma=1., lamda_criterion='b', time_norm=1,
+                 return_history=False):
         super(TimeGraphLassoForwardBackward, self).__init__(
             alpha=alpha, tol=tol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered,
@@ -393,6 +394,7 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
         self.eps = eps
         self.choose = choose
         self.lamda = lamda
+        self.return_history = return_history
 
     def _fit(self, emp_cov, n_samples):
         """Fit the TimeGraphLasso model to X.
@@ -403,15 +405,19 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
             Empirical covariance of data.
 
         """
-        self.precision_, self.covariance_, self.n_iter_ = \
-            time_graph_lasso(
-                emp_cov, n_samples=n_samples, alpha=self.alpha, beta=self.beta,
-                tol=self.tol, max_iter=self.max_iter, verbose=self.verbose,
-                return_n_iter=True, return_history=False,
-                compute_objective=self.compute_objective,
-                time_norm=self.time_norm, lamda_criterion=self.lamda_criterion,
-                gamma=self.gamma, delta=self.delta, eps=self.eps,
-                choose=self.choose, lamda=self.lamda)
+        out = time_graph_lasso(
+            emp_cov, n_samples=n_samples, alpha=self.alpha, beta=self.beta,
+            tol=self.tol, max_iter=self.max_iter, verbose=self.verbose,
+            return_n_iter=True, return_history=self.return_history,
+            compute_objective=self.compute_objective,
+            time_norm=self.time_norm, lamda_criterion=self.lamda_criterion,
+            gamma=self.gamma, delta=self.delta, eps=self.eps,
+            choose=self.choose, lamda=self.lamda)
+
+        if self.return_history:
+            self.precision_, self.covariance_, self.history_, self.n_iter_ = out
+        else:
+            self.precision_, self.covariance_, self.n_iter_ = out
         return self
 
     def fit(self, X, y=None):
