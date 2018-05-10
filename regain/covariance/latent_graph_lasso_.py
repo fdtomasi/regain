@@ -4,6 +4,7 @@ from __future__ import division
 import warnings
 
 import numpy as np
+from scipy import linalg
 from six.moves import range
 
 from regain.covariance.graph_lasso_ import GraphLasso, logl
@@ -69,6 +70,12 @@ def latent_graph_lasso(
         for the primal and dual residual norms at each iteration.
 
     """
+    # _, n_features = emp_cov.shape
+    # covariance_ = emp_cov.copy()
+    # covariance_ *= 0.95
+    # covariance_.flat[::n_features + 1] = emp_cov.flat[::n_features + 1]
+    # K = linalg.pinvh(covariance_)
+
     K = np.zeros_like(emp_cov)
     L = np.zeros_like(emp_cov)
     U = np.zeros_like(emp_cov)
@@ -121,7 +128,8 @@ def latent_graph_lasso(
     else:
         warnings.warn("Objective did not converge.")
 
-    return_list = [K, L, emp_cov]
+    covariance_ = linalg.pinvh(K)
+    return_list = [K, L, covariance_]
     if return_history:
         return_list.append(checks)
     if return_n_iter:

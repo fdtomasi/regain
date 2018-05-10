@@ -78,7 +78,14 @@ def graph_lasso(
         for the primal and dual residual norms at each iteration.
 
     """
-    Z = np.zeros_like(emp_cov)
+    _, n_features = emp_cov.shape
+    covariance_ = emp_cov.copy()
+    covariance_ *= 0.95
+    covariance_.flat[::n_features + 1] = emp_cov.flat[::n_features + 1]
+    from scipy import linalg
+    Z = linalg.pinvh(covariance_)
+
+    # Z = np.zeros_like(emp_cov)
     U = np.zeros_like(emp_cov)
     Z_old = np.zeros_like(Z)
 
