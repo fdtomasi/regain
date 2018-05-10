@@ -63,6 +63,25 @@ def blockwise_soft_thresholding_symmetric(a, lamda):
     return output
 
 
+# %% Perform prox operator:   min_x (1/2t)||x-w||^2 subject to |x|<=radius
+# function [ z ] = project_1ball( z,radius )
+# %  By Moreau's identity, projection onto 1-norm ball can be computed
+# %  using the proximal of the conjugate problem, which is L-infinity
+# %  minimization.
+#   z = z -  prox_infinityNorm(z,radius);
+# end
+# %% Perform prox operator:   min ||x||_inf + (1/2t)||x-w||^2
+# function [ xk ] = prox_infinityNorm( w,t )
+#     N = length(w);
+#     wabs = abs(w);
+#     ws = (cumsum(sort(wabs,'descend'))- t)./(1:N)';
+#     alphaopt = max(ws);
+#     if alphaopt>0
+#       xk = min(wabs,alphaopt).*sign(w); % truncation step
+#     else
+#       xk = zeros(size(w)); % if t is big, then solution is zero
+#     end
+# end
 def prox_linf_1d(a, lamda):
     """Proximal operator for the l-inf norm.
 

@@ -5,10 +5,12 @@ from scipy.optimize import minimize
 
 def vector_p_norm(a, p=1, time_on_axis='first'):
     """Sum of norms for each vector."""
-    if time_on_axis == 'first':
-        a = a.T
-    return np.sum(np.linalg.norm(a.reshape(np.prod(a.shape[:-1]), a.shape[-1]),
-                  axis=1, ord=p))
+    b = np.array([b.flatten() for b in a]).T
+    return np.linalg.norm(b, axis=1, ord=1).sum()
+    # if time_on_axis == 'first':
+    #     a = a.T
+    # return np.sum(np.linalg.norm(a.reshape(np.prod(a.shape[:-1]), a.shape[-1]),
+    #               axis=1, ord=p))
 
 
 def l1_norm(precision):
