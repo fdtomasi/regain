@@ -83,6 +83,8 @@ def make_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
         if func is None:
             raise ValueError("Unknown mode %s. "
                              "Choices are: %s" % (mode, modes.keys()))
+        kwargs.update(degree=degree, epsilon=epsilon,
+                      keep_sparsity=keep_sparsity, proportional=proportional)
     else:
         func = partial(
             make_covariance, update_ell=update_ell, update_theta=update_theta,
