@@ -361,7 +361,7 @@ def make_fixed_sparsity(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
 
 
 def make_sin(n_dim_obs, n_dim_lat, T, shape='smooth', closeness=1,
-             normalize=False):
+             normalize=False, **kwargs):
     upper_idx = np.triu_indices(n_dim_obs, 1)
     n_interactions = len(upper_idx[0])
     x = np.tile(np.linspace(0, (T-1.) / closeness, T), (n_interactions, 1))
