@@ -162,7 +162,9 @@ def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
             "Only spectral and frobenius norms are implemented")
     # optionally scale the error norm
     if scaling:
-        squared_norm = squared_norm / error.shape[0]
+        scaling_factor = error.shape[0] if len(error.shape) < 3 \
+            else np.prod(error.shape[:2])
+        squared_norm = squared_norm / scaling_factor
     # finally get either the squared norm or the norm
     if squared:
         result = squared_norm
