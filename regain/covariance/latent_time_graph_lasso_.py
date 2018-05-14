@@ -342,7 +342,7 @@ class LatentTimeGraphLasso(TimeGraphLasso):
         """
         return self.precision_ - self.latent_
 
-    def _fit(self, emp_cov):
+    def _fit(self, emp_cov, n_samples):
         """Fit the LatentTimeGraphLasso model to X.
 
         Parameters
@@ -353,7 +353,8 @@ class LatentTimeGraphLasso(TimeGraphLasso):
         """
         self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
             latent_time_graph_lasso(
-                emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
+                emp_cov, n_samples=n_samples,
+                alpha=self.alpha, tau=self.tau, rho=self.rho,
                 beta=self.beta, eta=self.eta, mode=self.mode,
                 tol=self.tol, rtol=self.rtol, psi=self.psi, phi=self.phi,
                 max_iter=self.max_iter, verbose=self.verbose,

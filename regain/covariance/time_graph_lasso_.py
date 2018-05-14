@@ -289,7 +289,7 @@ class TimeGraphLasso(GraphLasso):
         """
         return self.get_precision()
 
-    def _fit(self, emp_cov):
+    def _fit(self, emp_cov, n_samples):
         """Fit the TimeGraphLasso model to X.
 
         Parameters
@@ -301,7 +301,7 @@ class TimeGraphLasso(GraphLasso):
         self.precision_, self.covariance_, self.n_iter_ = \
             time_graph_lasso(
                 emp_cov, alpha=self.alpha, rho=self.rho,
-                beta=self.beta, mode=self.mode, n_samples=None,
+                beta=self.beta, mode=self.mode, n_samples=n_samples,
                 tol=self.tol, rtol=self.rtol, psi=self.psi,
                 max_iter=self.max_iter, verbose=self.verbose,
                 return_n_iter=True, return_history=False,
@@ -338,8 +338,9 @@ class TimeGraphLasso(GraphLasso):
             self.location_ = X.mean(1).reshape(X.shape[0], 1, X.shape[2])
         emp_cov = np.array([empirical_covariance(
             x, assume_centered=self.assume_centered) for x in X])
+        n_samples = np.array([x.shape[0] for x in X])
 
-        return self._fit(emp_cov)
+        return self._fit(emp_cov, n_samples)
 
     def score(self, X_test, y=None):
         """Computes the log-likelihood of a Gaussian data set with
@@ -377,8 +378,9 @@ class TimeGraphLasso(GraphLasso):
         test_cov = np.array([empirical_covariance(
             x, assume_centered=True) for x in X_test - self.location_])
 
-        res = sum(log_likelihood(S, K) for S, K in zip(
-            test_cov, self.get_observed_precision()))
+        n_samples = np.array([x.shape[0] for x in X_test])
+        res = sum(n * log_likelihood(S, K) for S, K, n in zip(
+            test_cov, self.get_observed_precision(), n_samples))
 
         # ALLA  MATLAB1
         # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
