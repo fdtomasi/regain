@@ -34,6 +34,10 @@ def check_norm_prox(function):
 
 def check_array_dimensions(X, n_dimensions=3, time_on_axis='first'):
     """Validate input matrix."""
+    if isinstance(X, list):
+        warnings.warn("Input data is list; assumed to be a list of matrices "
+                      "for each time point")
+        return X
     if X.ndim == n_dimensions - 1:
         warnings.warn("Input data should have %d"
                       " dimensions, found %d. Reshaping input into %s"

@@ -328,17 +328,29 @@ class TimeGraphLasso(GraphLasso):
         X = check_array_dimensions(
             X, n_dimensions=3, time_on_axis=self.time_on_axis)
 
+        is_list = isinstance(X, list)
         # Covariance does not make sense for a single feature
         X = np.array([check_array(x, ensure_min_features=2,
                       ensure_min_samples=2, estimator=self) for x in X])
+        if is_list:
+            n_times = len(X)
+            if np.unique([x.shape[1] for x in X]).size != 1:
+                raise ValueError("Input data cannot have different number "
+                                 "of variables.")
+            n_dimensions = X[0].shape[1]
+        else:
+            n_times = X.shape[0]
+            n_dimensions = X.shape[2]
+
+        n_samples = np.array([x.shape[0] for x in X])
 
         if self.assume_centered:
-            self.location_ = np.zeros((X.shape[0], 1, X.shape[2]))
+            self.location_ = np.zeros((n_times, 1, n_dimensions))
         else:
-            self.location_ = X.mean(1).reshape(X.shape[0], 1, X.shape[2])
+            mean = np.array([x.mean(0) for x in X]) if is_list else X.mean(1)
+            self.location_ = mean.reshape(n_times, 1, n_dimensions)
         emp_cov = np.array([empirical_covariance(
             x, assume_centered=self.assume_centered) for x in X])
-        n_samples = np.array([x.shape[0] for x in X])
 
         return self._fit(emp_cov, n_samples)
 
