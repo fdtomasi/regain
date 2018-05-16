@@ -405,6 +405,10 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
             Empirical covariance of data.
 
         """
+        if self.alpha == 'max':
+            # use sklearn alpha max
+            self.alpha = self.alpha_max(emp_cov, is_covariance=True)
+
         out = time_graph_lasso(
             emp_cov, n_samples=n_samples, alpha=self.alpha, beta=self.beta,
             tol=self.tol, max_iter=self.max_iter, verbose=self.verbose,
@@ -420,47 +424,6 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
             self.precision_, self.covariance_, self.n_iter_ = out
         return self
 
-    def fit(self, X, y=None):
-        """Fit the TimeGraphLasso model to X.
-
-        Parameters
-        ----------
-        X : ndarray, shape (n_time, n_samples, n_features), or
-                (n_samples, n_features, n_time)
-            Data from which to compute the covariance estimate.
-            If shape is (n_samples, n_features, n_time), then set
-            `time_on_axis = 'last'`.
-        y : (ignored)
-
-        """
-        if sp.issparse(X):
-            raise TypeError("sparse matrices not supported.")
-
-        X = check_array_dimensions(
-            X, n_dimensions=3, time_on_axis=self.time_on_axis)
-
-        # Covariance does not make sense for a single feature
-        X = np.array([check_array(x, ensure_min_features=2,
-                      ensure_min_samples=2, estimator=self) for x in X])
-
-        if self.assume_centered:
-            self.location_ = np.zeros((X.shape[0], 1, X.shape[2]))
-        else:
-            self.location_ = X.mean(1).reshape(X.shape[0], 1, X.shape[2])
-        emp_cov = np.array([empirical_covariance(
-            x, assume_centered=self.assume_centered) for x in X])
-        n_samples = np.array([x.shape[0] for x in X])
-
-        if self.alpha == 'max':
-            # use sklearn alpha max
-            self.alpha = self.alpha_max(emp_cov, is_covariance=True)
-
-        # if self.gamma == 'max':
-        #     lipschitz_constant = max(get_lipschitz(e) for e in emp_cov)
-        #     self.gamma = 1.98 / lipschitz_constant
-
-        return self._fit(emp_cov, n_samples)
-
     def alpha_max(self, X, is_covariance=False):
         """Compute the alpha_max for the problem at hand, based on sklearn."""
         from sklearn.covariance.graph_lasso_ import alpha_max
@@ -470,48 +433,6 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
             emp_cov = np.array([empirical_covariance(
                 x, assume_centered=self.assume_centered) for x in X])
         return max(alpha_max(e) for e in emp_cov)
-
-    def score(self, X_test, y=None):
-        """Computes the log-likelihood of a Gaussian data set with
-        `self.covariance_` as an estimator of its covariance matrix.
-
-        Parameters
-        ----------
-        X_test : array-like, shape = [n_samples, n_features]
-            Test data of which we compute the likelihood, where n_samples is
-            the number of samples and n_features is the number of features.
-            X_test is assumed to be drawn from the same distribution than
-            the data used in fit (including centering).
-
-        y : not used, present for API consistence purpose.
-
-        Returns
-        -------
-        res : float
-            The likelihood of the data set with `self.covariance_` as an
-            estimator of its covariance matrix.
-
-        """
-        if sp.issparse(X_test):
-            raise TypeError("sparse matrices not supported.")
-
-        X_test = check_array_dimensions(
-            X_test, n_dimensions=3, time_on_axis=self.time_on_axis)
-
-        # Covariance does not make sense for a single feature
-        X_test = np.array([
-            check_array(x, ensure_min_features=2,
-                        ensure_min_samples=2, estimator=self) for x in X_test])
-
-        # compute empirical covariance of the test set
-        test_cov = np.array([empirical_covariance(
-            x, assume_centered=True) for x in X_test - self.location_])
-
-        n_samples = np.array([x.shape[0] for x in X_test])
-        res = sum(n * log_likelihood(S, K) for S, K, n in zip(
-            test_cov, self.get_observed_precision(), n_samples))
-
-        return res
 
 
 def get_lipschitz(data):

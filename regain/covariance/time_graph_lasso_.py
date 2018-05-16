@@ -291,7 +291,7 @@ class TimeGraphLasso(GraphLasso):
         """
         return self.get_precision()
 
-    def _fit(self, emp_cov):
+    def _fit(self, emp_cov, n_samples):
         """Fit the TimeGraphLasso model to X.
 
         Parameters
@@ -302,7 +302,7 @@ class TimeGraphLasso(GraphLasso):
         """
         out = time_graph_lasso(
                 emp_cov, alpha=self.alpha, rho=self.rho,
-                beta=self.beta, mode=self.mode, n_samples=None,
+                beta=self.beta, mode=self.mode, n_samples=n_samples,
                 tol=self.tol, rtol=self.rtol, psi=self.psi,
                 max_iter=self.max_iter, verbose=self.verbose,
                 return_n_iter=True, return_history=self.return_history,
@@ -333,18 +333,31 @@ class TimeGraphLasso(GraphLasso):
         X = check_array_dimensions(
             X, n_dimensions=3, time_on_axis=self.time_on_axis)
 
+        is_list = isinstance(X, list)
         # Covariance does not make sense for a single feature
         X = np.array([check_array(x, ensure_min_features=2,
                       ensure_min_samples=2, estimator=self) for x in X])
+        if is_list:
+            n_times = len(X)
+            if np.unique([x.shape[1] for x in X]).size != 1:
+                raise ValueError("Input data cannot have different number "
+                                 "of variables.")
+            n_dimensions = X[0].shape[1]
+        else:
+            n_times = X.shape[0]
+            n_dimensions = X.shape[2]
+
+        n_samples = np.array([x.shape[0] for x in X])
 
         if self.assume_centered:
-            self.location_ = np.zeros((X.shape[0], 1, X.shape[2]))
+            self.location_ = np.zeros((n_times, 1, n_dimensions))
         else:
-            self.location_ = X.mean(1).reshape(X.shape[0], 1, X.shape[2])
+            mean = np.array([x.mean(0) for x in X]) if is_list else X.mean(1)
+            self.location_ = mean.reshape(n_times, 1, n_dimensions)
         emp_cov = np.array([empirical_covariance(
             x, assume_centered=self.assume_centered) for x in X])
 
-        return self._fit(emp_cov)
+        return self._fit(emp_cov, n_samples)
 
     def score(self, X_test, y=None):
         """Computes the log-likelihood of a Gaussian data set with
@@ -382,8 +395,9 @@ class TimeGraphLasso(GraphLasso):
         test_cov = np.array([empirical_covariance(
             x, assume_centered=True) for x in X_test - self.location_])
 
-        res = sum(log_likelihood(S, K) for S, K in zip(
-            test_cov, self.get_observed_precision()))
+        n_samples = np.array([x.shape[0] for x in X_test])
+        res = sum(n * log_likelihood(S, K) for S, K, n in zip(
+            test_cov, self.get_observed_precision(), n_samples))
 
         # ALLA  MATLAB1
         # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
