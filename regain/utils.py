@@ -121,7 +121,7 @@ def error_rank(ells_true, ells_pred):
 
 
 def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
-               squared=True):
+               squared=True, upper_triangular=False):
     """Mean Squared Error between two covariance estimators.
 
     Parameters
@@ -151,6 +151,10 @@ def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
 
     """
     # compute the error
+    if upper_triangular:
+        comp_cov = np.triu(comp_cov, 1)
+        cov = np.triu(cov, 1)
+
     error = comp_cov - cov
     # compute the error norm
     if norm == "frobenius":
