@@ -268,6 +268,7 @@ class TimeGraphLasso(GraphLasso):
                  time_on_axis='first', tol=1e-4, rtol=1e-4,
                  psi='laplacian', max_iter=100,
                  verbose=False, assume_centered=False,
+                 return_history=False,
                  update_rho_options=None, compute_objective=True):
         super(TimeGraphLasso, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
@@ -277,6 +278,7 @@ class TimeGraphLasso(GraphLasso):
         self.beta = beta
         self.psi = psi
         self.time_on_axis = time_on_axis
+        self.return_history = return_history
 
     def get_observed_precision(self):
         """Getter for the observed precision matrix.
@@ -298,15 +300,18 @@ class TimeGraphLasso(GraphLasso):
             Empirical covariance of data.
 
         """
-        self.precision_, self.covariance_, self.n_iter_ = \
-            time_graph_lasso(
+        out = time_graph_lasso(
                 emp_cov, alpha=self.alpha, rho=self.rho,
                 beta=self.beta, mode=self.mode, n_samples=None,
                 tol=self.tol, rtol=self.rtol, psi=self.psi,
                 max_iter=self.max_iter, verbose=self.verbose,
-                return_n_iter=True, return_history=False,
+                return_n_iter=True, return_history=self.return_history,
                 update_rho_options=self.update_rho_options,
                 compute_objective=self.compute_objective)
+        if self.return_history:
+            self.precision_, self.covariance_, self.history_, self.n_iter_ = out
+        else:
+            self.precision_, self.covariance_, self.n_iter_ = out
         return self
 
     def fit(self, X, y=None):
