@@ -5,6 +5,7 @@ import functools
 import logging
 import os
 import sys
+import collections
 from collections import namedtuple
 from contextlib import contextmanager
 
@@ -14,8 +15,20 @@ from scipy.spatial.distance import squareform
 from six.moves import cPickle as pkl
 from sklearn.metrics import average_precision_score
 
-convergence = namedtuple('convergence',
-                         ('obj', 'rnorm', 'snorm', 'e_pri', 'e_dual'))
+
+def namedtuple_with_defaults(typename, field_names, default_values=()):
+    T = collections.namedtuple(typename, field_names)
+    T.__new__.__defaults__ = (None,) * len(T._fields)
+    if isinstance(default_values, collections.Mapping):
+        prototype = T(**default_values)
+    else:
+        prototype = T(*default_values)
+    T.__new__.__defaults__ = tuple(prototype)
+    return T
+
+
+convergence = namedtuple_with_defaults(
+    'convergence', 'obj rnorm snorm e_pri e_dual precision')
 
 
 @contextmanager
@@ -170,7 +183,7 @@ def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
     # optionally scale the error norm
     if scaling:
         scaling_factor = error.shape[0] if len(error.shape) < 3 \
-            else np.prod(error.shape[:2]) * (error.shape[1] - 1) / 2.
+            else np.prod(error.shape[:2]) * ((error.shape[1] - 1) / 2. if upper_triangular else error.shape[1])
         squared_norm = squared_norm / scaling_factor
     # finally get either the squared norm or the norm
     if squared:
