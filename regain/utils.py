@@ -10,6 +10,7 @@ from contextlib import contextmanager
 
 import numpy as np
 import six
+from scipy import stats
 from scipy.spatial.distance import squareform
 from six.moves import cPickle as pkl
 from sklearn.metrics import average_precision_score
@@ -341,3 +342,20 @@ def threshold(a, threshmin=None, threshmax=None, newval=0):
 
     a[mask] = newval
     return a
+
+
+def rho_heuristic(gamma, S, n):
+    """An heuristic for GraphLasso alpha.
+
+    XXX - need testing
+
+    References
+    ----------
+    http://people.eecs.berkeley.edu/~elghaoui/Pubs/CvxTechCovSel_ICML.pdf
+    """
+    diag = np.diag(S)[:, None]
+    m = np.max(diag.dot(diag.T))
+    t = stats.t.pdf(gamma, n-2) * 2
+    num = t * m
+    den = np.sqrt(n - 2 + t * t)
+    return num / den
