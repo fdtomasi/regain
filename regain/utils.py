@@ -11,6 +11,7 @@ from contextlib import contextmanager
 
 import numpy as np
 import six
+from scipy import stats
 from scipy.spatial.distance import squareform
 from six.moves import cPickle as pkl
 from sklearn.metrics import average_precision_score
@@ -354,3 +355,27 @@ def threshold(a, threshmin=None, threshmax=None, newval=0):
 
     a[mask] = newval
     return a
+
+
+def alpha_heuristic(gamma, emp_cov, n_samples):
+    """An heuristic for GraphLasso alpha.
+
+    XXX - need testing
+
+    References
+    ----------
+    http://people.eecs.berkeley.edu/~elghaoui/Pubs/CvxTechCovSel_ICML.pdf
+    """
+    if emp_cov.ndim == 3:
+        diag = np.diagonal(emp_cov, axis1=1, axis2=2)
+        m = np.array([d[:, None].dot(d[None, :]) for d in diag]).max()
+    elif emp_cov.ndim == 2:
+        diag = np.diag(emp_cov)[:, None]
+        m = np.max(diag.dot(diag.T))
+    else:
+        raise ValueError(emp_cov.ndim)
+
+    t = stats.t.pdf(gamma, n_samples - 2) * 2
+    num = t * m
+    den = np.sqrt(n_samples - 2 + t * t)
+    return num / den
