@@ -5,60 +5,75 @@ import warnings
 from functools import partial
 
 import numpy as np
-import scipy.sparse as sp
 from scipy import linalg
 from six.moves import map, range, zip
-from sklearn.covariance import empirical_covariance, log_likelihood
-from sklearn.utils.validation import check_array
+from sklearn.utils.extmath import squared_norm
+from sklearn.covariance import empirical_covariance
 
-from regain.covariance.time_graph_lasso_ import TimeGraphLasso, loss
+from regain.covariance.graph_lasso_ import logl
+from regain.covariance.time_graph_lasso_ import TimeGraphLasso
 from regain.norm import l1_od_norm, vector_p_norm
 from regain.prox import prox_FL
-# from regain.update_rules import update_gamma
 from regain.utils import convergence, positive_definite
-from regain.validation import check_array_dimensions
 
 
-def penalty(precision, alpha, beta, psi):
-    """Penalty for time-varying graphical lasso."""
-    obj = alpha * sum(map(l1_od_norm, precision))
-    obj += beta * psi(precision[1:] - precision[:-1])
-    return obj
+def loss(S, K, n_samples=None, vareps=0):
+    """Loss function for time-varying graphical lasso."""
+    if n_samples is None:
+        n_samples = np.ones(S.shape[0])
+    loss_ = sum(-ni * logl(emp_cov, precision)
+                for emp_cov, precision, ni in zip(S, K, n_samples))
+    # loss_ += vareps / 2. * squared_norm(K)
+    loss_ += vareps / 2. * _scalar_product(K, K)
+    return loss_
 
 
-def objective(n_samples, emp_cov, precision, alpha, beta, psi):
-    """Objective function for time-varying graphical lasso."""
-    obj = loss(emp_cov, precision, n_samples=n_samples)
-    obj += penalty(precision, alpha, beta, psi)
-    return obj
-
-
-def grad_loss(x, emp_cov, n_samples, x_inv=None):
+def grad_loss(x, emp_cov, n_samples, x_inv=None, vareps=0):
     """Gradient of the loss function for the time-varying graphical lasso."""
     if x_inv is None:
         x_inv = np.array([linalg.pinvh(_) for _ in x])
     grad = emp_cov - x_inv
-    return grad * n_samples[:, None, None]
+    grad *= n_samples[:, None, None]
+
+    # add coercitive term
+    grad += vareps * x
+
+    return grad
+
+
+def penalty(precision, alpha, beta, psi):
+    """Penalty for time-varying graphical lasso."""
+    if isinstance(alpha, np.ndarray):
+        obj = sum(a[0][0] * m for a, m in zip(alpha, map(l1_od_norm, precision)))
+    else:
+        obj = alpha * sum(map(l1_od_norm, precision))
+    obj += beta * psi(precision[1:] - precision[:-1])
+    return obj
+
+
+def objective(n_samples, emp_cov, precision, alpha, beta, psi, vareps=0):
+    """Objective function for time-varying graphical lasso."""
+    obj = loss(emp_cov, precision, n_samples=n_samples, vareps=vareps)
+    obj += penalty(precision, alpha, beta, psi)
+    return obj
 
 
 def _J(x, beta, alpha, gamma, lamda, S, n_samples, p=1, x_inv=None, grad=None):
     """Grad + prox + line search for the new point."""
-    if grad is None:
-        grad = grad_loss(x, S, n_samples, x_inv=x_inv)
-    prox = prox_FL(x - gamma * grad, beta * gamma, alpha * gamma, p=p)
+    # if grad is None:
+    #     grad = grad_loss(x, S, n_samples, x_inv=x_inv)
+    prox = prox_FL(
+        x - gamma * grad, beta * gamma, alpha * gamma, p=p, symmetric=True)
     return x + lamda * (prox - x)
 
 
 def _scalar_product(x, y):
-    # return np.hstack(x).dot(np.hstack(y).T).sum()
-    # return x.reshape(np.prod(x.shape[:-1]), x.shape[-1]).ravel().dot((y).ravel()).sum()
-    x = np.array([b.flatten() for b in x]).T
-    y = np.array([b.flatten() for b in y]).T
-    return (x.dot(y.T).sum())
+    return (x * y).sum()
 
 
 def choose_gamma(gamma, x, emp_cov, n_samples, beta, alpha, lamda, grad,
-                 delta=1e-4, eps=0.5, max_iter=1000, p=1, x_inv=None):
+                 delta=1e-4, eps=0.5, max_iter=1000, p=1, x_inv=None,
+                 vareps=1e-5):
     """Choose gamma for backtracking.
 
     References
@@ -66,13 +81,14 @@ def choose_gamma(gamma, x, emp_cov, n_samples, beta, alpha, lamda, grad,
     Salzo S. (2017). https://doi.org/10.1137/16M1073741
 
     """
-    if grad is None:
-        grad = grad_loss(x, emp_cov, n_samples, x_inv=x_inv)
+    # if grad is None:
+    #     grad = grad_loss(x, emp_cov, n_samples, x_inv=x_inv)
 
-    partial_f = partial(loss, n_samples=n_samples, S=emp_cov)
+    partial_f = partial(loss, n_samples=n_samples, S=emp_cov, vareps=vareps)
     fx = partial_f(K=x)
     for i in range(max_iter):
-        prox = prox_FL(x - gamma * grad, beta * gamma, alpha * gamma, p=p)
+        prox = prox_FL(
+            x - gamma * grad, beta * gamma, alpha * gamma, p=p, symmetric=True)
         y_minus_x = prox - x
         loss_diff = partial_f(K=x + lamda * y_minus_x) - fx
 
@@ -86,7 +102,8 @@ def choose_gamma(gamma, x, emp_cov, n_samples, beta, alpha, lamda, grad,
 
 def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
                  eps=0.5, max_iter=1000, criterion='b', p=1, x_inv=None,
-                 grad=None, prox=None):
+                 grad=None, prox=None, min_eigen_x=None,
+                 vareps=1e-5):
     """Choose alpha for backtracking.
 
     References
@@ -94,26 +111,28 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
     Salzo S. (2017). https://doi.org/10.1137/16M1073741
 
     """
-    # lamda = 1.
-    if x_inv is None:
-        x_inv = np.array([linalg.pinvh(_) for _ in x])
-    if grad is None:
-        grad = grad_loss(x, emp_cov, n_samples, x_inv=x_inv)
-    if prox is None:
-        prox = prox_FL(x - gamma * grad, beta * gamma, alpha * gamma, p=p)
+    # if x_inv is None:
+    #     x_inv = np.array([linalg.pinvh(_) for _ in x])
+    # if grad is None:
+    #     grad = grad_loss(x, emp_cov, n_samples, x_inv=x_inv)
+    # if prox is None:
+    #     prox = prox_FL(x - gamma * grad, beta * gamma, alpha * gamma, p=p, symmetric=True)
 
-    partial_f = partial(loss, n_samples=n_samples, S=emp_cov)
+    partial_f = partial(loss, n_samples=n_samples, S=emp_cov, vareps=vareps)
     fx = partial_f(K=x)
+
+    min_eigen_y = np.min([np.linalg.eigh(z)[0] for z in prox])
 
     y_minus_x = prox - x
     if criterion == 'b':
         tolerance = _scalar_product(y_minus_x, grad)
         tolerance += delta / gamma * _scalar_product(y_minus_x, y_minus_x)
     elif criterion == 'c':
-        gx = penalty(x, alpha, beta, partial(vector_p_norm, p=p))
-        gy = penalty(prox, alpha, beta, partial(vector_p_norm, p=p))
+        psi = partial(vector_p_norm, p=p)
+        gx = penalty(x, alpha, beta, psi)
+        gy = penalty(prox, alpha, beta, psi)
         objective_x = objective(
-            n_samples, emp_cov, x, alpha, beta, partial(vector_p_norm, p=p))
+            n_samples, emp_cov, x, alpha, beta, psi, vareps=vareps)
         tolerance = (1 - delta) * (gy - gx + _scalar_product(y_minus_x, grad))
 
     for i in range(max_iter):
@@ -128,21 +147,23 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
             norm_iter_diff = np.sqrt(_scalar_product(iter_diff, iter_diff))
             tolerance = delta * norm_iter_diff / (gamma * lamda)
             if norm_grad_diff <= tolerance:
-                return lamda
+                break
         elif criterion == 'b':
             loss_diff = partial_f(K=x1) - fx
             if loss_diff <= lamda * tolerance:
-                return lamda
+                break
         elif criterion == 'c':
             obj_diff = objective(
-                n_samples, emp_cov, x1, alpha, beta,
-                partial(vector_p_norm, p=p)) - objective_x
-            if obj_diff <= lamda * tolerance:
-                return lamda
+                n_samples, emp_cov, x1, alpha, beta, psi, vareps=vareps) \
+                    - objective_x
+            # if positive_definite(x1) and obj_diff <= lamda * tolerance:
+            cond = lamda > 0 if min_eigen_y >= 0 else lamda < min_eigen_x / (min_eigen_x - min_eigen_y)
+            if cond and obj_diff <= lamda * tolerance:
+                break
         else:
             raise ValueError(criterion)
         lamda *= eps
-    return lamda
+    return lamda, i + 1
 
 
 def fista_step(Y, Y_diff, t):
@@ -152,16 +173,18 @@ def fista_step(Y, Y_diff, t):
 
 def upper_diag_3d(x):
     """Return the flattened upper diagonal of a 3d matrix."""
-    n_times, n_dim, _ = x.shape
-    upper_idx = np.triu_indices(n_dim, 1)
-    return np.array([xx[upper_idx] for xx in x])
+    # n_times, n_dim, _ = x.shape
+    # upper_idx = np.triu_indices(n_dim, 1)
+    # return np.array([xx[upper_idx] for xx in x])
+    return np.triu(x, 1)
 
 
 def time_graph_lasso(
         emp_cov, n_samples, alpha=0.01, beta=1., max_iter=100, verbose=False,
-        tol=1e-4, delta=1e-4, gamma=1., lamda=1., eps=0.5,
+        tol=1e-4, delta=1e-4, gamma=1., lamda=1., eps=0.5, debug=False,
         return_history=False, return_n_iter=True, choose='gamma',
-        lamda_criterion='b', time_norm=1, compute_objective=True):
+        lamda_criterion='b', time_norm=1, compute_objective=True,
+        return_n_linesearch=False, vareps=1e-5):
     """Time-varying graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -199,9 +222,10 @@ def time_graph_lasso(
         for the primal and dual residual norms at each iteration.
 
     """
-    if choose not in ('gamma', 'lamda', 'fixed'):
-        raise ValueError("`choose` parameter must be one of %s." % (
-            ('gamma', 'lamda', 'fixed'),))
+    available_choose = ('gamma', 'lamda', 'fixed', 'both')
+    if choose not in available_choose:
+        raise ValueError("`choose` parameter must be one of %s." %
+                         available_choose)
 
     n_times, _, n_features = emp_cov.shape
     covariance_ = emp_cov.copy()
@@ -218,32 +242,53 @@ def time_graph_lasso(
     checks = []
     obj_partial = partial(
         objective, n_samples=n_samples, emp_cov=emp_cov,
-        alpha=alpha, beta=beta, psi=partial(vector_p_norm, p=time_norm))
+        alpha=alpha, beta=beta, psi=partial(vector_p_norm, p=time_norm),
+        vareps=vareps)
+
     max_residual = -np.inf
+    n_linesearch = 0
     for iteration_ in range(max_iter):
         if not positive_definite(K):
-            warnings.warn("precision is not positive definite.")
+            print("precision is not positive definite.")
             break
 
         k_previous = K.copy()
-        x_inv = np.array([linalg.pinvh(x) for x in K])
-        grad = grad_loss(K, emp_cov, n_samples, x_inv=x_inv)
-        if choose == 'gamma':
+        # x_inv = np.array([linalg.pinvh(x) for x in K])
+        x_inv = []
+        eigens = []
+        for x in K:
+            es, Q = np.linalg.eigh(x)
+            Inv = np.linalg.multi_dot((Q.T, np.diag(1. / es), Q))
+            x_inv.append(Inv)
+            eigens.append(es)
+        x_inv = np.array(x_inv)
+        eigens = np.array(eigens)
+
+        grad = grad_loss(K, emp_cov, n_samples, x_inv=x_inv, vareps=vareps)
+        if choose in ['gamma', 'both']:
             gamma = choose_gamma(
-                gamma / eps, K, emp_cov, n_samples=n_samples,
+                gamma / eps if iteration_ > 0 else gamma, K, emp_cov,
+                n_samples=n_samples,
                 beta=beta, alpha=alpha, lamda=lamda, grad=grad,
-                delta=delta, eps=eps, max_iter=200, p=time_norm, x_inv=x_inv)
+                delta=delta, eps=eps, max_iter=200, p=time_norm, x_inv=x_inv,
+                vareps=vareps)
+        print(gamma)
 
         x_hat = K - gamma * grad
-        y = prox_FL(x_hat, beta * gamma, alpha * gamma, p=time_norm)
+        y = prox_FL(
+            x_hat, beta * gamma, alpha * gamma, p=time_norm, symmetric=True)
 
-        if choose == 'lamda':
-            lamda = choose_lamda(
-                lamda / eps if iteration_ > 0 else lamda,
+        if choose in ['lamda', 'both']:
+            lamda, n_ls = choose_lamda(
+                min(lamda / eps if iteration_ > 0 else lamda, 1),
                 K, emp_cov, n_samples=n_samples,
                 beta=beta, alpha=alpha, gamma=gamma, delta=delta, eps=eps,
                 criterion=lamda_criterion, max_iter=200, p=time_norm,
-                x_inv=x_inv, grad=grad, prox=y)
+                x_inv=x_inv, grad=grad, prox=y,
+                min_eigen_x=np.min(eigens),
+                vareps=vareps)
+            n_linesearch += n_ls
+        print (lamda, n_ls)
 
         K = K + np.maximum(lamda, 0) * (y - K)
         # K, t = fista_step(Y, Y - Y_old, t)
@@ -256,11 +301,11 @@ def time_graph_lasso(
             e_pri=np.sqrt(upper_diag_3d(K).size) * tol + tol * max(
                 np.linalg.norm(upper_diag_3d(K)),
                 np.linalg.norm(upper_diag_3d(k_previous))),
-            e_dual=tol)
+            e_dual=tol, precision=K.copy())
 
         if verbose and iteration_ % (50 if verbose < 2 else 1) == 0:
             print("obj: %.4f, rnorm: %.7f, snorm: %.4f,"
-                  "eps_pri: %.4f, eps_dual: %.4f" % check)
+                  "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
 
         if return_history:
             checks.append(check)
@@ -271,7 +316,7 @@ def time_graph_lasso(
         # use this convergence criterion
         subgrad = (x_hat - K) / gamma
         if 0:
-            grad = grad_loss(K, emp_cov, n_samples)
+            grad = grad_loss(K, emp_cov, n_samples, vareps=vareps)
             res_norm = np.linalg.norm(grad + subgrad)
 
             if iteration_ == 0:
@@ -287,23 +332,26 @@ def time_graph_lasso(
         r_rel = res_norm / max_residual
         r_norm = res_norm / normalizer
 
-        if (r_rel <= tol or r_norm <= tol): # or (
+        if not debug and (r_rel <= tol or r_norm <= tol) and iteration_ > 0: # or (
                 # check.rnorm <= check.e_pri and iteration_ > 0):
             break
+            # pass
         # if check.rnorm <= check.e_pri and iteration_ > 0:
         #     # and check.snorm <= check.e_dual:
         #     break
     else:
         warnings.warn("Objective did not converge.")
 
-    for i in range(K.shape[0]):
-        covariance_[i] = linalg.pinvh(K[i])
+    # for i in range(K.shape[0]):
+    #     covariance_[i] = linalg.pinvh(K[i])
 
     return_list = [K, covariance_]
     if return_history:
         return_list.append(checks)
     if return_n_iter:
         return_list.append(iteration_ + 1)
+    if return_n_linesearch:
+        return_list.append(n_linesearch)
     return return_list
 
 
@@ -381,7 +429,9 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
                  max_iter=100, verbose=False, assume_centered=False,
                  compute_objective=True, eps=0.5, choose='gamma', lamda=1,
                  delta=1e-4, gamma=1., lamda_criterion='b', time_norm=1,
-                 return_history=False):
+                 return_history=False, debug=False,
+                 return_n_linesearch=False,
+                 vareps=1e-5):
         super(TimeGraphLassoForwardBackward, self).__init__(
             alpha=alpha, tol=tol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered,
@@ -395,6 +445,9 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
         self.choose = choose
         self.lamda = lamda
         self.return_history = return_history
+        self.debug = debug
+        self.return_n_linesearch = return_n_linesearch
+        self.vareps = vareps
 
     def _fit(self, emp_cov, n_samples):
         """Fit the TimeGraphLasso model to X.
@@ -416,12 +469,20 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
             compute_objective=self.compute_objective,
             time_norm=self.time_norm, lamda_criterion=self.lamda_criterion,
             gamma=self.gamma, delta=self.delta, eps=self.eps,
-            choose=self.choose, lamda=self.lamda)
+            choose=self.choose, lamda=self.lamda, debug=self.debug,
+            return_n_linesearch=self.return_n_linesearch,
+            vareps=self.vareps)
 
         if self.return_history:
-            self.precision_, self.covariance_, self.history_, self.n_iter_ = out
+            if self.return_n_linesearch:
+                self.precision_, self.covariance_, self.history_, self.n_iter_, self.n_linesearch_ = out
+            else:
+                self.precision_, self.covariance_, self.history_, self.n_iter_ = out
         else:
-            self.precision_, self.covariance_, self.n_iter_ = out
+            if self.return_n_linesearch:
+                self.precision_, self.covariance_, self.n_iter_, self.n_linesearch_ = out
+            else:
+                self.precision_, self.covariance_, self.n_iter_ = out
         return self
 
     def alpha_max(self, X, is_covariance=False):

@@ -357,7 +357,7 @@ def threshold(a, threshmin=None, threshmax=None, newval=0):
     return a
 
 
-def alpha_heuristic(gamma, emp_cov, n_samples):
+def alpha_heuristic(emp_cov, n_samples, gamma=0.1):
     """An heuristic for GraphLasso alpha.
 
     XXX - need testing

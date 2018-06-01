@@ -3,7 +3,6 @@ import warnings
 from functools import partial
 
 import numpy as np
-from scipy.optimize import minimize
 from six.moves import range, zip
 from sklearn.utils.extmath import squared_norm
 
@@ -11,7 +10,7 @@ from regain.update_rules import update_rho
 from regain.utils import convergence
 
 try:
-    from prox_tv import tv1_1d, tvp_1d
+    from prox_tv import tv1_1d, tvp_1d, tvgen, tvp_2d
 except:
     # fused lasso prox cannot be used
     pass
@@ -87,6 +86,7 @@ def prox_linf_1d(a, lamda):
 
     Since there is no closed-form, we can minimize it with scipy.
     """
+    from scipy.optimize import minimize
     def _f(x):
         return lamda * np.linalg.norm(x, np.inf) + \
             .5 * np.power(np.linalg.norm(a - x), 2)
@@ -193,7 +193,8 @@ def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
     return Y_1, Y_2
 
 
-def prox_FL(a, beta, lamda, p=1):
+def prox_FL(a, beta, lamda, p=1, symmetric=False, use_matlab=False,
+            optimize=True):
     """Fused Lasso prox.
 
     It is calculated as the Total variation prox + soft thresholding
@@ -203,12 +204,31 @@ def prox_FL(a, beta, lamda, p=1):
     # if any([any(np.diag(x) < 0) for x in a]):
     #     for a_i in a:
     #         np.fill_diagonal(a_i, np.sum(np.abs(a_i), axis=1))
+    if optimize:
+        Y = tvgen(a, [beta], [1], [p], n_threads=32, max_iters=30)
 
-    Y = np.empty_like(a)
-    func = tv1_1d if p == 1 else partial(tvp_1d, p=p)
-    for i in range(np.power(a.shape[1], 2)):
-        solution = func(a.flat[i::np.power(a.shape[1], 2)], beta)
-        Y.flat[i::np.power(a.shape[1], 2)] = solution
+    else:
+        Y = np.empty_like(a)
+        # if use_matlab:
+        #     from regain.wrapper.tv_condat import wrapper
+        #     func = wrapper.total_variation_condat
+        # else:
+        func = tv1_1d if p == 1 else partial(tvp_1d, p=p)
+
+        if symmetric:
+            x, y = np.triu_indices_from(a[0])
+            b = np.vstack(a.transpose(1,2,0))
+            upper_ind = x*a.shape[1]+y
+            Z = np.zeros_like(b)
+            Z[upper_ind] = [func(row, beta) for row in b[upper_ind]]
+
+            e = np.array(np.split(Z, a.shape[1],
+                         axis=0)).transpose(2,0,1)
+            Y = (e + e.transpose(0,2,1)) / (np.array([np.eye(a.shape[1]) for i in range(a.shape[0])]) + 1)
+        else:
+            for i in range(np.power(a.shape[1], 2)):
+                solution = func(a.flat[i::np.power(a.shape[1], 2)], beta)
+                Y.flat[i::np.power(a.shape[1], 2)] = solution
 
     # fused-lasso (soft-thresholding on the solution)
     Y_soft = soft_thresholding(Y, lamda)

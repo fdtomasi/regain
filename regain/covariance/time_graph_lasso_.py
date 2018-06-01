@@ -9,6 +9,7 @@ import warnings
 
 import numpy as np
 import scipy.sparse as sp
+from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
@@ -81,10 +82,21 @@ def time_graph_lasso(
     """
     psi, prox_psi, psi_node_penalty = check_norm_prox(psi)
 
-    K = np.zeros_like(emp_cov)
-    Z_0 = np.zeros_like(emp_cov)
+    n_times, _, n_features = emp_cov.shape
+    covariance_ = emp_cov.copy()
+    covariance_ *= 0.95
+    K = np.empty_like(emp_cov)
+    for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
+        c.flat[::n_features + 1] = e.flat[::n_features + 1]
+        K[i] = linalg.pinvh(c)
+
+    # K = np.zeros_like(emp_cov)
+    Z_0 = K.copy() # np.zeros_like(emp_cov)
     Z_1 = np.zeros_like(emp_cov)[:-1]
     Z_2 = np.zeros_like(emp_cov)[1:]
+    # Z_0 = K.copy()
+    # Z_1 = K.copy()[:-1]
+    # Z_2 = K.copy()[1:]
 
     U_0 = np.zeros_like(Z_0)
     U_1 = np.zeros_like(Z_1)
@@ -162,7 +174,8 @@ def time_graph_lasso(
                 np.sqrt(squared_norm(Z_0) + squared_norm(Z_1) + squared_norm(Z_2)),
                 np.sqrt(squared_norm(K) + squared_norm(K[:-1]) + squared_norm(K[1:]))),
             e_dual=np.sqrt(K.size + 2 * Z_1.size) * tol + rtol * rho * np.sqrt(
-                squared_norm(U_0) + squared_norm(U_1) + squared_norm(U_2))
+                squared_norm(U_0) + squared_norm(U_1) + squared_norm(U_2)),
+            precision=Z_0.copy()
         )
         Z_0_old = Z_0.copy()
         Z_1_old = Z_1.copy()
@@ -170,7 +183,7 @@ def time_graph_lasso(
 
         if verbose:
             print("obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                  "eps_pri: %.4f, eps_dual: %.4f" % check)
+                  "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
@@ -190,7 +203,7 @@ def time_graph_lasso(
     if return_history:
         return_list.append(checks)
     if return_n_iter:
-        return_list.append(iteration_)
+        return_list.append(iteration_ + 1)
     return return_list
 
 
