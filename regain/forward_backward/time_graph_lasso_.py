@@ -7,7 +7,6 @@ from functools import partial
 import numpy as np
 from scipy import linalg
 from six.moves import map, range, zip
-from sklearn.utils.extmath import squared_norm
 from sklearn.covariance import empirical_covariance
 
 from regain.covariance.graph_lasso_ import logl
@@ -69,6 +68,7 @@ def _J(x, beta, alpha, gamma, lamda, S, n_samples, p=1, x_inv=None, grad=None):
 
 def _scalar_product(x, y):
     return (x * y).sum()
+    # return x.ravel().dot(y.ravel())
 
 
 def choose_gamma(gamma, x, emp_cov, n_samples, beta, alpha, lamda, grad,
@@ -84,8 +84,8 @@ def choose_gamma(gamma, x, emp_cov, n_samples, beta, alpha, lamda, grad,
     # if grad is None:
     #     grad = grad_loss(x, emp_cov, n_samples, x_inv=x_inv)
 
-    partial_f = partial(loss, n_samples=n_samples, S=emp_cov, vareps=vareps)
-    fx = partial_f(K=x)
+    # partial_f = partial(loss, n_samples=n_samples, S=emp_cov, vareps=vareps)
+    # fx = partial_f(K=x)
     for i in range(max_iter):
         prox = prox_FL(
             x - gamma * grad, beta * gamma, alpha * gamma, p=p, symmetric=True)
@@ -153,17 +153,15 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
                 break
         elif criterion == 'b':
             loss_diff = partial_f(K=x1) - fx
-            if loss_diff <= lamda * tolerance:
+            if loss_diff <= lamda * tolerance and positive_definite(x1):
                 break
         elif criterion == 'c':
-            # obj_diff = objective(
-            #     n_samples, emp_cov, x1, alpha, beta, psi, vareps=vareps) \
-            #         - objective_x
-            loss_diff = partial_f(K=x1) - fx
+            obj_diff = objective(
+                n_samples, emp_cov, x1, alpha, beta, psi, vareps=vareps) \
+                    - objective_x
             # if positive_definite(x1) and obj_diff <= lamda * tolerance:
             cond = True # lamda > 0 if min_eigen_y >= 0 else lamda < min_eigen_x / (min_eigen_x - min_eigen_y)
-            # if cond and obj_diff <= lamda * tolerance:
-            if loss_diff <= lamda * tolerance
+            if cond and obj_diff <= lamda * tolerance:
                 break
         else:
             raise ValueError(criterion)
@@ -243,6 +241,7 @@ def time_graph_lasso(
 
     # K = np.array([np.eye(s.shape[0]) for s in emp_cov])
     # Y = K.copy()
+    assert positive_definite(K)
 
     checks = []
     obj_partial = partial(
@@ -258,16 +257,16 @@ def time_graph_lasso(
             break
 
         k_previous = K.copy()
-        # x_inv = np.array([linalg.pinvh(x) for x in K])
-        x_inv = []
-        eigens = []
-        for x in K:
-            es, Q = np.linalg.eigh(x)
-            Inv = np.linalg.multi_dot((Q.T, np.diag(1. / es), Q))
-            x_inv.append(Inv)
-            eigens.append(es)
-        x_inv = np.array(x_inv)
-        eigens = np.array(eigens)
+        x_inv = np.array([linalg.pinvh(x) for x in K])
+        # x_inv = []
+        # eigens = []
+        # for x in K:
+        #     es, Q = np.linalg.eigh(x)
+        #     Inv = np.linalg.multi_dot((Q.T, np.diag(1. / es), Q))
+        #     x_inv.append(Inv)
+        #     eigens.append(es)
+        # x_inv = np.array(x_inv)
+        # eigens = np.array(eigens)
 
         grad = grad_loss(K, emp_cov, n_samples, x_inv=x_inv, vareps=vareps)
         if choose in ['gamma', 'both']:
@@ -277,11 +276,10 @@ def time_graph_lasso(
                 beta=beta, alpha=alpha, lamda=lamda, grad=grad,
                 delta=delta, eps=eps, max_iter=200, p=time_norm, x_inv=x_inv,
                 vareps=vareps)
-        # print(gamma)
-
+            print("gamma:", gamma)
         x_hat = K - gamma * grad
-        # y = prox_FL(
-        #     x_hat, beta * gamma, alpha * gamma, p=time_norm, symmetric=True)
+        if choose not in ['gamma', 'both']:
+            y = prox_FL(x_hat, beta * gamma, alpha * gamma, p=time_norm, symmetric=True)
 
         if choose in ['lamda', 'both']:
             lamda, n_ls = choose_lamda(
@@ -290,12 +288,12 @@ def time_graph_lasso(
                 beta=beta, alpha=alpha, gamma=gamma, delta=delta, eps=eps,
                 criterion=lamda_criterion, max_iter=200, p=time_norm,
                 x_inv=x_inv, grad=grad, prox=y,
-                min_eigen_x=np.min(eigens),
+                # min_eigen_x=np.min(eigens),
                 vareps=vareps)
             n_linesearch += n_ls
-        print (lamda, n_ls)
+        print ("lambda: ", lamda, n_ls)
 
-        K = K + min(np.maximum(lamda, 0), 1) * (y - K)
+        K = K + min(max(lamda, 0), 1) * (y - K)
         # K, t = fista_step(Y, Y - Y_old, t)
 
         check = convergence(
