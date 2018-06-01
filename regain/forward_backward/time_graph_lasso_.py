@@ -73,7 +73,7 @@ def _scalar_product(x, y):
 
 def choose_gamma(gamma, x, emp_cov, n_samples, beta, alpha, lamda, grad,
                  delta=1e-4, eps=0.5, max_iter=1000, p=1, x_inv=None,
-                 vareps=1e-5):
+                 vareps=1e-5, choose='gamma'):
     """Choose gamma for backtracking.
 
     References
@@ -89,17 +89,19 @@ def choose_gamma(gamma, x, emp_cov, n_samples, beta, alpha, lamda, grad,
     for i in range(max_iter):
         prox = prox_FL(
             x - gamma * grad, beta * gamma, alpha * gamma, p=p, symmetric=True)
-        if positive_definite(prox):
+        if positive_definite(prox) and choose != "gamma":
             break
 
-        # y_minus_x = prox - x
-        # loss_diff = partial_f(K=x + lamda * y_minus_x) - fx
-        #
-        # tolerance = _scalar_product(y_minus_x, grad)
-        # tolerance += delta / gamma * _scalar_product(y_minus_x, y_minus_x)
-        # if loss_diff <= lamda * tolerance:
-        #     return gamma
+        if choose == "gamma":
+            y_minus_x = prox - x
+            loss_diff = partial_f(K=x + lamda * y_minus_x) - fx
+
+            tolerance = _scalar_product(y_minus_x, grad)
+            tolerance += delta / gamma * _scalar_product(y_minus_x, y_minus_x)
+            if loss_diff <= lamda * tolerance:
+                break
         gamma *= eps
+
     return gamma, prox
 
 
@@ -262,7 +264,7 @@ def time_graph_lasso(
         # eigens = []
         # for x in K:
         #     es, Q = np.linalg.eigh(x)
-        #     Inv = np.linalg.multi_dot((Q.T, np.diag(1. / es), Q))
+        #     Inv = np.linalg.multi_dot((Q, np.diag(1. / es), Q.T))
         #     x_inv.append(Inv)
         #     eigens.append(es)
         # x_inv = np.array(x_inv)
@@ -275,8 +277,9 @@ def time_graph_lasso(
                 n_samples=n_samples,
                 beta=beta, alpha=alpha, lamda=lamda, grad=grad,
                 delta=delta, eps=eps, max_iter=200, p=time_norm, x_inv=x_inv,
-                vareps=vareps)
-            print("gamma:", gamma)
+                vareps=vareps, choose=choose)
+        # print(gamma)
+
         x_hat = K - gamma * grad
         if choose not in ['gamma', 'both']:
             y = prox_FL(x_hat, beta * gamma, alpha * gamma, p=time_norm, symmetric=True)
