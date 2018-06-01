@@ -89,22 +89,25 @@ def choose_gamma(gamma, x, emp_cov, n_samples, beta, alpha, lamda, grad,
     for i in range(max_iter):
         prox = prox_FL(
             x - gamma * grad, beta * gamma, alpha * gamma, p=p, symmetric=True)
-        y_minus_x = prox - x
-        loss_diff = partial_f(K=x + lamda * y_minus_x) - fx
+        if positive_definite(prox):
+            break
 
-        tolerance = _scalar_product(y_minus_x, grad)
-        tolerance += delta / gamma * _scalar_product(y_minus_x, y_minus_x)
-        if loss_diff <= lamda * tolerance:
-            return gamma
+        # y_minus_x = prox - x
+        # loss_diff = partial_f(K=x + lamda * y_minus_x) - fx
+        #
+        # tolerance = _scalar_product(y_minus_x, grad)
+        # tolerance += delta / gamma * _scalar_product(y_minus_x, y_minus_x)
+        # if loss_diff <= lamda * tolerance:
+        #     return gamma
         gamma *= eps
-    return gamma
+    return gamma, prox
 
 
 def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
                  eps=0.5, max_iter=1000, criterion='b', p=1, x_inv=None,
                  grad=None, prox=None, min_eigen_x=None,
                  vareps=1e-5):
-    """Choose alpha for backtracking.
+    """Choose lambda for backtracking.
 
     References
     ----------
@@ -121,7 +124,7 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
     partial_f = partial(loss, n_samples=n_samples, S=emp_cov, vareps=vareps)
     fx = partial_f(K=x)
 
-    min_eigen_y = np.min([np.linalg.eigh(z)[0] for z in prox])
+    # min_eigen_y = np.min([np.linalg.eigh(z)[0] for z in prox])
 
     y_minus_x = prox - x
     if criterion == 'b':
@@ -153,12 +156,14 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
             if loss_diff <= lamda * tolerance:
                 break
         elif criterion == 'c':
-            obj_diff = objective(
-                n_samples, emp_cov, x1, alpha, beta, psi, vareps=vareps) \
-                    - objective_x
+            # obj_diff = objective(
+            #     n_samples, emp_cov, x1, alpha, beta, psi, vareps=vareps) \
+            #         - objective_x
+            loss_diff = partial_f(K=x1) - fx
             # if positive_definite(x1) and obj_diff <= lamda * tolerance:
-            cond = lamda > 0 if min_eigen_y >= 0 else lamda < min_eigen_x / (min_eigen_x - min_eigen_y)
-            if cond and obj_diff <= lamda * tolerance:
+            cond = True # lamda > 0 if min_eigen_y >= 0 else lamda < min_eigen_x / (min_eigen_x - min_eigen_y)
+            # if cond and obj_diff <= lamda * tolerance:
+            if loss_diff <= lamda * tolerance
                 break
         else:
             raise ValueError(criterion)
@@ -266,17 +271,17 @@ def time_graph_lasso(
 
         grad = grad_loss(K, emp_cov, n_samples, x_inv=x_inv, vareps=vareps)
         if choose in ['gamma', 'both']:
-            gamma = choose_gamma(
+            gamma, y = choose_gamma(
                 gamma / eps if iteration_ > 0 else gamma, K, emp_cov,
                 n_samples=n_samples,
                 beta=beta, alpha=alpha, lamda=lamda, grad=grad,
                 delta=delta, eps=eps, max_iter=200, p=time_norm, x_inv=x_inv,
                 vareps=vareps)
-        print(gamma)
+        # print(gamma)
 
         x_hat = K - gamma * grad
-        y = prox_FL(
-            x_hat, beta * gamma, alpha * gamma, p=time_norm, symmetric=True)
+        # y = prox_FL(
+        #     x_hat, beta * gamma, alpha * gamma, p=time_norm, symmetric=True)
 
         if choose in ['lamda', 'both']:
             lamda, n_ls = choose_lamda(
@@ -290,7 +295,7 @@ def time_graph_lasso(
             n_linesearch += n_ls
         print (lamda, n_ls)
 
-        K = K + np.maximum(lamda, 0) * (y - K)
+        K = K + min(np.maximum(lamda, 0), 1) * (y - K)
         # K, t = fista_step(Y, Y - Y_old, t)
 
         check = convergence(
