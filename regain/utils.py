@@ -1,16 +1,17 @@
 """Utils for REGAIN package."""
 from __future__ import division
 
+import collections
 import functools
 import logging
 import os
 import sys
-import collections
 from collections import namedtuple
 from contextlib import contextmanager
 
 import numpy as np
 import six
+from numpy.linalg.linalg import LinAlgError
 from scipy import stats
 from scipy.spatial.distance import squareform
 from six.moves import cPickle as pkl
@@ -134,8 +135,17 @@ def error_rank(ells_true, ells_pred):
     return np.mean(np.abs(ranks_true - ranks_pred))
 
 
+def normalize_matrix(x):
+    """Normalize a matrix so to have 1 on the diagonal, in-place."""
+    d = np.diag(x).reshape(1, x.shape[0])
+    d = 1. / np.sqrt(d)
+    x *= d
+    x *= d.T
+
+
 def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
-               squared=True, upper_triangular=False, nonzero=False):
+               squared=True, upper_triangular=False, nonzero=False,
+               n=False):
     """Mean Squared Error between two covariance estimators.
 
     Parameters
@@ -164,6 +174,14 @@ def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
     `self` and `comp_cov` covariance estimators.
 
     """
+    if n:
+        comp_cov = comp_cov.copy()
+        # / comp_cov.max()
+        cov = cov.copy()
+        # / cov.max()
+        [normalize_matrix(c) for c in comp_cov]
+        [normalize_matrix(c) for c in cov]
+
     # compute the error
     if upper_triangular:
         comp_cov = np.triu(comp_cov, 1)
@@ -330,8 +348,15 @@ def is_pos_semidef(x, tol=1e-15):
     return np.all(eigs >= 0)
 
 
-def is_pos_def(x, tol=1e-15):
+def is_pos_def(x, tol=1e-15, chol=True):
     """Check if x is positive definite."""
+    if chol:
+        try:
+            np.linalg.cholesky(x)
+            return True
+        except LinAlgError:
+            return False
+
     eigs = np.linalg.eigvalsh(x)
     eigs[np.abs(eigs) < tol] = 0
     return np.all(eigs > 0)

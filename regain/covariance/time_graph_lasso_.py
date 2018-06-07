@@ -43,7 +43,8 @@ def time_graph_lasso(
         emp_cov, alpha=0.01, rho=1, beta=1, max_iter=100, n_samples=None,
         verbose=False, psi='laplacian', tol=1e-4, rtol=1e-4,
         return_history=False, return_n_iter=True, mode='admm',
-        update_rho_options=None, compute_objective=True):
+        update_rho_options=None, compute_objective=True,
+        stop_at=None, stop_when=1e-4):
     """Time-varying graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -92,8 +93,8 @@ def time_graph_lasso(
 
     # K = np.zeros_like(emp_cov)
     Z_0 = K.copy() # np.zeros_like(emp_cov)
-    Z_1 = np.zeros_like(emp_cov)[:-1]
-    Z_2 = np.zeros_like(emp_cov)[1:]
+    Z_1 = K.copy()[:-1] # np.zeros_like(emp_cov)[:-1]
+    Z_2 = K.copy()[1:] # np.zeros_like(emp_cov)[1:]
     # Z_0 = K.copy()
     # Z_1 = K.copy()[:-1]
     # Z_2 = K.copy()[1:]
@@ -114,7 +115,8 @@ def time_graph_lasso(
     if n_samples is None:
         n_samples = np.ones(emp_cov.shape[0])
 
-    checks = []
+    checks = [convergence(obj=objective(
+        n_samples, emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi))]
     for iteration_ in range(max_iter):
         # update K
         A = Z_0 - U_0
@@ -175,7 +177,7 @@ def time_graph_lasso(
                 np.sqrt(squared_norm(K) + squared_norm(K[:-1]) + squared_norm(K[1:]))),
             e_dual=np.sqrt(K.size + 2 * Z_1.size) * tol + rtol * rho * np.sqrt(
                 squared_norm(U_0) + squared_norm(U_1) + squared_norm(U_2)),
-            precision=Z_0.copy()
+            # precision=Z_0.copy()
         )
         Z_0_old = Z_0.copy()
         Z_1_old = Z_1.copy()
@@ -186,6 +188,10 @@ def time_graph_lasso(
                   "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
 
         checks.append(check)
+        if stop_at is not None:
+            if abs(check.obj - stop_at) / abs(stop_at) < stop_when:
+                break
+
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
 
@@ -282,7 +288,8 @@ class TimeGraphLasso(GraphLasso):
                  psi='laplacian', max_iter=100,
                  verbose=False, assume_centered=False,
                  return_history=False,
-                 update_rho_options=None, compute_objective=True):
+                 update_rho_options=None, compute_objective=True,
+                 stop_at=None, stop_when=1e-4):
         super(TimeGraphLasso, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered, mode=mode,
@@ -292,6 +299,8 @@ class TimeGraphLasso(GraphLasso):
         self.psi = psi
         self.time_on_axis = time_on_axis
         self.return_history = return_history
+        self.stop_at = stop_at
+        self.stop_when = stop_when
 
     def get_observed_precision(self):
         """Getter for the observed precision matrix.
@@ -320,7 +329,8 @@ class TimeGraphLasso(GraphLasso):
                 max_iter=self.max_iter, verbose=self.verbose,
                 return_n_iter=True, return_history=self.return_history,
                 update_rho_options=self.update_rho_options,
-                compute_objective=self.compute_objective)
+                compute_objective=self.compute_objective,
+                stop_at=self.stop_at, stop_when=self.stop_when)
         if self.return_history:
             self.precision_, self.covariance_, self.history_, self.n_iter_ = out
         else:

@@ -16,10 +16,10 @@ from regain.utils import convergence
 from regain.validation import check_norm_prox
 
 
-def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
+def objective(S, n_samples, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
               alpha, tau, beta, eta, psi, phi):
     """Objective function for latent variable time-varying graphical lasso."""
-    obj = sum(- logl(s, r) for s, r in zip(S, R))
+    obj = sum(- n * logl(s, r) for s, r, n in zip(S, R, n_samples))
     obj += alpha * sum(map(l1_od_norm, Z_0))
     obj += tau * sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
     obj += beta * sum(map(psi, Z_2 - Z_1))
@@ -177,7 +177,7 @@ def latent_time_graph_lasso(
             squared_norm(Z_1 - Z_1_old) + squared_norm(Z_2 - Z_2_old) +
             squared_norm(W_1 - W_1_old) + squared_norm(W_2 - W_2_old))
 
-        obj = objective(emp_cov, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
+        obj = objective(emp_cov, n_samples, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
                         alpha, tau, beta, eta, psi, phi) \
             if compute_objective else np.nan
 
