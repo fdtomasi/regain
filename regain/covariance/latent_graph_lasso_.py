@@ -115,10 +115,12 @@ def latent_graph_lasso(
 
         if verbose:
             print("obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                  "eps_pri: %.4f, eps_dual: %.4f" % check)
+                  "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
+            break
+        if check.obj == np.inf:
             break
         rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_,
                              **(update_rho_options or {}))

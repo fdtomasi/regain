@@ -22,7 +22,13 @@ def objective(S, n_samples, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
     obj = sum(- n * logl(s, r) for s, r, n in zip(S, R, n_samples))
     obj += alpha * sum(map(l1_od_norm, Z_0))
     obj += tau * sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
-    obj += beta * sum(map(psi, Z_2 - Z_1))
+
+    if isinstance(beta, np.ndarray):
+        obj += sum(b[0][0] * m for b, m in zip(beta, map(psi, Z_2 - Z_1)))
+    else:
+        obj += beta * sum(map(psi, Z_2 - Z_1))
+    # obj += beta * sum(map(psi, Z_2 - Z_1))
+
     obj += eta * sum(map(phi, W_2 - W_1))
     return obj
 
@@ -203,7 +209,7 @@ def latent_time_graph_lasso(
 
         if verbose:
             print("obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                  "eps_pri: %.4f, eps_dual: %.4f" % check)
+                  "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
