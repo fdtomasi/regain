@@ -7,7 +7,7 @@ import logging
 import os
 import sys
 import warnings
-from collections import namedtuple
+# from collections import namedtuple
 from contextlib import contextmanager
 
 import numpy as np

@@ -137,8 +137,9 @@ def make_starting(n_dim_obs=100, n_dim_lat=10, degree=2, normalize=False):
                 set(np.where(np.count_nonzero(theta, axis=1) > degree)[0])))
             if not possible_idx:
                 continue
-            indices = np.random.choice(
-                possible_idx, degree - (np.count_nonzero(theta[i, :]) - 1))
+            n_choice = degree - (np.count_nonzero(theta[i, :]) - 1)
+            if n_choice > 0:
+                indices = np.random.choice(possible_idx, n_choice)
             theta[i, indices] = theta[indices, i] = 1. / degree
 
         theta.flat[::n_dim_obs+1] = np.sum(theta, axis=1) + 0.002
@@ -151,9 +152,10 @@ def make_starting(n_dim_obs=100, n_dim_lat=10, degree=2, normalize=False):
                 set(np.where(np.count_nonzero(theta, axis=1) > degree)[0])))
             if not possible_idx:
                 continue
-            indices = np.random.choice(
-                possible_idx, degree - (np.count_nonzero(theta[i, :]) - 1))
-            theta[i, indices] = theta[indices, i] = .5 / degree
+            n_choice = degree - (np.count_nonzero(theta[i, :]) - 1)
+            if n_choice > 0:
+                indices = np.random.choice(possible_idx, n_choice)
+                theta[i, indices] = theta[indices, i] = .5 / degree
 
     assert(is_pos_def(theta))
     theta_observed = theta - L
