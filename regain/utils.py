@@ -6,6 +6,7 @@ import functools
 import logging
 import os
 import sys
+import warnings
 from collections import namedtuple
 from contextlib import contextmanager
 
@@ -97,6 +98,68 @@ def load_pickle(filename):
     with open(filename, 'rb') as f:
         res = pkl.load(f)
     return res
+
+
+def write_network(dataframe, filename):
+    """Write a network as a list of interactions."""
+    dataframe.stack().to_csv(filename)
+
+
+def read_network(filename, threshold=1., full_network=True, fill_diagonal=True,
+                 delimiter="auto"):
+    """Read a network from a list of interactions.
+
+    Parameters
+    ----------
+    filename : str
+        Filename to read from.
+    threshold : float, optional
+        Only get the top threshold edges.
+    full_network : boolean, optional
+        Choose if the network is written in full or only the upper triangular.
+    fill_diagonal : boolean, optional
+        Fill diagonal with the sum of absolute values in the row (for the
+        positive definite constraint).
+    """
+    import pandas as pd
+    if filename.endswith(".tsv") or filename.endswith(".tab"):
+        if delimiter == 'auto':
+            delimiter = '\t'
+        elif delimiter != '\t':
+            warnings.warn(
+                "The extension is suggesting the filename is tab-"
+                "separated. Please check you are using the correct "
+                "separator.")
+    elif filename.endswith(".csv"):
+        if delimiter == 'auto':
+            delimiter = ','
+        elif delimiter != ',':
+            warnings.warn(
+                "The extension is suggesting the filename is comma-"
+                "separated. Please check you are using the correct "
+                "separator.")
+    else:
+        if delimiter == 'auto':
+            raise ValueError("Unrecognized format. Please specify a separator")
+
+    nn = pd.read_csv(filename, delimiter=delimiter, header=None)
+    columns = sorted(nn[0].unique(), key=lambda x: int(x[1:]))
+    n_top_edges = int(nn.shape[0] * threshold / (2. if full_network else 1))
+
+    nn = nn.sort_values(2, ascending=False)[:(
+        2 if full_network else 1) * n_top_edges]
+
+    net_julia = pd.DataFrame(
+        columns=columns, index=columns, dtype=float).fillna(0)
+
+    for row in nn.itertuples():
+        if row[3] > 0:
+            net_julia.loc[row[1], row[2]] = \
+                net_julia.loc[row[2], row[1]] = row[3]
+
+    if fill_diagonal:
+        np.fill_diagonal(net_julia.values, net_julia.sum(axis=1).values)
+    return net_julia
 
 
 def flatten(lst):
