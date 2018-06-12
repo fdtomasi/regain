@@ -58,6 +58,7 @@ def test_structure_error():
     b = np.eye(3, k=-1) + np.eye(3)
     result = {
         'accuracy': 0.5555555555555556,
+	'average_precision': 0.66666666666666663,
         'balanced_accuracy': 0.55,
         'dor': 1.4999999999999998,
         'f1': 0.6,
@@ -81,6 +82,7 @@ def test_structure_error():
     b = np.eye(3) + np.eye(3, k=-1) * 1e-3
     result = {
         'accuracy': 0.7777777777777778,
+	'average_precision': 0.66666666666666663,
         'balanced_accuracy': 0.8,
         'dor': 0.0,
         'f1': 0.7499999999999999,
