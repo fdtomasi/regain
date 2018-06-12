@@ -143,6 +143,7 @@ def read_network(filename, threshold=1., full_network=True, fill_diagonal=True,
             raise ValueError("Unrecognized format. Please specify a separator")
 
     nn = pd.read_csv(filename, delimiter=delimiter, header=None)
+    # the following suppose genes are in the form G1, ... G10
     columns = sorted(nn[0].unique(), key=lambda x: int(x[1:]))
     n_top_edges = int(nn.shape[0] * threshold / (2. if full_network else 1))
 
