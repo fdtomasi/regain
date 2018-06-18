@@ -11,14 +11,13 @@ from setuptools import setup, find_packages
 
 # Package Version
 from regain import __version__ as version
-# alignment_module = Extension('icing.align.align',
-#                              sources=['icing/align/alignment.c'])
 setup(
     name='regain',
     version=version,
 
     description=('REGAIN (Regularised Graph Inference)'),
     long_description=open('README.md').read(),
+    long_description_content_type='text/markdown',
     author='Federico Tomasi',
     author_email='federico.tomasi@dibris.unige.it',
     maintainer='Federico Tomasi',
