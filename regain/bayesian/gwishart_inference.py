@@ -17,7 +17,7 @@ from sklearn.utils.extmath import fast_logdet
 from regain.covariance.graph_lasso_ import GraphLasso, graph_lasso
 
 
-def markov_blankets(graphs, boolean=True, tol=1e-8):
+def markov_blankets(graphs, boolean=True, tol=1e-8, unique=False):
     """For each variable, list each of its markov blankets in graphs."""
     m_blankets = [np.array([G[i] for G in graphs]) for i in
                   range(graphs[0].shape[0])]
@@ -26,6 +26,10 @@ def markov_blankets(graphs, boolean=True, tol=1e-8):
         mb[np.abs(mb) < tol] = 0
     if boolean:
         m_blankets = [mb != 0 for mb in m_blankets]
+    if unique:
+        # discard same blankets
+        # works with numpy >= 1.13.0
+        m_blankets = np.unique(np.array(m_blankets), axis=1)
     return m_blankets
 
 
@@ -63,7 +67,7 @@ def get_graphs(blankets, scores, n_dim, n_resampling=200):
 
     graphs_ = np.array([blankets[i][idx[i]] for i in
                         range(n_dim)]).transpose(1, 0, 2)
-    # symmetrise with AND operator - product
+    # symmetrise with AND operator -> product
     graphs = np.array([g * g.T for g in graphs_])
     return graphs
 
@@ -294,7 +298,7 @@ def bayesian_graph_lasso(
     precisions = [
         mdl.set_params(alpha=a).fit(X).precision_
         for a in alphas]
-    mblankets = markov_blankets(precisions, tol=tol)
+    mblankets = markov_blankets(precisions, tol=tol, unique=True)
 
     normalized_scores = score_blankets(mblankets, X=X, alphas=[0.01, 0.5, 1])
 
