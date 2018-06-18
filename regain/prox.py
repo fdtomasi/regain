@@ -1,8 +1,8 @@
 """Useful proximal functions."""
 import warnings
+from functools import partial
 
 import numpy as np
-from scipy.optimize import minimize
 from six.moves import range, zip
 from sklearn.utils.extmath import squared_norm
 
@@ -10,20 +10,20 @@ from regain.update_rules import update_rho
 from regain.utils import convergence
 
 try:
-    from prox_tv import tv1_1d
+    from prox_tv import tv1_1d, tvp_1d, tvgen, tvp_2d
 except:
     # fused lasso prox cannot be used
     pass
 
 
-def soft_thresholding(a, lamda):
+def soft_thresholding_vector(a, lamda):
     """Soft-thresholding for vectors."""
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         return np.maximum(0, 1 - lamda / np.linalg.norm(a)) * a
 
 
-def soft_thresholding_sign(a, lamda):
+def soft_thresholding(a, lamda):
     """Soft-thresholding."""
     return np.sign(a) * np.maximum(np.abs(a) - lamda, 0)
 
@@ -33,7 +33,7 @@ def soft_thresholding_od(a, lamda):
     if a.ndim > 2:
         res = []
         for i, x in enumerate(a):
-            st = soft_thresholding_sign(x, lamda[i])
+            st = soft_thresholding(x, lamda[i])
             st.flat[::x.shape[0]+1] = np.diag(x)
             res.append(st)
         return np.array(res)
@@ -62,11 +62,31 @@ def blockwise_soft_thresholding_symmetric(a, lamda):
     return output
 
 
+# %% Perform prox operator:   min_x (1/2t)||x-w||^2 subject to |x|<=radius
+# function [ z ] = project_1ball( z,radius )
+# %  By Moreau's identity, projection onto 1-norm ball can be computed
+# %  using the proximal of the conjugate problem, which is L-infinity
+# %  minimization.
+#   z = z -  prox_infinityNorm(z,radius);
+# end
+# %% Perform prox operator:   min ||x||_inf + (1/2t)||x-w||^2
+# function [ xk ] = prox_infinityNorm( w,t )
+#     N = length(w);
+#     wabs = abs(w);
+#     ws = (cumsum(sort(wabs,'descend'))- t)./(1:N)';
+#     alphaopt = max(ws);
+#     if alphaopt>0
+#       xk = min(wabs,alphaopt).*sign(w); % truncation step
+#     else
+#       xk = zeros(size(w)); % if t is big, then solution is zero
+#     end
+# end
 def prox_linf_1d(a, lamda):
     """Proximal operator for the l-inf norm.
 
     Since there is no closed-form, we can minimize it with scipy.
     """
+    from scipy.optimize import minimize
     def _f(x):
         return lamda * np.linalg.norm(x, np.inf) + \
             .5 * np.power(np.linalg.norm(a - x), 2)
@@ -93,6 +113,7 @@ def prox_logdet_ala_ma(a, lamda):
     es, Q = np.linalg.eigh(a)
     xi = (- es + np.sqrt(np.square(es) + 4. * lamda)) / 2.
     return np.linalg.multi_dot((Q, np.diag(xi), Q.T))
+
 
 def prox_trace_indicator(a, lamda):
     """Time-varying latent variable graphical lasso prox."""
@@ -172,20 +193,60 @@ def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
     return Y_1, Y_2
 
 
-def prox_FL(a, beta, lamda):
+def prox_FL(a, beta, lamda, p=1, symmetric=False, use_matlab=False,
+            optimize=True):
     """Fused Lasso prox.
 
     It is calculated as the Total variation prox + soft thresholding
     on the solution, as in
     http://ieeexplore.ieee.org/abstract/document/6579659/
     """
-    Y = np.empty_like(a)
-    for i in range(np.power(a.shape[1], 2)):
-        solution = tv1_1d(a.flat[i::np.power(a.shape[1], 2)], beta)
-        # fused-lasso (soft-thresholding on the solution)
-        solution = soft_thresholding_sign(solution, lamda)
-        Y.flat[i::np.power(a.shape[1], 2)] = solution
-    return Y
+    # if any([any(np.diag(x) < 0) for x in a]):
+    #     for a_i in a:
+    #         np.fill_diagonal(a_i, np.sum(np.abs(a_i), axis=1))
+    if optimize:
+        Y = tvgen(a, [beta], [1], [p], n_threads=32, max_iters=30)
+
+    else:
+        Y = np.empty_like(a)
+        # if use_matlab:
+        #     from regain.wrapper.tv_condat import wrapper
+        #     func = wrapper.total_variation_condat
+        # else:
+        func = tv1_1d if p == 1 else partial(tvp_1d, p=p)
+
+        if symmetric:
+            x, y = np.triu_indices_from(a[0])
+            b = np.vstack(a.transpose(1,2,0))
+            upper_ind = x*a.shape[1]+y
+            Z = np.zeros_like(b)
+            Z[upper_ind] = [func(row, beta) for row in b[upper_ind]]
+
+            e = np.array(np.split(Z, a.shape[1],
+                         axis=0)).transpose(2,0,1)
+            Y = (e + e.transpose(0,2,1)) / (np.array([np.eye(a.shape[1]) for i in range(a.shape[0])]) + 1)
+        else:
+            for i in range(np.power(a.shape[1], 2)):
+                solution = func(a.flat[i::np.power(a.shape[1], 2)], beta)
+                Y.flat[i::np.power(a.shape[1], 2)] = solution
+
+    # fused-lasso (soft-thresholding on the solution)
+    Y_soft = soft_thresholding(Y, lamda)
+
+    # restore diagonal
+    for y_s, y_fv in zip(Y_soft, Y):
+        np.fill_diagonal(y_s, np.diag(y_fv))
+    return Y_soft
+
+    # Y = np.empty_like(a)
+    # for i in range(a.shape[1]):
+    #     for j in range(i, a.shape[2]):
+    #         solution = tv1_1d(a[:, i, j], beta)
+    #         # fused-lasso (soft-thresholding on the solution)
+    #         if i != j:
+    #             solution = soft_thresholding_sign(solution, lamda)
+    #         Y[:, i, j] = solution
+    # return Y
 
     # not work
     # x = np.vstack(a.transpose((2, 1, 0)))  # each row is the time evolution

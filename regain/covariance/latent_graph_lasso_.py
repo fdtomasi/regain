@@ -1,42 +1,36 @@
-"""Sparse inverse covariance selection via ADMM.
-
-More information can be found in the paper linked at:
-http://www.stanford.edu/~boyd/papers/distr_opt_stat_learning_admm.html
-"""
+"""Graphical latent variable model selection via ADMM."""
 from __future__ import division
 
 import warnings
 
 import numpy as np
+from scipy import linalg
 from six.moves import range
-from sklearn.covariance import GraphLasso, empirical_covariance
-from sklearn.utils.extmath import fast_logdet
-from sklearn.utils.validation import check_array
 
+from regain.covariance.graph_lasso_ import GraphLasso, logl
 from regain.norm import l1_od_norm
-from regain.prox import prox_logdet, soft_thresholding_sign
+from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence
 
 
-def logl(emp_cov, precision):
-    """Gaussian log-likelihood without constant term."""
-    return fast_logdet(precision) - np.sum(emp_cov * precision)
+def objective(emp_cov, R, K, L, alpha, tau):
+    """Objective function for latent graphical lasso."""
+    obj = - logl(emp_cov, R)
+    obj += alpha * l1_od_norm(K)
+    obj += tau * np.linalg.norm(L, ord='nuc')
+    return obj
 
 
-def objective(S, X, Z, alpha):
-    """Graph lasso objective."""
-    return - logl(S, X) + alpha * l1_od_norm(Z)
-
-
-def graph_lasso(
-        emp_cov, alpha=0.01, rho=1, over_relax=1, max_iter=100, verbose=False,
-        tol=1e-4, rtol=1e-4, return_history=False, return_n_iter=True,
-        update_rho_options=None, compute_objective=True, mode='admm'):
-    """Graph lasso solver via ADMM.
+def latent_graph_lasso(
+        emp_cov, alpha=1., tau=1., rho=1., max_iter=100,
+        verbose=False, tol=1e-4, rtol=1e-2, return_history=False,
+        return_n_iter=True, mode=None,
+        update_rho_options=None, compute_objective=True):
+    r"""Latent variable graphical lasso solver.
 
     Solves the following problem via ADMM:
-        minimize  trace(S*X) - log det X + alpha ||X||_{od,1}
+        min - log_likelihood(S, K-L) + alpha ||K||_{od,1} + tau ||L_i||_*
 
     where S is the empirical covariance of the data
     matrix D (training observations by features).
@@ -45,12 +39,10 @@ def graph_lasso(
     ----------
     emp_cov : array-like
         Empirical covariance matrix.
-    alpha : float, optional
-        Regularisation parameter.
+    alpha, tau : float, optional
+        Regularisation parameters.
     rho : float, optional
         Augmented Lagrangian parameter.
-    over_relax : float, optional
-        Over-relaxation parameter (typically between 1.0 and 1.8).
     max_iter : int, optional
         Maximum number of iterations.
     tol : float, optional
@@ -66,7 +58,7 @@ def graph_lasso(
 
     Returns
     -------
-    X : numpy.array, 2-dimensional
+    K, L : np.array, 2-dimensional, size (d x d)
         Solution to the problem.
     S : np.array, 2 dimensional
         Empirical covariance matrix.
@@ -78,45 +70,58 @@ def graph_lasso(
         for the primal and dual residual norms at each iteration.
 
     """
-    Z = np.zeros_like(emp_cov)
+    # _, n_features = emp_cov.shape
+    # covariance_ = emp_cov.copy()
+    # covariance_ *= 0.95
+    # covariance_.flat[::n_features + 1] = emp_cov.flat[::n_features + 1]
+    # K = linalg.pinvh(covariance_)
+
+    K = np.zeros_like(emp_cov)
+    L = np.zeros_like(emp_cov)
     U = np.zeros_like(emp_cov)
-    Z_old = np.zeros_like(Z)
+    R_old = np.zeros_like(emp_cov)
 
     checks = []
     for iteration_ in range(max_iter):
-        # x-update
-        A = Z - U
+        # update R
+        A = K - L - U
         A += A.T
         A /= 2.
-        K = prox_logdet(emp_cov - rho * A, lamda=1. / rho)
+        R = prox_logdet(emp_cov - rho * A, lamda=1. / rho)
 
-        # z-update with relaxation
-        K_hat = over_relax * K - (1 - over_relax) * Z
-        Z = soft_thresholding_sign(K_hat + U, lamda=alpha / rho)
+        A = L + R + U
+        K = soft_thresholding(A, lamda=alpha / rho)
+
+        A = K - R - U
+        A += A.T
+        A /= 2.
+        L = prox_trace_indicator(A, lamda=tau / rho)
 
         # update residuals
-        U += K_hat - Z
+        U += R - K + L
 
         # diagnostics, reporting, termination checks
-        obj = objective(emp_cov, K, Z, alpha) if compute_objective else np.nan
-        rnorm = np.linalg.norm(K - Z, 'fro')
-        snorm = rho * np.linalg.norm(Z - Z_old, 'fro')
+        obj = objective(emp_cov, R, K, L, alpha, tau) \
+            if compute_objective else np.nan
+        rnorm = np.linalg.norm(R - K + L)
+        snorm = rho * np.linalg.norm(R - R_old)
         check = convergence(
             obj=obj, rnorm=rnorm, snorm=snorm,
-            e_pri=np.sqrt(K.size) * tol + rtol * max(
-                np.linalg.norm(K, 'fro'), np.linalg.norm(Z, 'fro')),
-            e_dual=np.sqrt(K.size) * tol + rtol * rho * np.linalg.norm(U)
+            e_pri=np.sqrt(R.size) * tol + rtol * max(
+                np.linalg.norm(R), np.linalg.norm(K - L)),
+            e_dual=np.sqrt(R.size) * tol + rtol * rho * np.linalg.norm(U)
         )
+        R_old = R.copy()
 
-        Z_old = Z.copy()
         if verbose:
             print("obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                  "eps_pri: %.4f, eps_dual: %.4f" % check)
+                  "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
-
+        if check.obj == np.inf:
+            break
         rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_,
                              **(update_rho_options or {}))
         # scaled dual variables should be also rescaled
@@ -125,7 +130,8 @@ def graph_lasso(
     else:
         warnings.warn("Objective did not converge.")
 
-    return_list = [Z, emp_cov]
+    covariance_ = linalg.pinvh(K)
+    return_list = [K, L, covariance_]
     if return_history:
         return_list.append(checks)
     if return_n_iter:
@@ -133,14 +139,18 @@ def graph_lasso(
     return return_list
 
 
-class GraphLasso(GraphLasso):
+class LatentGraphLasso(GraphLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Parameters
     ----------
     alpha : positive float, default 0.01
-        The regularization parameter: the higher alpha, the more
-        regularization, the sparser the inverse covariance.
+        Regularization parameter for precision matrix. The higher alpha,
+        the more regularization, the sparser the inverse covariance.
+
+    tau : positive float, default 1
+        Regularization parameter for latent variables matrix. The higher tau,
+        the more regularization, the lower rank of the latent matrix.
 
     rho : positive float, default 1
         Augmented Lagrangian parameter.
@@ -186,47 +196,52 @@ class GraphLasso(GraphLasso):
     precision_ : array-like, shape (n_features, n_features)
         Estimated pseudo inverse matrix.
 
+    latent_ : array-like, shape (n_features, n_features)
+        Estimated latent variable matrix.
+
     n_iter_ : int
         Number of iterations run.
 
     """
 
-    def __init__(self, alpha=0.01, rho=1., over_relax=1., max_iter=100,
-                 mode='admm', tol=1e-4, rtol=1e-4, verbose=False,
-                 assume_centered=False, update_rho_options=None,
-                 compute_objective=True):
-        super(GraphLasso, self).__init__(
-            alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
-            assume_centered=assume_centered, mode=mode)
-        self.rho = rho
-        self.rtol = rtol
-        self.over_relax = over_relax
-        self.update_rho_options = update_rho_options or {}
-        self.compute_objective = compute_objective
+    def __init__(self, alpha=0.01, tau=1., rho=1., tol=1e-4, rtol=1e-4,
+                 max_iter=100, verbose=False, assume_centered=False,
+                 mode='admm', update_rho_options=None, compute_objective=True):
+        super(LatentGraphLasso, self).__init__(
+            alpha=alpha, rho=rho,
+            tol=tol, rtol=rtol, max_iter=max_iter, verbose=verbose,
+            assume_centered=assume_centered, mode=mode,
+            update_rho_options=update_rho_options,
+            compute_objective=compute_objective)
+        self.tau = tau
 
-    def fit(self, X, y=None):
-        """Fits the GraphLasso model to X.
+    def get_precision(self):
+        """Getter for the precision matrix.
+
+        Returns
+        -------
+        precision_ : array-like,
+            The precision matrix associated to the current covariance object.
+            Note that this is the observed precision matrix.
+
+        """
+        return self.precision_ - self.latent_
+
+    def _fit(self, emp_cov):
+        """Fit the LatentGraphLasso model to X.
 
         Parameters
         ----------
-        X : ndarray, shape (n_samples, n_features)
-            Data from which to compute the covariance estimate
-        y : (ignored)
+        emp_cov : ndarray, shape (n_features, n_features)
+            Empirical covariance of data.
 
         """
-        # Covariance does not make sense for a single feature
-        X = check_array(X, ensure_min_features=2, ensure_min_samples=2,
-                        estimator=self)
-        if self.assume_centered:
-            self.location_ = np.zeros(X.shape[1])
-        else:
-            self.location_ = X.mean(0)
-
-        emp_cov = empirical_covariance(X, assume_centered=self.assume_centered)
-        self.precision_, self.covariance_, self.n_iter_ = graph_lasso(
-            emp_cov, alpha=self.alpha, tol=self.tol, rtol=self.rtol,
-            max_iter=self.max_iter, over_relax=self.over_relax, rho=self.rho,
-            verbose=self.verbose, return_n_iter=True, return_history=False,
-            mode=self.mode, update_rho_options=self.update_rho_options,
-            compute_objective=self.compute_objective)
+        self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
+            latent_graph_lasso(
+                emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
+                mode=self.mode, tol=self.tol, rtol=self.rtol,
+                max_iter=self.max_iter, verbose=self.verbose,
+                return_n_iter=True, return_history=False,
+                update_rho_options=self.update_rho_options,
+                compute_objective=self.compute_objective)
         return self

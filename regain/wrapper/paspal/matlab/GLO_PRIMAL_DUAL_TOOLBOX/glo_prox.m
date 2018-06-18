@@ -1,6 +1,6 @@
 function [w,q,lambda_tot] = glo_prox(w0,tau,blocks,weights,lambda0,tol,max_iter)
-% GLO_PROX Computes the proximity operator of the group lasso with overlap 
-% penalty. Firts, identifies "active" blocks, then apply Bersekas's 
+% GLO_PROX Computes the proximity operator of the group lasso with overlap
+% penalty. Firts, identifies "active" blocks, then apply Bersekas's
 % projected Newton method on the dual space.
 %
 %   Copyright 2009-2010 Sofia Mosci and Lorenzo Rosasco
@@ -14,14 +14,14 @@ B = length(blocks);
 % for g = 1:B;
 % %     weights(g) = length(blocks{g})*tau^2; %weight is sqrt{|g|}
 %     weights(g) = tau^2; %not weighted
-% end  
+% end
 % %------------NEW
 weights = (weights.*tau).^2;
 
 
 
 % if lambda is not initialized, then initialize it to 0
-if isempty(lambda0); 
+if isempty(lambda0);
     lambda0 = zeros(B,1);
 end
 
@@ -32,7 +32,7 @@ epsilon = 0.001;
 
 lambda_tot = zeros(B,1);
 
-% Identify active blocks, by removing blocks such that w0 is already 
+% Identify active blocks, by removing blocks such that w0 is already
 % inside the corresponding cylinder
 to_be_projected = zeros(B,1);
 for g = 1:B;
@@ -58,14 +58,14 @@ end
 I  = zeros(d,B);
 for g = 1:B;
     I(blocks{g},g) = 1;
-end  
+end
 
 % Bersekas constrained Newton method
 stop =0;
 i_null = 0;
 while and(q<max_iter,~stop)
     q = q+1;
-    lambda_prev = lambda;    
+    lambda_prev = lambda;
     s = I*lambda_prev;
     denominator = 1./(1+s);
     grad = weights - I'*((w0.*denominator).^2);
@@ -75,7 +75,7 @@ while and(q<max_iter,~stop)
     I_inactive = find(or((grad<=0),(lambda>epsk)));
     n_inactive = length(I_inactive);
     B_inactive = zeros(n_inactive,n_inactive);
-    
+
     for g = 1:n_inactive;
         B_inactive(g,g) = sum(tmp(blocks{I_inactive(g)}));
         for k = (g+1):n_inactive;
@@ -87,17 +87,17 @@ while and(q<max_iter,~stop)
 
     I_active = find((grad>0).*(lambda<=epsk));
     n_active = length(I_active);
-    if n_inactive==0; 
+    if n_inactive==0;
         i_null=i_null+1;
     else
         i_null = 0;
     end
     if i_null>=5; break; end
-        
+
     B_active = zeros(n_active,1);
     for g = 1:n_active;
         B_active(g) = sum(tmp(blocks{I_active(g)}));
-    end     
+    end
     p_active = grad(I_active,:)./B_active;
 
     x_inactive = grad(I_inactive)'*p_inactive;
@@ -123,4 +123,4 @@ end
 s = I*lambda;
 w = w0.*(1-1./(1+s));
 
-lambda_tot(to_be_projected) = lambda; 
+lambda_tot(to_be_projected) = lambda;

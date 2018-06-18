@@ -1,57 +1,67 @@
 """Sparse inverse covariance selection over time via ADMM.
 
 More information can be found in the paper linked at:
-[cite Hallac]
+https://arxiv.org/abs/1703.01958
 """
 from __future__ import division
 
 import warnings
 
 import numpy as np
+import scipy.sparse as sp
+from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_array
 
-from regain.admm.graph_lasso_ import GraphLasso, logl
+from regain.covariance.graph_lasso_ import GraphLasso, logl
 from regain.norm import l1_od_norm
-from regain.prox import prox_logdet, soft_thresholding_sign
+from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence, error_norm_time
 from regain.validation import check_array_dimensions, check_norm_prox
 
 
-def objective(S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
+def loss(S, K, n_samples=None):
+    """Loss function for time-varying graphical lasso."""
+    if n_samples is None:
+        n_samples = np.ones(S.shape[0])
+    return sum(-ni * logl(emp_cov, precision)
+               for emp_cov, precision, ni in zip(S, K, n_samples))
+
+
+def objective(n_samples, S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
     """Objective function for time-varying graphical lasso."""
-    obj = sum(- logl(emp_cov, precision) for emp_cov, precision in zip(S, K))
+    obj = loss(S, K, n_samples=n_samples)
     obj += alpha * sum(map(l1_od_norm, Z_0))
     obj += beta * sum(map(psi, Z_2 - Z_1))
     return obj
 
 
 def time_graph_lasso(
-        emp_cov, alpha=0.01, rho=1, beta=1, max_iter=100,
+        emp_cov, alpha=0.01, rho=1, beta=1, max_iter=100, n_samples=None,
         verbose=False, psi='laplacian', tol=1e-4, rtol=1e-4,
         return_history=False, return_n_iter=True, mode='admm',
-        update_rho_options=None, compute_objective=True):
+        update_rho_options=None, compute_objective=True,
+        stop_at=None, stop_when=1e-4):
     """Time-varying graphical lasso solver.
 
     Solves the following problem via ADMM:
         minimize  trace(S*X) - log det X + lambda*||X||_1
+            + beta sum_{i=2}^T Psi(K_i - K_{i-1})
 
     where S is the empirical covariance of the data
     matrix D (training observations by features).
 
     Parameters
     ----------
-    data_list : list of 2-dimensional matrices.
-        Input matrices.
-    lamda : float, optional
+    emp_cov : ndarray, shape (n_features, n_features)
+        Empirical covariance of data.
+    alpha, beta : float, optional
         Regularisation parameter.
     rho : float, optional
         Augmented Lagrangian parameter.
-    alpha : float, optional
-        Over-relaxation parameter (typically between 1.0 and 1.8).
     max_iter : int, optional
         Maximum number of iterations.
     tol : float, optional
@@ -73,10 +83,21 @@ def time_graph_lasso(
     """
     psi, prox_psi, psi_node_penalty = check_norm_prox(psi)
 
-    K = np.zeros_like(emp_cov)
-    Z_0 = np.zeros_like(emp_cov)
-    Z_1 = np.zeros_like(emp_cov)[:-1]
-    Z_2 = np.zeros_like(emp_cov)[1:]
+    n_times, _, n_features = emp_cov.shape
+    covariance_ = emp_cov.copy()
+    covariance_ *= 0.95
+    K = np.empty_like(emp_cov)
+    for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
+        c.flat[::n_features + 1] = e.flat[::n_features + 1]
+        K[i] = linalg.pinvh(c)
+
+    # K = np.zeros_like(emp_cov)
+    Z_0 = K.copy() # np.zeros_like(emp_cov)
+    Z_1 = K.copy()[:-1] # np.zeros_like(emp_cov)[:-1]
+    Z_2 = K.copy()[1:] # np.zeros_like(emp_cov)[1:]
+    # Z_0 = K.copy()
+    # Z_1 = K.copy()[:-1]
+    # Z_2 = K.copy()[1:]
 
     U_0 = np.zeros_like(Z_0)
     U_1 = np.zeros_like(Z_1)
@@ -91,7 +112,11 @@ def time_graph_lasso(
     divisor[0] -= 1
     divisor[-1] -= 1
 
-    checks = []
+    if n_samples is None:
+        n_samples = np.ones(emp_cov.shape[0])
+
+    checks = [convergence(obj=objective(
+        n_samples, emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi))]
     for iteration_ in range(max_iter):
         # update K
         A = Z_0 - U_0
@@ -103,17 +128,17 @@ def time_graph_lasso(
         A += A.transpose(0, 2, 1)
         A /= 2.
 
-        A *= - rho * divisor[:, None, None]
+        A *= - rho * divisor[:, None, None] / n_samples[:, None, None]
         A += emp_cov
 
-        K = np.array([prox_logdet(a, lamda=1. / (rho * div))
-                      for a, div in zip(A, divisor)])
+        K = np.array([prox_logdet(a, lamda=ni / (rho * div))
+                      for a, div, ni in zip(A, divisor, n_samples)])
 
         # update Z_0
         A = K + U_0
         A += A.transpose(0, 2, 1)
         A /= 2.
-        Z_0 = soft_thresholding_sign(A, lamda=alpha / rho)
+        Z_0 = soft_thresholding(A, lamda=alpha / rho)
 
         # other Zs
         A_1 = K[:-1] + U_1
@@ -141,7 +166,8 @@ def time_graph_lasso(
                               squared_norm(Z_1 - Z_1_old) +
                               squared_norm(Z_2 - Z_2_old))
 
-        obj = objective(emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi) \
+        obj = objective(
+            n_samples, emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi) \
             if compute_objective else np.nan
 
         check = convergence(
@@ -150,7 +176,8 @@ def time_graph_lasso(
                 np.sqrt(squared_norm(Z_0) + squared_norm(Z_1) + squared_norm(Z_2)),
                 np.sqrt(squared_norm(K) + squared_norm(K[:-1]) + squared_norm(K[1:]))),
             e_dual=np.sqrt(K.size + 2 * Z_1.size) * tol + rtol * rho * np.sqrt(
-                squared_norm(U_0) + squared_norm(U_1) + squared_norm(U_2))
+                squared_norm(U_0) + squared_norm(U_1) + squared_norm(U_2)),
+            # precision=Z_0.copy()
         )
         Z_0_old = Z_0.copy()
         Z_1_old = Z_1.copy()
@@ -158,9 +185,13 @@ def time_graph_lasso(
 
         if verbose:
             print("obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                  "eps_pri: %.4f, eps_dual: %.4f" % check)
+                  "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
 
         checks.append(check)
+        if stop_at is not None:
+            if abs(check.obj - stop_at) / abs(stop_at) < stop_when:
+                break
+
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
 
@@ -178,7 +209,7 @@ def time_graph_lasso(
     if return_history:
         return_list.append(checks)
     if return_n_iter:
-        return_list.append(iteration_)
+        return_list.append(iteration_ + 1)
     return return_list
 
 
@@ -224,8 +255,9 @@ class TimeGraphLasso(GraphLasso):
         zero.
         If False, data are centered before computation.
 
-    bypass_transpose : boolean, default True
-        If data have time as the last dimension, set this to False.
+    time_on_axis : {'first', 'last'}, default 'first'
+        If data have time as the last dimension, set this to 'last'.
+        Useful to use scikit-learn functions as train_test_split.
 
     update_rho_options : dict, default None
         Options for the update of rho. See `update_rho` function for details.
@@ -252,10 +284,12 @@ class TimeGraphLasso(GraphLasso):
     """
 
     def __init__(self, alpha=0.01, beta=1., mode='admm', rho=1.,
-                 bypass_transpose=True, tol=1e-4, rtol=1e-4,
+                 time_on_axis='first', tol=1e-4, rtol=1e-4,
                  psi='laplacian', max_iter=100,
                  verbose=False, assume_centered=False,
-                 update_rho_options=None, compute_objective=True):
+                 return_history=False,
+                 update_rho_options=None, compute_objective=True,
+                 stop_at=None, stop_when=1e-4):
         super(TimeGraphLasso, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered, mode=mode,
@@ -263,10 +297,10 @@ class TimeGraphLasso(GraphLasso):
             compute_objective=compute_objective)
         self.beta = beta
         self.psi = psi
-        # for splitting purposes, data may come transposed, with time in the
-        # last index. Set bypass_transpose=True if X comes with time in the
-        # first dimension already
-        self.bypass_transpose = bypass_transpose
+        self.time_on_axis = time_on_axis
+        self.return_history = return_history
+        self.stop_at = stop_at
+        self.stop_when = stop_when
 
     def get_observed_precision(self):
         """Getter for the observed precision matrix.
@@ -279,8 +313,32 @@ class TimeGraphLasso(GraphLasso):
         """
         return self.get_precision()
 
+    def _fit(self, emp_cov, n_samples):
+        """Fit the TimeGraphLasso model to X.
+
+        Parameters
+        ----------
+        emp_cov : ndarray, shape (n_time, n_features, n_features)
+            Empirical covariance of data.
+
+        """
+        out = time_graph_lasso(
+                emp_cov, alpha=self.alpha, rho=self.rho,
+                beta=self.beta, mode=self.mode, n_samples=n_samples,
+                tol=self.tol, rtol=self.rtol, psi=self.psi,
+                max_iter=self.max_iter, verbose=self.verbose,
+                return_n_iter=True, return_history=self.return_history,
+                update_rho_options=self.update_rho_options,
+                compute_objective=self.compute_objective,
+                stop_at=self.stop_at, stop_when=self.stop_when)
+        if self.return_history:
+            self.precision_, self.covariance_, self.history_, self.n_iter_ = out
+        else:
+            self.precision_, self.covariance_, self.n_iter_ = out
+        return self
+
     def fit(self, X, y=None):
-        """Fit the GraphLasso model to X.
+        """Fit the TimeGraphLasso model to X.
 
         Parameters
         ----------
@@ -288,33 +346,41 @@ class TimeGraphLasso(GraphLasso):
                 (n_samples, n_features, n_time)
             Data from which to compute the covariance estimate.
             If shape is (n_samples, n_features, n_time), then set
-            `bypass_transpose = False`.
+            `time_on_axis = 'last'`.
         y : (ignored)
-        """
-        if not self.bypass_transpose:
-            X = X.transpose(2, 0, 1)  # put time as first dimension
-        # Covariance does not make sense for a single feature
 
-        check_array_dimensions(X, n_dimensions=3)
+        """
+        if sp.issparse(X):
+            raise TypeError("sparse matrices not supported.")
+
+        X = check_array_dimensions(
+            X, n_dimensions=3, time_on_axis=self.time_on_axis)
+
+        is_list = isinstance(X, list)
+        # Covariance does not make sense for a single feature
         X = np.array([check_array(x, ensure_min_features=2,
                       ensure_min_samples=2, estimator=self) for x in X])
+        if is_list:
+            n_times = len(X)
+            if np.unique([x.shape[1] for x in X]).size != 1:
+                raise ValueError("Input data cannot have different number "
+                                 "of variables.")
+            n_dimensions = X[0].shape[1]
+        else:
+            n_times = X.shape[0]
+            n_dimensions = X.shape[2]
+
+        n_samples = np.array([x.shape[0] for x in X])
 
         if self.assume_centered:
-            self.location_ = np.zeros((X.shape[0], 1, X.shape[2]))
+            self.location_ = np.zeros((n_times, 1, n_dimensions))
         else:
-            self.location_ = X.mean(1).reshape(X.shape[0], 1, X.shape[2])
+            mean = np.array([x.mean(0) for x in X]) if is_list else X.mean(1)
+            self.location_ = mean.reshape(n_times, 1, n_dimensions)
         emp_cov = np.array([empirical_covariance(
             x, assume_centered=self.assume_centered) for x in X])
-        self.precision_, self.covariance_, self.n_iter_ = \
-            time_graph_lasso(
-                emp_cov, alpha=self.alpha, rho=self.rho,
-                beta=self.beta, mode=self.mode,
-                tol=self.tol, rtol=self.rtol, psi=self.psi,
-                max_iter=self.max_iter, verbose=self.verbose,
-                return_n_iter=True, return_history=False,
-                update_rho_options=self.update_rho_options,
-                compute_objective=self.compute_objective)
-        return self
+
+        return self._fit(emp_cov, n_samples)
 
     def score(self, X_test, y=None):
         """Computes the log-likelihood of a Gaussian data set with
@@ -337,14 +403,24 @@ class TimeGraphLasso(GraphLasso):
             estimator of its covariance matrix.
 
         """
-        if not self.bypass_transpose:
-            X_test = X_test.transpose(2, 0, 1)  # put time as first dimension
+        if sp.issparse(X_test):
+            raise TypeError("sparse matrices not supported.")
+
+        X_test = check_array_dimensions(
+            X_test, n_dimensions=3, time_on_axis=self.time_on_axis)
+
+        # Covariance does not make sense for a single feature
+        X_test = np.array([
+            check_array(x, ensure_min_features=2,
+                        ensure_min_samples=2, estimator=self) for x in X_test])
+
         # compute empirical covariance of the test set
         test_cov = np.array([empirical_covariance(
             x, assume_centered=True) for x in X_test - self.location_])
 
-        res = sum(log_likelihood(S, K) for S, K in zip(
-            test_cov, self.get_observed_precision()))
+        n_samples = np.array([x.shape[0] for x in X_test])
+        res = sum(n * log_likelihood(S, K) for S, K, n in zip(
+            test_cov, self.get_observed_precision(), n_samples))
 
         # ALLA  MATLAB1
         # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
@@ -402,7 +478,7 @@ class TimeGraphLasso(GraphLasso):
             Squared Mahalanobis distances of the observations.
 
         """
-        if not self.bypass_transpose:
+        if self.time_on_axis == 'last':
             # put time as first dimension
             observations = observations.transpose(2, 0, 1)
         precision = self.get_observed_precision()

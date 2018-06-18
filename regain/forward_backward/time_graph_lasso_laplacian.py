@@ -8,15 +8,16 @@ import numpy as np
 from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.covariance import empirical_covariance
+from sklearn.utils.extmath import squared_norm
 
 from regain.covariance.graph_lasso_ import logl
 from regain.covariance.time_graph_lasso_ import TimeGraphLasso
 from regain.norm import l1_od_norm, vector_p_norm
-from regain.prox import prox_FL
+from regain.prox import prox_FL, soft_thresholding, soft_thresholding_od
 from regain.utils import convergence, positive_definite
 
 
-def loss(S, K, n_samples=None, vareps=0):
+def loss(S, K, beta=0, n_samples=None, vareps=0):
     """Loss function for time-varying graphical lasso."""
     if n_samples is None:
         n_samples = np.ones(S.shape[0])
@@ -24,10 +25,13 @@ def loss(S, K, n_samples=None, vareps=0):
                 for emp_cov, precision, ni in zip(S, K, n_samples))
     # loss_ += vareps / 2. * squared_norm(K)
     loss_ += vareps / 2. * _scalar_product(K, K)
+
+    loss_ += beta * squared_norm(K[1:] - K[:-1])
+
     return loss_
 
 
-def grad_loss(x, emp_cov, n_samples, x_inv=None, vareps=0):
+def grad_loss(x, emp_cov, beta=0, n_samples=None, x_inv=None, vareps=0):
     """Gradient of the loss function for the time-varying graphical lasso."""
     if x_inv is None:
         x_inv = np.array([linalg.pinvh(_) for _ in x])
@@ -37,38 +41,40 @@ def grad_loss(x, emp_cov, n_samples, x_inv=None, vareps=0):
     # add coercitive term
     grad += vareps * x
 
+    aux = np.empty_like(x)
+    aux[0] = x[0] - x[1]
+    aux[-1] = x[-1] - x[-2]
+    for t in range(1, x.shape[0] - 1):
+        aux[t] = 2 * x[t] - x[t-1] - x[t+1]
+    aux *= 2 * beta
+    grad += aux
+
     return grad
 
 
-def penalty(precision, alpha, beta, psi):
+def penalty(precision, alpha):
     """Penalty for time-varying graphical lasso."""
     if isinstance(alpha, np.ndarray):
         obj = sum(a[0][0] * m for a, m in zip(alpha, map(l1_od_norm, precision)))
     else:
         obj = alpha * sum(map(l1_od_norm, precision))
-    obj += beta * psi(precision[1:] - precision[:-1])
+    # obj += beta * psi(precision[1:] - precision[:-1])
     return obj
 
+def prox_penalty(precision, alpha):
+    # return soft_thresholding(precision, alpha)
+    return np.array([soft_thresholding_od(p, alpha) for p in precision])
 
-def objective(n_samples, emp_cov, precision, alpha, beta, psi, vareps=0):
+
+def objective(n_samples, emp_cov, precision, alpha, beta, vareps=0):
     """Objective function for time-varying graphical lasso."""
-    obj = loss(emp_cov, precision, n_samples=n_samples, vareps=vareps)
-    obj += penalty(precision, alpha, beta, psi)
+    obj = loss(emp_cov, precision, beta=beta, n_samples=n_samples, vareps=vareps)
+    obj += penalty(precision, alpha)
     return obj
-
-
-def _J(x, beta, alpha, gamma, lamda, S, n_samples, p=1, x_inv=None, grad=None):
-    """Grad + prox + line search for the new point."""
-    # if grad is None:
-    #     grad = grad_loss(x, S, n_samples, x_inv=x_inv)
-    prox = prox_FL(
-        x - gamma * grad, beta * gamma, alpha * gamma, p=p, symmetric=True)
-    return x + lamda * (prox - x)
 
 
 def _scalar_product(x, y):
     return (x * y).sum()
-    # return x.ravel().dot(y.ravel())
 
 
 def choose_gamma(gamma, x, emp_cov, n_samples, beta, alpha, lamda, grad,
@@ -84,11 +90,11 @@ def choose_gamma(gamma, x, emp_cov, n_samples, beta, alpha, lamda, grad,
     # if grad is None:
     #     grad = grad_loss(x, emp_cov, n_samples, x_inv=x_inv)
 
-    partial_f = partial(loss, n_samples=n_samples, S=emp_cov, vareps=vareps)
+    partial_f = partial(loss, beta=beta,
+                        n_samples=n_samples, S=emp_cov, vareps=vareps)
     fx = partial_f(K=x)
     for i in range(max_iter):
-        prox = prox_FL(
-            x - gamma * grad, beta * gamma, alpha * gamma, p=p, symmetric=True)
+        prox = prox_penalty(x - gamma * grad, alpha * gamma)
         if positive_definite(prox) and choose != "gamma":
             break
 
@@ -123,7 +129,8 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
     # if prox is None:
     #     prox = prox_FL(x - gamma * grad, beta * gamma, alpha * gamma, p=p, symmetric=True)
 
-    partial_f = partial(loss, n_samples=n_samples, S=emp_cov, vareps=vareps)
+    partial_f = partial(loss, beta=beta, n_samples=n_samples, S=emp_cov,
+                        vareps=vareps)
     fx = partial_f(K=x)
 
     # min_eigen_y = np.min([np.linalg.eigh(z)[0] for z in prox])
@@ -247,8 +254,7 @@ def time_graph_lasso(
 
     obj_partial = partial(
         objective, n_samples=n_samples, emp_cov=emp_cov,
-        alpha=alpha, beta=beta, psi=partial(vector_p_norm, p=time_norm),
-        vareps=vareps)
+        alpha=alpha, beta=beta, vareps=vareps)
 
     max_residual = -np.inf
     n_linesearch = 0
@@ -256,7 +262,7 @@ def time_graph_lasso(
     for iteration_ in range(max_iter):
         # if not positive_definite(K):
         #     print("precision is not positive definite.")
-        #     # break
+        #     break
 
         k_previous = K.copy()
         x_inv = np.array([linalg.pinvh(x) for x in K])
@@ -270,7 +276,7 @@ def time_graph_lasso(
         # x_inv = np.array(x_inv)
         # eigens = np.array(eigens)
 
-        grad = grad_loss(K, emp_cov, n_samples, x_inv=x_inv, vareps=vareps)
+        grad = grad_loss(K, emp_cov, beta=beta, n_samples=n_samples, x_inv=x_inv, vareps=vareps)
         if choose in ['gamma', 'both']:
             gamma, y = choose_gamma(
                 gamma / eps if iteration_ > 0 else gamma, K, emp_cov,
@@ -278,11 +284,12 @@ def time_graph_lasso(
                 beta=beta, alpha=alpha, lamda=lamda, grad=grad,
                 delta=delta, eps=eps, max_iter=200, p=time_norm, x_inv=x_inv,
                 vareps=vareps, choose=choose)
+            # gamma = min(gamma, 0.249)
         # print(gamma)
 
         x_hat = K - gamma * grad
         if choose not in ['gamma', 'both']:
-            y = prox_FL(x_hat, beta * gamma, alpha * gamma, p=time_norm, symmetric=True)
+            y = prox_penalty(x_hat, alpha * gamma)
 
         if choose in ['lamda', 'both']:
             lamda, n_ls = choose_lamda(
@@ -324,29 +331,29 @@ def time_graph_lasso(
         if stop_at is not None:
             if abs(check.obj - stop_at) / abs(stop_at) < stop_when:
                 break
+
+        # use this convergence criterion
+        subgrad = (x_hat - K) / gamma
+        if 0:
+            grad = grad_loss(K, emp_cov, n_samples, vareps=vareps)
+            res_norm = np.linalg.norm(grad + subgrad)
+
+            if iteration_ == 0:
+                normalizer = res_norm + 1e-6
+            max_residual = max(np.linalg.norm(grad),
+                               np.linalg.norm(subgrad)) + 1e-6
         else:
-            # use this convergence criterion
-            subgrad = (x_hat - K) / gamma
-            if 0:
-                grad = grad_loss(K, emp_cov, n_samples, vareps=vareps)
-                res_norm = np.linalg.norm(grad + subgrad)
+            res_norm = np.linalg.norm(K - k_previous) / gamma
+            max_residual = max(max_residual, res_norm)
+            normalizer = max(np.linalg.norm(grad),
+                             np.linalg.norm(subgrad)) + 1e-6
 
-                if iteration_ == 0:
-                    normalizer = res_norm + 1e-6
-                max_residual = max(np.linalg.norm(grad),
-                                   np.linalg.norm(subgrad)) + 1e-6
-            else:
-                res_norm = np.linalg.norm(K - k_previous) / gamma
-                max_residual = max(max_residual, res_norm)
-                normalizer = max(np.linalg.norm(grad),
-                                 np.linalg.norm(subgrad)) + 1e-6
+        r_rel = res_norm / max_residual
+        r_norm = res_norm / normalizer
 
-            r_rel = res_norm / max_residual
-            r_norm = res_norm / normalizer
-
-            if not debug and (r_rel <= tol or r_norm <= tol) and iteration_ > 0: # or (
-                    # check.rnorm <= check.e_pri and iteration_ > 0):
-                break
+        if not debug and (r_rel <= tol or r_norm <= tol) and iteration_ > 0: # or (
+                # check.rnorm <= check.e_pri and iteration_ > 0):
+            break
             # pass
         # if check.rnorm <= check.e_pri and iteration_ > 0:
         #     # and check.snorm <= check.e_dual:

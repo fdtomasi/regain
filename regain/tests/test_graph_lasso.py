@@ -3,7 +3,7 @@ import numpy as np
 from numpy.testing import assert_array_almost_equal
 from sklearn.covariance import GraphLasso as GL
 
-from regain.admm.graph_lasso_ import GraphLasso
+from regain.covariance.graph_lasso_ import GraphLasso
 
 
 def test_gl():

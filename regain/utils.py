@@ -1,19 +1,37 @@
 """Utils for REGAIN package."""
 from __future__ import division
 
+import collections
 import functools
 import logging
 import os
 import sys
-from collections import namedtuple
+import warnings
+# from collections import namedtuple
 from contextlib import contextmanager
 
 import numpy as np
 import six
+from numpy.linalg.linalg import LinAlgError
+from scipy import stats
+from scipy.spatial.distance import squareform
 from six.moves import cPickle as pkl
+from sklearn.metrics import average_precision_score
 
-convergence = namedtuple('convergence',
-                         ('obj', 'rnorm', 'snorm', 'e_pri', 'e_dual'))
+
+def namedtuple_with_defaults(typename, field_names, default_values=()):
+    T = collections.namedtuple(typename, field_names)
+    T.__new__.__defaults__ = (None,) * len(T._fields)
+    if isinstance(default_values, collections.Mapping):
+        prototype = T(**default_values)
+    else:
+        prototype = T(*default_values)
+    T.__new__.__defaults__ = tuple(prototype)
+    return T
+
+
+convergence = namedtuple_with_defaults(
+    'convergence', 'obj rnorm snorm e_pri e_dual precision')
 
 
 @contextmanager
@@ -34,7 +52,7 @@ def suppress_stdout():
             sys.stdout = old_stdout
 
 
-def _ensure_filename_ending(filename, possible_extensions=['.txt']):
+def _ensure_filename_ending(filename, possible_extensions='.txt'):
     if isinstance(possible_extensions, six.string_types):
         possible_extensions = [possible_extensions]
 
@@ -82,6 +100,69 @@ def load_pickle(filename):
     return res
 
 
+def write_network(dataframe, filename):
+    """Write a network as a list of interactions."""
+    dataframe.stack().to_csv(filename)
+
+
+def read_network(filename, threshold=1., full_network=True, fill_diagonal=True,
+                 delimiter="auto"):
+    """Read a network from a list of interactions.
+
+    Parameters
+    ----------
+    filename : str
+        Filename to read from.
+    threshold : float, optional
+        Only get the top threshold edges.
+    full_network : boolean, optional
+        Choose if the network is written in full or only the upper triangular.
+    fill_diagonal : boolean, optional
+        Fill diagonal with the sum of absolute values in the row (for the
+        positive definite constraint).
+    """
+    import pandas as pd
+    if filename.endswith(".tsv") or filename.endswith(".tab"):
+        if delimiter == 'auto':
+            delimiter = '\t'
+        elif delimiter != '\t':
+            warnings.warn(
+                "The extension is suggesting the filename is tab-"
+                "separated. Please check you are using the correct "
+                "separator.")
+    elif filename.endswith(".csv"):
+        if delimiter == 'auto':
+            delimiter = ','
+        elif delimiter != ',':
+            warnings.warn(
+                "The extension is suggesting the filename is comma-"
+                "separated. Please check you are using the correct "
+                "separator.")
+    else:
+        if delimiter == 'auto':
+            raise ValueError("Unrecognized format. Please specify a separator")
+
+    nn = pd.read_csv(filename, delimiter=delimiter, header=None)
+    # the following suppose genes are in the form G1, ... G10
+    columns = sorted(nn[0].unique(), key=lambda x: int(x[1:]))
+    n_top_edges = int(nn.shape[0] * threshold / (2. if full_network else 1))
+
+    nn = nn.sort_values(2, ascending=False)[:(
+        2 if full_network else 1) * n_top_edges]
+
+    net_julia = pd.DataFrame(
+        columns=columns, index=columns, dtype=float).fillna(0)
+
+    for row in nn.itertuples():
+        if row[3] > 0:
+            net_julia.loc[row[1], row[2]] = \
+                net_julia.loc[row[2], row[1]] = row[3]
+
+    if fill_diagonal:
+        np.fill_diagonal(net_julia.values, net_julia.sum(axis=1).values)
+    return net_julia
+
+
 def flatten(lst):
     """Flatten a list."""
     return [y for l in lst for y in flatten(l)] \
@@ -118,8 +199,17 @@ def error_rank(ells_true, ells_pred):
     return np.mean(np.abs(ranks_true - ranks_pred))
 
 
+def normalize_matrix(x):
+    """Normalize a matrix so to have 1 on the diagonal, in-place."""
+    d = np.diag(x).reshape(1, x.shape[0])
+    d = 1. / np.sqrt(d)
+    x *= d
+    x *= d.T
+
+
 def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
-               squared=True, upper_triangular=False):
+               squared=True, upper_triangular=False, nonzero=False,
+               n=False):
     """Mean Squared Error between two covariance estimators.
 
     Parameters
@@ -148,10 +238,21 @@ def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
     `self` and `comp_cov` covariance estimators.
 
     """
+    if n:
+        comp_cov = comp_cov.copy()
+        # / comp_cov.max()
+        cov = cov.copy()
+        # / cov.max()
+        [normalize_matrix(c) for c in comp_cov]
+        [normalize_matrix(c) for c in cov]
+
     # compute the error
     if upper_triangular:
         comp_cov = np.triu(comp_cov, 1)
         cov = np.triu(cov, 1)
+    if nonzero:
+        comp_cov = comp_cov[np.where(cov == 0)]
+        cov = cov[np.where(cov == 0)]
 
     error = comp_cov - cov
     # compute the error norm
@@ -164,7 +265,9 @@ def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
             "Only spectral and frobenius norms are implemented")
     # optionally scale the error norm
     if scaling:
-        squared_norm = squared_norm / error.shape[0]
+        scaling_factor = error.shape[0] if len(error.shape) < 3 \
+            else np.prod(error.shape[:2]) * ((error.shape[1] - 1) / 2. if upper_triangular else error.shape[1])
+        squared_norm = squared_norm / scaling_factor
     # finally get either the squared norm or the norm
     if squared:
         result = squared_norm
@@ -219,7 +322,7 @@ def structure_error(true, pred, thresholding=False, eps=1e-2,
         it is consider as an edge (inverse covariance).
 
     pred: array-like, shape=(d,d)
-        Predicted matrix. In grpahical inference, if an entry is different
+        Predicted matrix. In graphical inference, if an entry is different
         from 0 it is consider as an edge (inverse covariance).
 
     thresholding: bool, default False,
@@ -232,41 +335,63 @@ def structure_error(true, pred, thresholding=False, eps=1e-2,
     # avoid inplace modifications
     true = true.copy()
     pred = pred.copy()
+
+    if true.ndim > 2:
+        y_true = np.array(flatten([squareform(x, checks=None) for x in true]))
+        y_pred = np.array(flatten([squareform(x, checks=None) for x in pred]))
+    else:
+        y_true = squareform(true, checks=None)
+        y_pred = squareform(pred, checks=None)
+
+    average_precision = average_precision_score(y_true > 0, y_pred)
+
     if thresholding:
         pred[np.abs(pred) < eps] = 0
+    tn_to_remove = 0
     if no_diagonal:
         if true.ndim > 2:
-            true = np.array([t - np.diag(t) for t in true])
-            pred = np.array([t - np.diag(t) for t in pred])
+            true = np.array([t - np.diag(np.diag(t)) for t in true])
+            pred = np.array([t - np.diag(np.diag(t)) for t in pred])
+            tn_to_remove = np.prod(true.shape[:2])
         else:
             true -= np.diag(np.diag(true))
             pred -= np.diag(np.diag(pred))
+            tn_to_remove = true.shape[0]
     true[true != 0] = 1
     pred[pred != 0] = 2
     res = true + pred
-    TN = np.count_nonzero((res == 0).astype(float))
+    # from collections import Counter
+    # c = Counter(res.flat)
+    # tn, fn, fp, tp = c[0], c[1], c[2], c[3]
+    TN = np.count_nonzero((res == 0).astype(float)) - tn_to_remove
     FN = np.count_nonzero((res == 1).astype(float))
     FP = np.count_nonzero((res == 2).astype(float))
     TP = np.count_nonzero((res == 3).astype(float))
 
-    precision = TP / float(TP + FP) if TP + FP > 0 else 0
-    recall = TP / float(TP + FN)
-    f1 = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0
+    precision = TP / (TP + FP) if TP + FP > 0 else 0
+    recall = TP / (TP + FN)
+    miss_rate = FN / (TP + FN) or 1 - recall
+    f1 = 2 * precision * recall / (precision + recall) \
+        if precision + recall > 0 else 0
 
     accuracy = (TP + TN) / true.size
-    balanced_accuracy = 0.5 * (TP / (TP + FN) + TN / (TN + FP))
     prevalence = (TP + FN) / true.size
 
-    miss_rate = FN / (TP + FN)
-    fall_out = FP / (FP + TN)
-    specificity = TN / (FP + TN)
-    false_discovery_rate = FP / (TP + FP) if TP + FP > 0 else 0
+    fall_out = FP / (FP + TN) if (FP + TN) > 0 else 1
+    specificity = TN / (FP + TN) if (FP + TN) > 0 else 1. - fall_out
+
+    balanced_accuracy = 0.5 * (recall + specificity)
+    false_discovery_rate = FP / (TP + FP) if TP + FP > 0 else 1 - precision
     false_omission_rate = FN / (FN + TN) if FN + TN > 0 else 0
-    negative_predicted_value = TN / (FN + TN) if FN + TN > 0 else 0
+    negative_predicted_value = TN / (FN + TN) if FN + TN > 0 else \
+        1 - false_omission_rate
 
     positive_likelihood_ratio = recall / fall_out if fall_out > 0 else 0
-    negative_likelihood_ratio = miss_rate / specificity if specificity > 0 else 0
-    diagnostic_odds_ratio = positive_likelihood_ratio / negative_likelihood_ratio if negative_likelihood_ratio > 0 else 0
+    negative_likelihood_ratio = miss_rate / specificity \
+        if specificity > 0 else 0
+    diagnostic_odds_ratio = \
+        positive_likelihood_ratio / negative_likelihood_ratio if \
+        negative_likelihood_ratio > 0 else 0
 
     dictionary = dict(
         tp=TP, tn=TN, fp=FP, fn=FN, precision=precision, recall=recall,
@@ -275,5 +400,71 @@ def structure_error(true, pred, thresholding=False, eps=1e-2,
         prevalence=prevalence, miss_rate=miss_rate, fall_out=fall_out,
         specificity=specificity, plr=positive_likelihood_ratio,
         nlr=negative_likelihood_ratio, dor=diagnostic_odds_ratio,
-        balanced_accuracy=balanced_accuracy)
+        balanced_accuracy=balanced_accuracy,
+        average_precision=average_precision)
     return dictionary
+
+
+def is_pos_semidef(x, tol=1e-15):
+    """Check if x is positive semi-definite."""
+    eigs = np.linalg.eigvalsh(x)
+    eigs[np.abs(eigs) < tol] = 0
+    return np.all(eigs >= 0)
+
+
+def is_pos_def(x, tol=1e-15, chol=True):
+    """Check if x is positive definite."""
+    if chol:
+        try:
+            np.linalg.cholesky(x)
+            return True
+        except LinAlgError:
+            return False
+
+    eigs = np.linalg.eigvalsh(x)
+    eigs[np.abs(eigs) < tol] = 0
+    return np.all(eigs > 0)
+
+
+def positive_definite(x, tol=1e-15):
+    if x.ndim == 2:
+        return is_pos_def(x)
+    return all(is_pos_def(y) for y in x)
+
+
+def threshold(a, threshmin=None, threshmax=None, newval=0):
+    """Threshold. Replaces the deprecated scipy function."""
+    a = np.ma.array(a, copy=True)
+    mask = np.zeros(a.shape, dtype=bool)
+    if threshmin is not None:
+        mask |= (a < threshmin).filled(False)
+
+    if threshmax is not None:
+        mask |= (a > threshmax).filled(False)
+
+    a[mask] = newval
+    return a
+
+
+def alpha_heuristic(emp_cov, n_samples, gamma=0.1):
+    """An heuristic for GraphLasso alpha.
+
+    XXX - need testing
+
+    References
+    ----------
+    http://people.eecs.berkeley.edu/~elghaoui/Pubs/CvxTechCovSel_ICML.pdf
+    """
+    if emp_cov.ndim == 3:
+        diag = np.diagonal(emp_cov, axis1=1, axis2=2)
+        m = np.array([d[:, None].dot(d[None, :]) for d in diag]).max()
+    elif emp_cov.ndim == 2:
+        diag = np.diag(emp_cov)[:, None]
+        m = np.max(diag.dot(diag.T))
+    else:
+        raise ValueError(emp_cov.ndim)
+
+    t = stats.t.pdf(gamma, n_samples - 2) * 2
+    num = t * m
+    den = np.sqrt(n_samples - 2 + t * t)
+    return num / den

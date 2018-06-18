@@ -3,7 +3,7 @@ import numpy as np
 import warnings
 from numpy.testing import assert_array_equal
 
-from regain.admm.time_graph_lasso_ import TimeGraphLasso
+from regain.covariance.time_graph_lasso_ import TimeGraphLasso
 
 
 def test_ltgl_zero():
@@ -12,7 +12,7 @@ def test_ltgl_zero():
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         mdl = TimeGraphLasso(
-            bypass_transpose=False, max_iter=1, assume_centered=True).fit(a)
+            time_on_axis='last', max_iter=1, assume_centered=True).fit(a)
 
     for p in mdl.precision_:
         # remove the diagonal
