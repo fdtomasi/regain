@@ -14,11 +14,12 @@ regain requires:
 - NumPy (>= 1.8.2)
 - scikit-learn (>= 0.17)
 
-To use the parameter selection via gaussian process optimisation, [GPyOpt](https://github.com/SheffieldML/GPyOpt) is required.
-You can install dependencies by running:
+You can install (required) dependencies by running:
 ```bash
 pip install -r requirements.txt
 ```
+
+To use the parameter selection via gaussian process optimisation, [skopt](https://scikit-optimize.github.io/) is required.
 
 ### Installation
 The simplest way to install regain is using pip
@@ -42,12 +43,12 @@ python setup.py develop
 A simple example for how to use LTGL.
 ```python
 import numpy as np
-from regain.admm import LatentTimeGraphLasso
-from regain.datasets import generate_dataset
+from regain.covariance import LatentTimeGraphLasso
+from regain.datasets import make_dataset
 from regain.utils import error_norm_time
 
 np.random.seed(42)
-data = generate_dataset(mode='l1l2', n_dim_lat=1, n_dim_obs=10)
+data = make_dataset(n_dim_lat=1, n_dim_obs=10)
 X = data.data
 theta = data.thetas
 
