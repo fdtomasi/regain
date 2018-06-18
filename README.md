@@ -4,9 +4,6 @@
 Regularised graph inference across multiple time stamps, considering the influence of latent variables.
 It inherits functionalities from the [scikit-learn](https://github.com/scikit-learn/scikit-learn) package.
 
-**NB**: The development version (branch `develop`) contains the code for `Forward-Backward splitting`.
-We plan to include it in the branch `master` soon.
-
 ## Getting started
 ### Dependencies
 regain requires:
