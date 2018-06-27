@@ -6,8 +6,10 @@ https://github.com/probml/pmtksupport/blob/master/GGM-GWishart/GWishartScore.m
 from functools import partial
 
 import numpy as np
+from numpy import binary_repr
 from scipy import linalg
 from scipy.optimize import minimize
+from scipy.special import comb
 from sklearn.covariance import empirical_covariance
 from sklearn.covariance.empirical_covariance_ import log_likelihood
 from sklearn.linear_model import LassoLars
@@ -15,6 +17,27 @@ from sklearn.utils import Bunch, check_array
 from sklearn.utils.extmath import fast_logdet
 
 from regain.covariance.graph_lasso_ import GraphLasso, graph_lasso
+
+
+def mk_all_ugs(n_dim):
+    """Utility for generating all possible """
+    nedges = int(comb(n_dim, 2))
+    m = 2 ** nedges
+
+    ind = np.array([list(binary_repr(x, width=len(binary_repr(m-1))))
+                    for x in range(m)]).astype(int)
+    ord = np.argsort(ind.sum(axis=1))
+    ind = ind[ord]
+
+    ut = np.triu(np.ones((n_dim, n_dim)), 1) > 0
+
+    Gs = []
+    for i in range(m):
+        G = np.zeros((n_dim, n_dim))
+        G[ut] = ind[i]
+        G = (G + G.T) > 0
+        Gs.append(G)
+    return Gs
 
 
 def markov_blankets(graphs, boolean=True, tol=1e-8, unique=False):
@@ -279,12 +302,10 @@ def GWishartScore(X, G, d0=3, S0=None, score_method='bic', mode='covsel'):
     # Compute the score
     GWpost = compute_score(X, G, P, S, GWprior, score_method)
     return GWpost
-    # score = GWpost.score
-    # loglik = GWpost.loglik
 
 
 def bayesian_graph_lasso(
-        X, tol=1e-8, alphas=None, n_resampling=200, mode='gl',
+        X, tol=1e-8, alphas=None, n_resampling=200, mode='gl', top_n=1,
         scoring='diaglaplace', assume_centered=False, max_iter=100):
     """Bayesian graphical lasso."""
     n_samples, n_dim = X.shape
@@ -317,7 +338,8 @@ def bayesian_graph_lasso(
     res = [GWishartScore(X, G, d0=d0, S0=S0, mode=mode, score_method=scoring)
            for G in nonzeros_all]
 
-    return sorted(res, key=lambda x: x.score)[::-1][0].P
+    top_n = [x.P for x in sorted(res, key=lambda x: x.score)[::-1][:top_n]]
+    return np.mean(top_n, axis=0)
 
 
 class BayesianGraphLasso(GraphLasso):
@@ -380,13 +402,14 @@ class BayesianGraphLasso(GraphLasso):
 
     def __init__(self, alpha=0.01, max_iter=100, alphas=None, n_resampling=200,
                  tol=1e-4, verbose=False, assume_centered=False, mode='gl',
-                 scoring='diaglaplace'):
+                 scoring='diaglaplace', top_n=1):
         super(GraphLasso, self).__init__(
             alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
             assume_centered=assume_centered, mode=mode)
         self.alphas = alphas
         self.n_resampling = n_resampling
         self.scoring = scoring
+        self.top_n = top_n
 
     def fit(self, X, y=None):
         """Fit the GraphLasso model to X.
@@ -409,5 +432,5 @@ class BayesianGraphLasso(GraphLasso):
             X, tol=self.tol, alphas=self.alphas,
             n_resampling=self.n_resampling, mode=self.mode,
             scoring=self.scoring, assume_centered=self.assume_centered,
-            max_iter=self.max_iter)
+            max_iter=self.max_iter, top_n=self.top_n)
         return self
