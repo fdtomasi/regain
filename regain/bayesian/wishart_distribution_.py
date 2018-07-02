@@ -58,10 +58,7 @@ class InverseWishartDistribution(WishartDistribution):
     """Inverse Wishart (IW) distribution."""
 
     def __init__(self, nu, S):
-        self.nu = nu
-        self.S = S
-        self.D = S.shape[0]
-        self.inv_S = linalg.pinvh(S)
+        super(InverseWishartDistribution, self).__init__(nu=nu, S=S)
 
     @property
     def mean(self):
