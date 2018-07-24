@@ -2,21 +2,9 @@ import numpy as np
 from scipy import linalg, stats
 from sklearn.utils.extmath import fast_logdet
 
-from regain.bayesian.wishart_process_ import GWP_construct, log_lik_frob
-
-normpdf = stats.norm.pdf
-
-
-def lognpdf(x, mu, sigma):
-    """This is like Matlab and numpy. stats.lognorm.pdf is different for the mean."""
-    return np.exp(-0.5 * ((np.log(x) - mu) / sigma) ** 2) \
-        / (x * sigma * np.sqrt(2 * np.pi))
-
-
-def lognstat(m, v):
-    mu = np.log(m**2 / np.sqrt(v + m**2))
-    sigma = np.sqrt(np.log(v / m**2 + 1))
-    return mu, sigma
+from regain.bayesian.stats import lognpdf, lognstat
+from regain.bayesian.wishart_process_ import (GWP_construct, log_lik_frob,
+                                              log_likelihood_normal)
 
 
 def elliptical_slice(
@@ -24,15 +12,15 @@ def elliptical_slice(
         *varargin):
     # %ELLIPTICAL_SLICE Markov chain update for a distribution with a Gaussian "prior" factored out
     # %
-    # %     [xx, cur_log_like] = elliptical_slice(xx, chol_Sigma, log_like_fn);
+    # %     [xx, cur_log_like] = elliptical_slice(xx, chol_Sigma, log_like_fn)
     # % OR
-    # %     [xx, cur_log_like] = selliptical_slice(xx, prior_sample, log_like_fn);
+    # %     [xx, cur_log_like] = selliptical_slice(xx, prior_sample, log_like_fn)
     # %
     # % Optional additional arguments: cur_log_like, angle_range, varargin (see below).
     # %
     # % A Markov chain update is applied to the D-element array xx leaving a
     # % "posterior" distribution
-    # %     P(xx) \propto N(xx;0,Sigma) L(xx)
+    # %     P(xx) \propto N(xx0,Sigma) L(xx)
     # % invariant. Where N(0,Sigma) is a zero-mean Gaussian distribution with
     # % covariance Sigma. Often L is a likelihood function in an inference problem.
     # %
@@ -69,16 +57,16 @@ def elliptical_slice(
 
     umat = xx.u
     # nu, p, N = umat.shape
-    v = xx.v;
-    V = xx.V;
-    S = xx.S;
-    L = xx.L;
-    x = xx.xx;
-    flag = 0;
+    v = xx.v
+    V = xx.V
+    S = xx.S
+    L = xx.L
+    x = xx.xx
+    flag = 0
     fil = V.shape[0]
 
     D = x.size
-    Ndatos = D / (v*fil);
+    Ndatos = D / (v*fil)
 
     if cur_log_like is None:
         cur_log_like = log_lik_frob(S, V, 1)
@@ -90,41 +78,41 @@ def elliptical_slice(
     else:
         # % User specified Cholesky of prior covariance:
         if prior.shape != (D, D):
-            raise ValueError('Prior must be given by a D-element sample or DxD chol(Sigma)');
-        nu = np.reshape(prior.T.dot(np.random.normal(D)), x.shape);
+            raise ValueError('Prior must be given by a D-element sample or DxD chol(Sigma)')
+        nu = np.reshape(prior.T.dot(np.random.normal(D)), x.shape)
 
-    hh = 0.001 * np.log(np.random.uniform()) + cur_log_like;
+    hh = 0.001 * np.log(np.random.uniform()) + cur_log_like
 
     # % Set up a bracket of angles and pick a first proposal.
     # % "phi = (theta'-theta)" is a change in angle.
     if angle_range <= 0:
         # % Bracket whole ellipse with both edges at first proposed point
-        phi = np.random.uniform()*2*np.pi;
-        phi_min = phi - 2*np.pi;
-        phi_max = phi;
+        phi = np.random.uniform()*2*np.pi
+        phi_min = phi - 2*np.pi
+        phi_max = phi
     else:
         # % Randomly center bracket on current point
-        phi_min = -angle_range * np.random.uniform();
-        phi_max = phi_min + angle_range;
-        phi = np.random.uniform() * (phi_max - phi_min) + phi_min;
+        phi_min = -angle_range * np.random.uniform()
+        phi_max = phi_min + angle_range
+        phi = np.random.uniform() * (phi_max - phi_min) + phi_min
 
     cont = 0
     # Slice sampling loop
     while True:
         # Compute xx for proposed angle difference and check if it's on the slice
-        # startOne = 1;
-        # endOne = 0;
-        xx_prop = np.real(x*np.cos(phi) + nu*np.sin(phi));
+        # startOne = 1
+        # endOne = 0
+        xx_prop = np.real(x*np.cos(phi) + nu*np.sin(phi))
         umat = xx_prop.reshape((v, fil, Ndatos))
-        # cell(v, fil);
+        # cell(v, fil)
         # for i in range(v):
         #     for j in range(fil):
-        #         endOne = endOne + Ndatos;
-        #         umat{i,j} = xx_prop(startOne:endOne);
-        #         startOne = endOne + 1;
+        #         endOne = endOne + Ndatos
+        #         umat{i,j} = xx_prop(startOne:endOne)
+        #         startOne = endOne + 1
 
-        V = GWP_construct(umat, L, v);
-        cur_log_like = log_lik_frob(S,V, sigma2);
+        V = GWP_construct(umat, L)
+        cur_log_like = log_lik_frob(S,V, sigma2)
 
         if cur_log_like > hh:
             # New point is on slice, ** EXIT LOOP **
@@ -144,7 +132,7 @@ def elliptical_slice(
             # raise RuntimeError('BUG DETECTED: Shrunk to current position and still not acceptable.')
 
         # Propose new angle difference
-        phi = np.random.uniform()*(phi_max - phi_min) + phi_min;
+        phi = np.random.uniform()*(phi_max - phi_min) + phi_min
         cont += 1
 
     if flag == 0:
@@ -182,13 +170,19 @@ def sample_hyper_kernel(ztau, sigma2prop, t, u, kern, muprior, sigma2prior):
 
 
 def logpunorm(l, t, umat, kern, muprior, sigma2prior):
-    K = kern(t[:, None], inverse_width=l)
-    U = linalg.cholesky(K + np.eye(K.shape[0]) * 1e-12)
-    invU = linalg.pinv(U)
+    K = kern(t[:, None], inverse_width=l) #+ np.eye(t.size) * 1e-5
+    k_inverse = linalg.pinvh(K)
+    # u_decomp = linalg.cholesky(K)
+    # u_inverse = linalg.pinv(u_decomp)
 
     v, p, n = umat.shape
-    F = np.tensordot(umat.transpose(1, 0, 2), invU, axes=1)
-    logpugl = -0.5 * (v*p*fast_logdet(K) + np.sum(F * F) + F.size * np.log(2*np.pi))
+    # F = np.tensordot(umat, u_inverse, axes=1)
+    F = np.tensordot(umat, umat, axes=([1, 0], [1, 0]))
+
+    # logpugl = v*p*fast_logdet(K) + np.sum(F * F) + umat.size * np.log(2*np.pi)
+    logpugl = v * p * fast_logdet(K) + np.sum(F * k_inverse)
+    logpugl += umat.size * np.log(2 * np.pi)
+    logpugl /= -2
 
     mu_prior, sigma_prior = lognstat(muprior, sigma2prior)
     log_prior = np.log(lognpdf(l, mu=mu_prior, sigma=sigma_prior))
@@ -198,42 +192,46 @@ def logpunorm(l, t, umat, kern, muprior, sigma2prior):
 
 
 def sample_L2(Ltau, sigma2Lprop, S, umat, sigma2error, muLprior, sigma2Lprior):
-    # % We do Metropolis-Hastings for sampling the posterior of the elements in L.
-    # % According to the paper, we use an spherical normal distribution
-    # % as the proposal
+    """Metropolis-Hastings for sampling the posterior of the elements in L.
 
-    # % Run the MH individually per component of L
+    Use a spherical normal distribution as the proposal.
+    """
+    # Run the MH individually per component of L
     free_elements = Ltau.size
-    Lp = np.zeros(free_elements);
+    L_proposal = np.zeros(free_elements)
     for i in range(free_elements):
-        Lp[i] = sample_L_comp(Ltau, i, sigma2Lprop[i], S, umat, sigma2error, muLprior[i], sigma2Lprior[i])
-        Ltau[i] = Lp[i]
+        L_proposal[i] = sample_L_comp(
+            Ltau, i, sigma2Lprop[i], S, umat, sigma2error, muLprior[i],
+            sigma2Lprior[i])
+        Ltau[i] = L_proposal[i]
 
-    return Lp
+    return L_proposal
 
-def sample_L_comp(Ltaug, i, sigma2Lprop, S, umat, sigma2error, muLprior, sigma2Lprior):
+
+def sample_L_comp(Ltaug, i, sigma2Lprop, S, umat, sigma2error, muLprior,
+                  sigma2Lprior):
     # Propose a sample
     Ltau = Ltaug[i]
-    Last = np.random.normal(Ltau, np.sqrt(sigma2Lprop));
-    Lastg = Ltaug;
-    Lastg[i] = Last;
+    Last = np.random.normal(Ltau, np.sqrt(sigma2Lprop))
+    Lastg = Ltaug
+    Lastg[i] = Last
+
     # Criterion to choose whether to accept the proposed sample or not
-    logpLast = logpLpost(Lastg, i, S, umat, sigma2error, muLprior, sigma2Lprior);
-    qzastztau = normpdf(Last, Ltau, np.sqrt(sigma2Lprop));
+    logpLast = logpLpost(Lastg, i, S, umat, sigma2error, muLprior, sigma2Lprior)
+    qzastztau = stats.norm.pdf(Last, Ltau, np.sqrt(sigma2Lprop))
 
-    logpLtau = logpLpost(Ltaug, i, S, umat, sigma2error, muLprior, sigma2Lprior);
-    qztauzast = normpdf(Ltau, Last, np.sqrt(sigma2Lprop));
+    logpLtau = logpLpost(Ltaug, i, S, umat, sigma2error, muLprior, sigma2Lprior)
+    qztauzast = stats.norm.pdf(Ltau, Last, np.sqrt(sigma2Lprop))
 
-    A = min(1, np.exp(logpLast - logpLtau)*(qztauzast/qzastztau));
+    A = min(1, np.exp(logpLast - logpLtau) * (qztauzast / qzastztau))
 
     # Now we decide whether to accept zast or use the previous value
     return Last if np.random.uniform() < A else Ltau
 
 def logpLpost(Lv, i, S, umat, sigma2e, muprior, sigma2prior):
-    L = np.zeros((2, 2))  # XXX
+    L = np.zeros_like(S[..., 0])  # p times p
     L[np.tril_indices_from(L)] = Lv
-    nu = umat.shape[0]
-    D = GWP_construct(umat, L, nu);
-    logpS = log_lik_frob(S, D, sigma2e);
-    logpL = -(1/2)*np.log(2*np.pi*sigma2prior) - 0.5*(((Lv[i] - muprior)**2)/sigma2prior);
-    return logpS + logpL;
+    D = GWP_construct(umat, L)
+    logpS = log_lik_frob(S, D, sigma2e)
+    logpL = log_likelihood_normal(Lv[i], muprior, sigma2prior)
+    return logpS + logpL
