@@ -50,8 +50,8 @@ def elliptical_slice(xx, prior, cur_log_like, sigma2, angle_range=0, max_iter=20
     The Proceedings of the 13th International Conference on Artificial
     Intelligence and Statistics (AISTATS), JMLR W&CP 9:541-548, 2010.
     """
-    umat = xx.xx
-    v, p, N = umat.shape
+    initial_theta = xx.xx
+    v, p, N = initial_theta.shape
     D = v * p * N
 
     S = xx.S
@@ -70,7 +70,7 @@ def elliptical_slice(xx, prior, cur_log_like, sigma2, angle_range=0, max_iter=20
         if prior.shape != (D, D):
             raise ValueError('Prior must be given by a D-element sample '
                              'or DxD chol(Sigma)')
-        nu = np.reshape(prior.T.dot(np.random.normal(size=D)), umat.shape)
+        nu = np.reshape(prior.T.dot(np.random.normal(size=D)), initial_theta.shape)
 
     hh = 0.001 * np.log(np.random.uniform()) + cur_log_like
 
@@ -91,14 +91,13 @@ def elliptical_slice(xx, prior, cur_log_like, sigma2, angle_range=0, max_iter=20
     error = False
     for iteration_ in range(max_iter):
         # Compute xx for proposed angle difference and check if it's on the slice
-        xx_proposal = np.real(umat * np.cos(phi) + nu * np.sin(phi))
+        xx_proposal = np.real(initial_theta * np.cos(phi) + nu * np.sin(phi))
         uut = np.array([u.dot(u.T) for u in xx_proposal.T])
         V = GWP_construct(xx_proposal, L, uut=uut)
         cur_log_like = log_lik_frob(S, V, sigma2)
 
         if cur_log_like > hh:
             # New point is on slice, ** EXIT LOOP **
-            print "escooo"
             break
 
         # Shrink slice to rejected point
@@ -116,7 +115,10 @@ def elliptical_slice(xx, prior, cur_log_like, sigma2, angle_range=0, max_iter=20
     else:
         error = True
 
-    if not error:
+    if error:
+        # revert to initial point
+        xx['xx'] = initial_theta
+    else:
         # update with new point
         xx['uut'] = uut
         xx['xx'] = xx_proposal
@@ -140,9 +142,8 @@ def sample_hyper_kernel(ztau, sigma2prop, t, u, kern, muprior, sigma2prior):
     logpzast = logpunorm(zast, t, u, kern, muprior, sigma2prior)
     qzastztau = lognpdf(zast, mu=mu, sigma=sigma)
 
-    logpztau = logpunorm(ztau, t, u, kern, muprior, sigma2prior)
     mu, sigma = lognstat(zast, sigma2prop)
-
+    logpztau = logpunorm(ztau, t, u, kern, muprior, sigma2prior)
     qztauzast = lognpdf(ztau, mu=mu, sigma=sigma)
 
     acceptance_proba = min(
@@ -199,20 +200,23 @@ def sample_L_comp(Ltaug, i, sigma2Lprop, S, umat, sigma2error, mu_prior,
     # Propose a sample
     Ltau = Ltaug[i]
     Last = np.random.normal(Ltau, np.sqrt(sigma2Lprop))
-    Lastg = Ltaug
+    Lastg = Ltaug.copy()
     Lastg[i] = Last
 
     # Criterion to choose whether to accept the proposed sample or not
+    # normpdf = lambda x, m, s: np.exp(-0.5 * ((x - m)/s)**2) / (np.sqrt(2*np.pi) * s)
+
     logpLast = logpLpost(Lastg, i, S, umat, sigma2error, mu_prior, var_prior, uut=uut)
-    qzastztau = stats.norm.pdf(Last, Ltau, np.sqrt(sigma2Lprop))
+    q_ast_tau = stats.norm.pdf(Last, Ltau, np.sqrt(sigma2Lprop))
 
     logpLtau = logpLpost(Ltaug, i, S, umat, sigma2error, mu_prior, var_prior, uut=uut)
-    qztauzast = stats.norm.pdf(Ltau, Last, np.sqrt(sigma2Lprop))
+    q_tau_ast = stats.norm.pdf(Ltau, Last, np.sqrt(sigma2Lprop))
 
-    A = min(1, np.exp(logpLast - logpLtau) * (qztauzast / qzastztau))
+    A = min(1, np.exp(logpLast - logpLtau) * (q_tau_ast / q_ast_tau))
 
     # Now we decide whether to accept zast or use the previous value
     return Last if np.random.uniform() < A else Ltau
+
 
 def logpLpost(Lv, i, S, umat, sigma2e, mu_prior, var_prior, uut=None):
     L = np.zeros_like(S[..., 0])  # p times p
