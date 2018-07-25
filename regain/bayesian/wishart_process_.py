@@ -3,18 +3,27 @@ from scipy import stats
 from sklearn.utils.extmath import squared_norm
 
 
-def GWP_construct(umat, L):
-    v, p, n = umat.shape
-    M = np.zeros((p, p, n))
+def GWP_construct(umat, L, uut=None):
+    """Build the sample from the GWP.
 
-    for i in range(n):
-        for j in range(v):
-            Lu = L.dot(umat[j, :, i])
-            LuuL = Lu[:, None].dot(Lu[None, :])
-            M[..., i] += LuuL
+    Optimised with uut:
+    uut = np.array([u.dot(u.T) for u in umat.T])
+    """
 
-    # Lu =
-    # N = np.array([np.linalg.multi_dot((L, umat[..., i].T, umat[..., i], L.T)) for i in range(n)]).transpose()
+    if uut is None:
+        v, p, n = umat.shape
+        M = np.zeros((p, p, n))
+        for i in range(n):
+            for j in range(v):
+                Lu = L.dot(umat[j, :, i])
+                LuuL = Lu[:, None].dot(Lu[None, :])
+                M[..., i] += LuuL
+
+    else:
+        M = np.array([np.linalg.multi_dot((L, uu_i, L.T))
+                      for uu_i in uut]).transpose()
+
+    # assert np.allclose(N, M)
     return M
 
 

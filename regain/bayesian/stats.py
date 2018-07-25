@@ -8,6 +8,7 @@ def lognpdf(x, mu, sigma):
 
 
 def lognstat(m, v):
-    mu = np.log(m**2 / np.sqrt(v + m**2))
-    sigma = np.sqrt(np.log(v / m**2 + 1))
+    m2 = m * m
+    mu = np.log(m2 / np.sqrt(v + m2))
+    sigma = np.sqrt(np.log(v / m2 + 1))
     return mu, sigma
