@@ -128,57 +128,53 @@ def elliptical_slice(xx, prior, cur_log_like, sigma2, angle_range=0, max_iter=20
     return xx, cur_log_like_start if error else cur_log_like
 
 
-def sample_hyper_kernel(ztau, sigma2prop, t, u, kern, muprior, sigma2prior):
+def sample_hyper_kernel(z_tau, var_proposal, t, u, kern, mean_prior, var_prior):
     """Metropolis-Hastings for sampling the posterior of the kernel
     hyperparameter.
 
     According to the paper, we use a lognormal distribution as the proposal.
     """
     # Propose a sample
-    mu, sigma = lognstat(ztau, sigma2prop)
+    mu, sigma = lognstat(z_tau, var_proposal)
     zast = np.random.lognormal(mu, sigma)
 
     # Criterion to choose whether to accept the proposed sample or not
-    logpzast = logpunorm(zast, t, u, kern, muprior, sigma2prior)
+    logpzast = logpunorm(zast, t, u, kern, mean_prior, var_prior)
     qzastztau = lognpdf(zast, mu=mu, sigma=sigma)
 
-    mu, sigma = lognstat(zast, sigma2prop)
-    logpztau = logpunorm(ztau, t, u, kern, muprior, sigma2prior)
-    qztauzast = lognpdf(ztau, mu=mu, sigma=sigma)
+    mu, sigma = lognstat(zast, var_proposal)
+    logpztau = logpunorm(z_tau, t, u, kern, mean_prior, var_prior)
+    qztauzast = lognpdf(z_tau, mu=mu, sigma=sigma)
 
     acceptance_proba = min(
         1, np.exp(logpzast - logpztau) * (qztauzast / qzastztau))
 
     # Now we decide whether to accept zast or use the previous value
     accept = np.random.uniform() < acceptance_proba
-    lp = zast if accept else ztau
+    lp = zast if accept else z_tau
     return lp, accept
 
 
-def logpunorm(l, t, umat, kern, muprior, sigma2prior):
-    K = kern(t[:, None], inverse_width=l) #+ np.eye(t.size) * 1e-5
+def logpunorm(l, t, umat, kern, mean_prior, var_prior):
+    K = kern(t[:, None], inverse_width=l)
     k_inverse = linalg.pinvh(K)
-    # u_decomp = linalg.cholesky(K)
-    # u_inverse = linalg.pinv(u_decomp)
 
     v, p, n = umat.shape
-    # F = np.tensordot(umat, u_inverse, axes=1)
     F = np.tensordot(umat, umat, axes=([1, 0], [1, 0]))
 
-    # logpugl = v*p*fast_logdet(K) + np.sum(F * F) + umat.size * np.log(2*np.pi)
     logpugl = v * p * fast_logdet(K) + np.sum(F * k_inverse)
     logpugl += umat.size * np.log(2 * np.pi)
     logpugl *= -0.5
-    # logpugl /= -2
 
-    mu_prior, sigma_prior = lognstat(muprior, sigma2prior)
+    mu_prior, sigma_prior = lognstat(mean_prior, var_prior)
     logp_prior = np.log(lognpdf(l, mu=mu_prior, sigma=sigma_prior))
 
     logprob = logpugl + logp_prior
     return logprob
 
 
-def sample_L2(Ltau, sigma2Lprop, S, umat, sigma2error, muLprior, sigma2Lprior, uut=None):
+def sample_L2(Ltau, var_proposal, S, umat, sigma2error,
+              mu_prior, var_prior, uut=None):
     """Metropolis-Hastings for sampling the posterior of the elements in L.
 
     Use a spherical normal distribution as the proposal.
@@ -187,16 +183,18 @@ def sample_L2(Ltau, sigma2Lprop, S, umat, sigma2error, muLprior, sigma2Lprior, u
     free_elements = Ltau.size
     L_proposal = np.zeros(free_elements)
     for i in range(free_elements):
-        L_proposal[i] = sample_L_comp(
-            Ltau, i, sigma2Lprop[i], S, umat, sigma2error, muLprior[i],
-            sigma2Lprior[i], uut=uut)
+        L_proposal[i] = _sample_ell_comp(
+            Ltau, i, var_proposal[i], S, umat, sigma2error, mu_prior[i],
+            var_prior[i], uut=uut)
         Ltau[i] = L_proposal[i]
 
     return L_proposal
 
 
-def sample_L_comp(Ltaug, i, sigma2Lprop, S, umat, sigma2error, mu_prior,
-                  var_prior, uut=None):
+def _sample_ell_comp(
+        Ltaug, i, sigma2Lprop, S, umat, sigma2error, mu_prior, var_prior,
+        uut=None):
+    """Sample a single element for L."""
     # Propose a sample
     Ltau = Ltaug[i]
     Last = np.random.normal(Ltau, np.sqrt(sigma2Lprop))
@@ -206,10 +204,10 @@ def sample_L_comp(Ltaug, i, sigma2Lprop, S, umat, sigma2error, mu_prior,
     # Criterion to choose whether to accept the proposed sample or not
     # normpdf = lambda x, m, s: np.exp(-0.5 * ((x - m)/s)**2) / (np.sqrt(2*np.pi) * s)
 
-    logpLast = logpLpost(Lastg, i, S, umat, sigma2error, mu_prior, var_prior, uut=uut)
+    logpLast = logp_ell_posterior(Lastg, i, S, umat, sigma2error, mu_prior, var_prior, uut=uut)
     q_ast_tau = stats.norm.pdf(Last, Ltau, np.sqrt(sigma2Lprop))
 
-    logpLtau = logpLpost(Ltaug, i, S, umat, sigma2error, mu_prior, var_prior, uut=uut)
+    logpLtau = logp_ell_posterior(Ltaug, i, S, umat, sigma2error, mu_prior, var_prior, uut=uut)
     q_tau_ast = stats.norm.pdf(Ltau, Last, np.sqrt(sigma2Lprop))
 
     A = min(1, np.exp(logpLast - logpLtau) * (q_tau_ast / q_ast_tau))
@@ -218,7 +216,7 @@ def sample_L_comp(Ltaug, i, sigma2Lprop, S, umat, sigma2error, mu_prior,
     return Last if np.random.uniform() < A else Ltau
 
 
-def logpLpost(Lv, i, S, umat, sigma2e, mu_prior, var_prior, uut=None):
+def logp_ell_posterior(Lv, i, S, umat, sigma2e, mu_prior, var_prior, uut=None):
     L = np.zeros_like(S[..., 0])  # p times p
     L[np.tril_indices_from(L)] = Lv
     D = GWP_construct(umat, L, uut=uut)
