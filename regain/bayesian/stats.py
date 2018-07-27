@@ -1,6 +1,7 @@
 """Statistical functions."""
 import numpy as np
 from sklearn.utils.extmath import squared_norm
+from scipy.stats import multivariate_normal
 
 
 def lognormal_pdf(x, mu, sigma):
@@ -47,3 +48,9 @@ def log_likelihood_normal(x, mean, var):
     # logl2 = stats.norm.logpdf(x, loc=mean, scale=np.sqrt(var))
     # assert logl == logl2, (logl, logl2)
     return logl
+
+
+def time_multivariate_normal_logpdf(X, Cov):
+    return sum(sum(
+        multivariate_normal.logpdf(x, cov=Sigma, allow_singular=True)
+        for x, Sigma in zip(X.transpose(2, 0, 1), Cov.T)))

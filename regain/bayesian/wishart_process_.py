@@ -53,12 +53,12 @@ def predict(t_test, t_train, u_map, L_map, kern, inverse_width_map):
     A = kern(t_test[:, None], t_train[:, None], inverse_width=inverse_width_map)
     invKB = linalg.pinvh(KB)
 
-    # umat_test is the mean of the data
-    nu, p, _ = u_map.shape
+    # u_test is the mean of the data
     A_invKb = A.dot(invKB)
 
     u_test = np.tensordot(A_invKb, u_map.T, axes=1).T
     # equivalent to:
+    # nu, p, _ = u_map.shape
     # u_test = np.zeros((nu, p, t_test.size))
     # for i in range(nu):
     #     for j in range(p):

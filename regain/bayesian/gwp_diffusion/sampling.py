@@ -3,9 +3,8 @@ import numpy as np
 from scipy import linalg, stats
 from sklearn.utils.extmath import fast_logdet
 
-from regain.bayesian.stats import (log_likelihood_normal, lognormal_logpdf,
-                                   lognormal_pdf, lognstat,
-                                   time_multivariate_normal_logpdf)
+from regain.bayesian.stats import (log_lik_frob, log_likelihood_normal,
+                                   lognormal_logpdf, lognormal_pdf, lognstat)
 from regain.bayesian.wishart_process_ import GWP_construct
 
 
@@ -55,13 +54,12 @@ def elliptical_slice(
     v, p, N = initial_theta.shape
     D = v * p * N
 
-    # S = xx.S
+    S = xx.S
     L = xx.L
 
     cur_log_like_start = cur_log_like
     if cur_log_like is None:
-        # cur_log_like = log_lik_frob(S, xx.V, variance)
-        cur_log_like = time_multivariate_normal_logpdf(initial_theta, xx.V)
+        cur_log_like = log_lik_frob(S, xx.V, variance)
 
     # Set up the ellipse and the slice threshold
     if prior.size == D:
@@ -91,16 +89,12 @@ def elliptical_slice(
 
     # Slice sampling loop
     error = False
-    # LLt = L.dot(L.T)
     for iteration_ in range(max_iter):
         # Compute xx for proposed angle difference and check if on the slice
         xx_proposal = np.real(initial_theta * np.cos(phi) + nu * np.sin(phi))
-
         uut = np.array([u.dot(u.T) for u in xx_proposal.T])
         V = GWP_construct(xx_proposal, L, uut=uut)
-        # cur_log_like = log_lik_frob(S, V, variance)
-        # cur_log_like = stats.wishart.logpdf(V, nu, LLt)
-        cur_log_like = time_multivariate_normal_logpdf(xx_proposal, V)
+        cur_log_like = log_lik_frob(S, V, variance)
 
         if cur_log_like > hh:
             # New point is on slice, ** EXIT LOOP **
@@ -257,10 +251,10 @@ def _sample_ell_comp(
     # Criterion to choose whether to accept the proposed sample or not
     # normpdf = lambda x, m, s: np.exp(-0.5 * ((x - m)/s)**2) / (np.sqrt(2*np.pi) * s)
 
-    logpLast = logp_ell_posterior(Lastg, i, umat, mu_prior, var_prior, uut=uut)
+    logpLast = logp_ell_posterior(Lastg, i, S, umat, var_err, mu_prior, var_prior, uut=uut)
     q_ast_tau = stats.norm.pdf(Last, Ltau, np.sqrt(sigma2Lprop))
 
-    logpLtau = logp_ell_posterior(Ltaug, i, umat, mu_prior, var_prior, uut=uut)
+    logpLtau = logp_ell_posterior(Ltaug, i, S, umat, var_err, mu_prior, var_prior, uut=uut)
     q_tau_ast = stats.norm.pdf(Ltau, Last, np.sqrt(sigma2Lprop))
 
     A = min(1, np.exp(logpLast - logpLtau) * (q_tau_ast / q_ast_tau))
@@ -269,12 +263,10 @@ def _sample_ell_comp(
     return Last if np.random.uniform() < A else Ltau
 
 
-def logp_ell_posterior(Lv, i, u, mu_prior, var_prior, uut=None):
-    v, p, n = u.shape
-    L = np.zeros((p, p))
+def logp_ell_posterior(Lv, i, S, umat, var_err, mu_prior, var_prior, uut=None):
+    L = np.zeros_like(S[..., 0])  # p times p
     L[np.tril_indices_from(L)] = Lv
-    D = GWP_construct(u, L, uut=uut)
-    # logpS = log_lik_frob(S, D, var_err)
-    logp = time_multivariate_normal_logpdf(u, D)
+    D = GWP_construct(umat, L, uut=uut)
+    logpS = log_lik_frob(S, D, var_err)
     logpL = log_likelihood_normal(Lv[i], mu_prior, var_prior)
-    return logp + logpL
+    return logpS + logpL
