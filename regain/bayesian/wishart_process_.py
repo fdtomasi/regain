@@ -1,6 +1,5 @@
 import numpy as np
-from scipy import stats
-from sklearn.utils.extmath import squared_norm
+from scipy import linalg
 
 
 def GWP_construct(umat, L, uut=None):
@@ -27,16 +26,47 @@ def GWP_construct(umat, L, uut=None):
     return M
 
 
-def log_lik_frob(S, D, sigma2):
-    """Frobenius norm log likelihood."""
-    logl = -0.5 * (S.size * np.log(2. * np.pi * sigma2)
-                   + squared_norm(S - D) / sigma2)
-    return logl
+def predict(t_test, t_train, u_map, L_map, kern, inverse_width_map):
+    """Predict covariance matrix for t_test.
 
+    Parameters
+    ----------
+    t_{test, train} : ndarray
+        Test and train time points.
+    u_map : type
+        MAP estimate of u parameter.
+    L_map : type
+        MAP estimate of L parameter.
+    kern : type
+        Kernel function.
+    inverse_width_map : float
+        MAP estimate of inverse_width, the kernel parameter.
 
-def log_likelihood_normal(x, mean, var):
-    """Normal log likelihood."""
-    logl = -0.5 * (np.log(2 * np.pi * var) + (x - mean) ** 2 / var)
-    # logl2 = stats.norm.logpdf(x, loc=mean, scale=np.sqrt(var))
-    # assert logl == logl2, (logl, logl2)
-    return logl
+    Returns
+    -------
+    ndarray, shape (p, p, t_test.size)
+        List of covariances at t_test.
+
+    """
+    # Compute the mean for ustar for test data
+    KB = kern(t_train[:, None], inverse_width=inverse_width_map)
+    A = kern(t_test[:, None], t_train[:, None], inverse_width=inverse_width_map)
+    invKB = linalg.pinvh(KB)
+
+    # umat_test is the mean of the data
+    nu, p, _ = u_map.shape
+    A_invKb = A.dot(invKB)
+
+    u_test = np.tensordot(A_invKb, u_map.T, axes=1).T
+    # equivalent to:
+    # u_test = np.zeros((nu, p, t_test.size))
+    # for i in range(nu):
+    #     for j in range(p):
+    #         u_test[i, j, :] = A_invKb.dot(u_map[i, j, :])
+
+    # Covariance of test data is
+    # I_p - AK^{-1}A^T
+    test_size = t_test.size
+    test_covariance = np.eye(test_size) - A_invKb.dot(A.T)
+
+    return GWP_construct(u_test, L_map)
