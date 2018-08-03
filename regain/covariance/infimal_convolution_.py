@@ -8,8 +8,6 @@ from scipy import linalg
 from six.moves import range
 from sklearn.utils.extmath import squared_norm
 
-from regain.covariance.graph_lasso_ import GraphLasso
-from regain.covariance.latent_graph_lasso_ import latent_graph_lasso
 from regain.norm import l1_od_norm
 from regain.prox import prox_laplacian, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
