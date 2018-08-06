@@ -1,21 +1,44 @@
+"""Wrapper for PASPAL (Matlab implementation)."""
 import matlab
 import matlab.engine
 import numpy as np
 import os
 
-matlab_engine = matlab.engine.start_matlab()
+
+matlab_engine = None  # matlab.engine.start_matlab()
 
 
 def group_lasso_overlap_paspal(X, y, groups=(), lamda=0.1, verbose=False,
                                **kwargs):
-    # if matlab_engine is None or not matlab_engine._check_matlab():
-    #     if verbose:
-    #         print("Starting matlab engine ...")
-    #     close_engine = True
-    #     matlab_engine = matlab.engine.start_matlab()
+    """Group Lasso with Overlap via PASPAL (Matlab implementation).
+
+    Parameters
+    ----------
+    X : ndarray
+        Data.
+    y : ndarray
+        Classes.
+    groups : list-type
+        Groups of variables.
+    lamda : float
+        Regularization parameter.
+    verbose : boolean
+        If True, print debug information.
+
+    Returns
+    -------
+    coef_
+        Coefficient of the Lasso algorithm for each feature.
+
+    """
+    global matlab_engine
+    if matlab_engine is None or not matlab_engine._check_matlab():
+        if verbose:
+            print("Starting matlab engine ...")
+        # close_engine = True
+        matlab_engine = matlab.engine.start_matlab()
     # else:
     #     close_engine = False
-    global matlab_engine
 
     matlab_engine.addpath(
         os.path.join(os.path.abspath(os.path.dirname(__file__)),
@@ -36,6 +59,7 @@ def group_lasso_overlap_paspal(X, y, groups=(), lamda=0.1, verbose=False,
 
 
 def test():
+    """Test function for the module."""
     from sklearn.datasets import make_regression
     X, y, coef = make_regression(n_features=10, coef=True, n_informative=5)
 
