@@ -205,7 +205,8 @@ def time_graph_lasso(
     else:
         warnings.warn("Objective did not converge.")
 
-    return_list = [Z_0, emp_cov]
+    covariance_ = np.array([linalg.pinvh(x) for x in Z_0])
+    return_list = [Z_0, covariance_]
     if return_history:
         return_list.append(checks)
     if return_n_iter:

@@ -46,7 +46,7 @@ def blockwise_soft_thresholding(a, lamda):
     """Proximal operator for l2 norm."""
     x = np.empty_like(a)
     for t in range(a.shape[0]):
-        x[t] = np.array([soft_thresholding(
+        x[t] = np.array([soft_thresholding_vector(
             a[t, :, j], lamda) for j in range(a.shape[2])]).T
     return x
 
