@@ -26,7 +26,7 @@ def plot_graph_with_latent_variables(
     #    G, pos, nodelist=list(np.arange(n_latents, n_latents + n_observed)), ax=ax,
     #    node_color='b', node_size=node_size, alpha=0.2)
     if labels is not None:
-        nx.draw_networkx_labels(G,pos,labels,font_size=font_size, ax=ax)
+        nx.draw_networkx_labels(G, pos, labels, font_size=font_size, ax=ax)
 
     #nx.draw_networkx_edges(
     #    G, pos, colors=range(n_observed), cmap=plt.cm.Blues,width=1.0, alpha=0.5, ax=ax)
@@ -39,15 +39,16 @@ def plot_graph_with_latent_variables(
     return ax
 
 
-def plot_cov_2d(means, cov, sdwidth=1.0, npts=50, ax=None):
-    tt = np.linspace(0,2*np.pi, 100)
+def plot_cov_2d(means, cov, sdwidth=1.0, npts=50, ax=None, c=None):
+    tt = np.linspace(0, 2 * np.pi, 100)
     ap = np.array([np.cos(tt), np.sin(tt)])
 
     d, v = linalg.eigh(cov)
     d = sdwidth * np.sqrt(d)
 
-    bp = (v.dot(np.diag(d)).dot(ap)) + means.ravel()[:,None]
-    plt.plot(bp[0], bp[1])
+    bp = (v.dot(np.diag(d)).dot(ap)) + means.ravel()[:, None]
+    plot = plt.plot if ax is None else ax.plot
+    plot(bp[0], bp[1], c=c)
 
 
 def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
@@ -69,16 +70,17 @@ def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
     -------
         A matplotlib ellipse artist
     """
+
     def eigsorted(cov):
         vals, vecs = np.linalg.eigh(cov)
         order = vals.argsort()[::-1]
-        return vals[order], vecs[:,order]
+        return vals[order], vecs[:, order]
 
     if ax is None:
         ax = plt.gca()
 
     vals, vecs = eigsorted(cov)
-    theta = np.degrees(np.arctan2(*vecs[:,0][::-1]))
+    theta = np.degrees(np.arctan2(*vecs[:, 0][::-1]))
 
     # Width and height are "full" widths, not radius
     width, height = 2 * nstd * np.sqrt(vals)
