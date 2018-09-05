@@ -11,7 +11,7 @@ from regain.bayesian.wishart_process_ import GWP_construct
 
 
 def elliptical_slice(
-        xx, prior, cur_log_like, variance, likelihood=None, angle_range=0,
+        xx, prior, cur_log_like, likelihood=None, angle_range=0,
         max_iter=20):
     """Markov chain update for a distribution with a Gaussian "prior" factored out.
 
@@ -239,7 +239,7 @@ def logpunorm(inverse_width, t, u, kern, mean_prior, var_prior):
 
 
 def sample_ell(
-        Ltau, var_proposal, S, umat, var_err, mu_prior, var_prior, uut=None,
+        Ltau, var_proposal, umat, mu_prior, var_prior, uut=None,
         likelihood=None):
     """Metropolis-Hastings for sampling the posterior of the elements in L.
 
@@ -250,7 +250,7 @@ def sample_ell(
     L_proposal = np.zeros(free_elements)
     for i in range(free_elements):
         L_proposal[i] = _sample_ell_comp(
-            Ltau, i, var_proposal[i], S, umat, var_err, mu_prior=mu_prior[i],
+            Ltau, i, var_proposal[i], umat, mu_prior=mu_prior[i],
             var_prior=var_prior[i], uut=uut, likelihood=likelihood)
         Ltau[i] = L_proposal[i]
 
@@ -258,7 +258,7 @@ def sample_ell(
 
 
 def _sample_ell_comp(
-        Ltaug, i, sigma2Lprop, S, umat, var_err, mu_prior, var_prior, uut=None,
+        Ltaug, i, sigma2Lprop, umat, mu_prior, var_prior, uut=None,
         likelihood=None):
     """Sample a single element for L."""
     if likelihood is None:
@@ -272,7 +272,8 @@ def _sample_ell_comp(
     Lastg[i] = Last
 
     # Criterion to choose whether to accept the proposed sample or not
-    # normpdf = lambda x, m, s: np.exp(-0.5 * ((x - m)/s)**2) / (np.sqrt(2*np.pi) * s)
+    # normpdf = lambda x, m, s: ...
+    # np.exp(-0.5 * ((x - m)/s)**2) / (np.sqrt(2*np.pi) * s)
 
     logp_post = partial(
         logp_ell_posterior, i=i, u=umat, mu_prior=mu_prior,
@@ -291,7 +292,7 @@ def _sample_ell_comp(
 
 
 def logp_ell_posterior(
-        Lv, i, u, mu_prior, var_prior, uut=None, likelihood=None):
+        ell_lower, i, u, mu_prior, var_prior, uut=None, likelihood=None):
     """Short summary.
 
     Parameters
@@ -318,10 +319,10 @@ def logp_ell_posterior(
 
     """
     v, p, n = u.shape
-    L = np.zeros((p, p))
-    L[np.tril_indices_from(L)] = Lv
-    D = GWP_construct(u, L, uut=uut)
+    ell = np.zeros((p, p))
+    ell[np.tril_indices_from(ell)] = ell_lower
+    D = GWP_construct(u, ell, uut=uut)
     # logpS = log_lik_frob(S, D, var_err)
-    logp = likelihood(D)
-    logpL = log_likelihood_normal(Lv[i], mu_prior, var_prior)
-    return logp + logpL
+    posterior = likelihood(D)
+    prior = log_likelihood_normal(ell_lower[i], mu_prior, var_prior)
+    return posterior + prior
