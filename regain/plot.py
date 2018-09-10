@@ -51,7 +51,7 @@ def plot_cov_2d(means, cov, sdwidth=1.0, npts=50, ax=None, c=None):
     plot(bp[0], bp[1], c=c)
 
 
-def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
+def plot_cov_ellipse(pos, cov, nstd=2, ax=None, **kwargs):
     """
     Plots an `nstd` sigma error ellipse based on the specified covariance
     matrix (`cov`). Additional keyword arguments are passed on to the
@@ -76,17 +76,22 @@ def plot_cov_ellipse(cov, pos, nstd=2, ax=None, **kwargs):
         order = vals.argsort()[::-1]
         return vals[order], vecs[:, order]
 
-    if ax is None:
-        ax = plt.gca()
-
     vals, vecs = eigsorted(cov)
     theta = np.degrees(np.arctan2(*vecs[:, 0][::-1]))
 
     # Width and height are "full" widths, not radius
     width, height = 2 * nstd * np.sqrt(vals)
+
+    if width == 0:
+        width += 0.1
+    if height == 0:
+        height += 0.1
+
+    if ax is None:
+        ax = plt.gca()
+        plt.xlim([- (width + pos[0] + 0.1), width + pos[0] + 0.1])
+        plt.ylim([- (height + pos[1] + 0.1), height + pos[1] + 0.1])
     ellip = Ellipse(xy=pos, width=width, height=height, angle=theta, **kwargs)
 
     ax.add_artist(ellip)
-    ax.set_ylim([2, 6])
-    ax.set_xlim([0, 7])
     return ellip
