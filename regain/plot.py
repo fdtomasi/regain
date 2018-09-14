@@ -6,13 +6,13 @@ from scipy import linalg
 
 
 def plot_graph_with_latent_variables(
-        adjacency_matrix, n_observed, title="", n_latents=0,
-        labels=None, ax=None, node_size=100, font_size=5):
+        adjacency_matrix, n_observed, title="", n_latents=0, labels=None,
+        ax=None, node_size=100, font_size=5):
     """Plot graph with latent variables."""
     import networkx as nx
     # plt.figure(figsize=(15,10))
     if ax is None:
-        f, ax = plt.subplots(1,1)
+        f, ax = plt.subplots(1, 1)
 
     G = nx.from_numpy_matrix(adjacency_matrix)
     pos = nx.circular_layout(G, scale=.1)
@@ -30,9 +30,10 @@ def plot_graph_with_latent_variables(
 
     #nx.draw_networkx_edges(
     #    G, pos, colors=range(n_observed), cmap=plt.cm.Blues,width=1.0, alpha=0.5, ax=ax)
-    nx.draw(G, pos, node_color='#A0CBE2', node_size=node_size,
-            edge_color=range(len(G.edges.values())), alpha=1,
-            width=2, edge_cmap=plt.cm.Blues, with_labels=False, ax=ax)
+    nx.draw(
+        G, pos, node_color='#A0CBE2', node_size=node_size, edge_color=range(
+            len(G.edges.values())), alpha=1, width=2, edge_cmap=plt.cm.Blues,
+        with_labels=False, ax=ax)
 
     ax.set_axis_off()
     ax.set_title(title)
@@ -40,6 +41,23 @@ def plot_graph_with_latent_variables(
 
 
 def plot_cov_2d(means, cov, sdwidth=1.0, npts=50, ax=None, c=None):
+    """Plot a 2D covariance matrix.
+
+    Parameters
+    ----------
+    means : list
+        List of two means for the two dimensions of the covariance.
+    cov : ndarray
+        Covariance matrix (must be 2-dimensional).
+    sdwidth : float, optional
+        Width of the standard deviation.
+    npts : int, optional
+        Number of points used to generate the plot.
+    ax : plt.ax, optional
+        Pass an axis to plot the covariance there,
+    c : str, optional
+        Color of the plot.
+    """
     tt = np.linspace(0, 2 * np.pi, 100)
     ap = np.array([np.cos(tt), np.sin(tt)])
 
@@ -52,23 +70,24 @@ def plot_cov_2d(means, cov, sdwidth=1.0, npts=50, ax=None, c=None):
 
 
 def plot_cov_ellipse(pos, cov, nstd=2, ax=None, **kwargs):
-    """
-    Plots an `nstd` sigma error ellipse based on the specified covariance
-    matrix (`cov`). Additional keyword arguments are passed on to the
-    ellipse patch artist.
+    """Plots an `nstd` sigma error ellipse based on the specified covariance.
+
+    Additional keyword arguments are passed on to the ellipse patch artist.
+
     Parameters
     ----------
-        cov : The 2x2 covariance matrix to base the ellipse on
-        pos : The location of the center of the ellipse. Expects a 2-element
-            sequence of [x0, y0].
-        nstd : The radius of the ellipse in numbers of standard deviations.
-            Defaults to 2 standard deviations.
-        ax : The axis that the ellipse will be plotted on. Defaults to the
-            current axis.
-        Additional keyword arguments are pass on to the ellipse patch.
+    cov : The 2x2 covariance matrix to base the ellipse on
+    pos : The location of the center of the ellipse. Expects a 2-element
+        sequence of [x0, y0].
+    nstd : The radius of the ellipse in numbers of standard deviations.
+        Defaults to 2 standard deviations.
+    ax : The axis that the ellipse will be plotted on. Defaults to the
+        current axis.
+    Additional keyword arguments are pass on to the ellipse patch.
+
     Returns
     -------
-        A matplotlib ellipse artist
+    A matplotlib ellipse artist
     """
 
     def eigsorted(cov):
@@ -89,8 +108,8 @@ def plot_cov_ellipse(pos, cov, nstd=2, ax=None, **kwargs):
 
     if ax is None:
         ax = plt.gca()
-        plt.xlim([- (width + pos[0] + 0.1), width + pos[0] + 0.1])
-        plt.ylim([- (height + pos[1] + 0.1), height + pos[1] + 0.1])
+        plt.xlim([-(width + pos[0] + 0.1), width + pos[0] + 0.1])
+        plt.ylim([-(height + pos[1] + 0.1), height + pos[1] + 0.1])
     ellip = Ellipse(xy=pos, width=width, height=height, angle=theta, **kwargs)
 
     ax.add_artist(ellip)
