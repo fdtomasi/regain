@@ -279,16 +279,13 @@ def _sample_ell_comp(
         logp_ell_posterior, i=i, u=umat, mu_prior=mu_prior,
         var_prior=var_prior, uut=uut, likelihood=likelihood)
 
-    logpLast = logp_post(Lastg)
+    logp_diff = logp_post(Lastg) - logp_post(Ltaug)
     q_ast_tau = stats.norm.pdf(Last, Ltau, np.sqrt(sigma2Lprop))
-
-    logpLtau = logp_post(Ltaug)
     q_tau_ast = stats.norm.pdf(Ltau, Last, np.sqrt(sigma2Lprop))
 
-    A = min(1, np.exp(logpLast - logpLtau) * (q_tau_ast / q_ast_tau))
-
     # Now we decide whether to accept zast or use the previous value
-    return Last if np.random.uniform() < A else Ltau
+    accept = min(1, np.exp(logp_diff) * (q_tau_ast / q_ast_tau))
+    return Last if np.random.uniform() < accept else Ltau
 
 
 def logp_ell_posterior(
