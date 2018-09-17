@@ -290,14 +290,14 @@ def _sample_ell_comp(
 
 def logp_ell_posterior(
         ell_lower, i, u, mu_prior, var_prior, uut=None, likelihood=None):
-    """Short summary.
+    """Log-probability of the posterior of L.
 
     Parameters
     ----------
-    Lv : type
-        Description of parameter `Lv`.
+    ell_lower : ndarray
+        Lower Cholesky.
     i : type
-        Description of parameter `i`.
+        Index.
     u : type
         Description of parameter `u`.
     mu_prior : type
