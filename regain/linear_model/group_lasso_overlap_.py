@@ -6,8 +6,8 @@ import numpy as np
 import six
 from scipy import sparse
 from sklearn.base import RegressorMixin
-from sklearn.linear_model.base import (LinearClassifierMixin, LinearModel,
-                                       _pre_fit)
+from sklearn.linear_model.base import (
+    LinearClassifierMixin, LinearModel, _pre_fit)
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.utils import check_array, check_X_y, deprecated
 from sklearn.utils.extmath import safe_sparse_dot
@@ -16,6 +16,16 @@ from sklearn.utils.validation import check_is_fitted
 from regain.prox import soft_thresholding
 from regain.wrapper.paspal.wrapper import group_lasso_overlap_paspal
 from regain.wrapper.paspal.glopridu import glopridu_algorithm
+
+from regain.utils import flatten
+
+
+def _remove_unused_features(data, groups):
+    unique_idx = sorted(set(flatten(groups)))
+    hashing = dict(zip(unique_idx, range(len(unique_idx))))
+
+    new_groups = [[hashing[g] for g in group] for group in groups]
+    return data[:, unique_idx], new_groups
 
 
 def D_function(d, groups):
@@ -44,8 +54,9 @@ def P_star_x_bar_function(x, d, groups):
     return P_star_x_bar
 
 
-def group_lasso_overlap(A, b, lamda=1.0, groups=None, rho=1.0,
-                        max_iter=100, tol=1e-4, verbose=False, rtol=1e-2):
+def group_lasso_overlap(
+        A, b, lamda=1.0, groups=None, rho=1.0, max_iter=100, tol=1e-4,
+        verbose=False, rtol=1e-2):
     n, d = A.shape
 
     x = [np.zeros(len(g)) for g in groups]  # local variables
@@ -76,16 +87,16 @@ def group_lasso_overlap(A, b, lamda=1.0, groups=None, rho=1.0,
             objective(A, b, lamda, x, z),  # objective
             np.linalg.norm(x_consensus - z),  # rnorm
             np.linalg.norm(-rho * (z - zold)),  # snorm
-
-            np.sqrt(d) * tol + rtol * max(np.linalg.norm(x_consensus),
-                                          np.linalg.norm(-z)),  # eps primal
+            np.sqrt(d) * tol + rtol * max(
+                np.linalg.norm(x_consensus), np.linalg.norm(-z)),  # eps primal
             np.sqrt(d) * tol + rtol * np.linalg.norm(rho * y_consensus)
             # eps dual
         )
 
         if verbose:
-            print("obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                  "eps_pri: %.4f, eps_dual: %.4f" % history)
+            print(
+                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
+                "eps_pri: %.4f, eps_dual: %.4f" % history)
 
         hist.append(history)
         if history[1] < history[3] and history[2] < history[4]:
@@ -100,14 +111,12 @@ def group_lasso_overlap(A, b, lamda=1.0, groups=None, rho=1.0,
 
 
 class GroupLassoOverlap(LinearModel, RegressorMixin):
-
-    def __init__(self, alpha=1.0, fit_intercept=True,
-                 groups=None, rho=1.0, n_jobs=1,
-                 tol=1e-4, verbose=False, rtol=1e-2,
-                 normalize=False, precompute=False, max_iter=1000,
-                 copy_X=True, warm_start=False, positive=False,
-                 random_state=None, selection='cyclic', mode='admm',
-                 matlab_engine=None):
+    def __init__(
+            self, alpha=1.0, fit_intercept=True, groups=None, rho=1.0,
+            n_jobs=1, tol=1e-4, verbose=False, rtol=1e-2, normalize=False,
+            precompute=False, max_iter=1000, copy_X=True, warm_start=False,
+            positive=False, random_state=None, selection='cyclic', mode='admm',
+            matlab_engine=None):
         self.alpha = alpha
         self.coef_ = None
         self.fit_intercept = fit_intercept
@@ -156,23 +165,25 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
         """
 
         if self.alpha == 0:
-            warnings.warn("With alpha=0, this algorithm does not converge "
-                          "well. You are advised to use the LinearRegression "
-                          "estimator", stacklevel=2)
+            warnings.warn(
+                "With alpha=0, this algorithm does not converge "
+                "well. You are advised to use the LinearRegression "
+                "estimator", stacklevel=2)
 
         if isinstance(self.precompute, six.string_types):
-            raise ValueError('precompute should be one of True, False or'
-                             ' array-like. Got %r' % self.precompute)
+            raise ValueError(
+                'precompute should be one of True, False or'
+                ' array-like. Got %r' % self.precompute)
 
         # We expect X and y to be float64 or float32 Fortran ordered arrays
         # when bypassing checks
         if check_input:
-            X, y = check_X_y(X, y, accept_sparse='csc',
-                             order='F', dtype=[np.float64, np.float32],
-                             copy=self.copy_X and self.fit_intercept,
-                             multi_output=True, y_numeric=True)
-            y = check_array(y, order='F', copy=False, dtype=X.dtype.type,
-                            ensure_2d=False)
+            X, y = check_X_y(
+                X, y, accept_sparse='csc', order='F',
+                dtype=[np.float64, np.float32], copy=self.copy_X
+                and self.fit_intercept, multi_output=True, y_numeric=True)
+            y = check_array(
+                y, order='F', copy=False, dtype=X.dtype.type, ensure_2d=False)
 
         X, y, X_offset, y_offset, X_scale, precompute, Xy = \
             _pre_fit(X, y, None, self.precompute, self.normalize,
@@ -190,8 +201,7 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
             raise ValueError("selection should be either random or cyclic.")
 
         if not self.warm_start or self.coef_ is None:
-            coef_ = np.zeros((n_targets, n_features), dtype=X.dtype,
-                             order='F')
+            coef_ = np.zeros((n_targets, n_features), dtype=X.dtype, order='F')
         else:
             coef_ = self.coef_
             if coef_.ndim == 1:
@@ -304,11 +314,10 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
         """
         check_is_fitted(self, 'n_iter_')
         if sparse.isspmatrix(X):
-            return safe_sparse_dot(X, self.coef_.T,
-                                   dense_output=True) + self.intercept_
+            return safe_sparse_dot(
+                X, self.coef_.T, dense_output=True) + self.intercept_
         else:
             return super(GroupLassoOverlap, self)._decision_function(X)
-
 
 
 class GroupLassoOverlapClassifier(LinearClassifierMixin, GroupLassoOverlap):
@@ -320,8 +329,8 @@ class GroupLassoOverlapClassifier(LinearClassifierMixin, GroupLassoOverlap):
         if self._label_binarizer.y_type_.startswith('multilabel'):
             # we don't (yet) support multi-label classification in ENet
             raise ValueError(
-                "%s doesn't support multi-label classification" % (
-                    self.__class__.__name__))
+                "%s doesn't support multi-label classification" %
+                (self.__class__.__name__))
 
         # Y = column_or_1d(Y, warn=True)
         super(GroupLassoOverlapClassifier, self).fit(X, Y)
@@ -338,8 +347,9 @@ class GroupLassoOverlapClassifier(LinearClassifierMixin, GroupLassoOverlap):
         return self._label_binarizer.classes_
 
 
-def overlapping_group_lasso(A, b, lamda=1.0, groups=None, rho=1.0, alpha=1.0,
-                        max_iter=100, tol=1e-4):
+def overlapping_group_lasso(
+        A, b, lamda=1.0, groups=None, rho=1.0, alpha=1.0, max_iter=100,
+        tol=1e-4):
     # % solves the following problem via ADMM:
     # %   minimize 1/2*|| Ax - b ||_2^2 + \lambda sum(norm(x_i))
     # %
@@ -361,8 +371,6 @@ def overlapping_group_lasso(A, b, lamda=1.0, groups=None, rho=1.0, alpha=1.0,
     x = [np.zeros(len(g)) for g in groups]  # local variables
     z = np.zeros(d)
     y = np.zeros(d)
-
-
 
     hist = []
     AtA = A.T.dot(A)
@@ -414,5 +422,5 @@ def fi(xi):
 
 
 def objective(A, b, alpha, x, z):
-    return .5 * np.sum((A.dot(z) - b) ** 2) + alpha * np.sum(
+    return .5 * np.sum((A.dot(z) - b)**2) + alpha * np.sum(
         [np.linalg.norm(x_i) for x_i in x])
