@@ -9,23 +9,27 @@ from sklearn.utils.validation import check_is_fitted
 
 from regain.covariance.graph_lasso_ import fast_logdet
 from regain.covariance.latent_time_graph_lasso_ import LatentTimeGraphLasso
+from regain.utils import ensure_posdef
 
 
-class DiscriminantAnalysis(LatentTimeGraphLasso, QuadraticDiscriminantAnalysis):
+class DiscriminantAnalysis(LatentTimeGraphLasso,
+                           QuadraticDiscriminantAnalysis):
     """docstring for QuadraticDiscriminantAnalysis."""
-    def __init__(self, alpha=0.01, tau=1., beta=1., eta=1., mode='admm', rho=1.,
-                 time_on_axis='first', tol=1e-4, rtol=1e-4,
-                 psi='laplacian', phi='laplacian', max_iter=100,
-                 verbose=False, assume_centered=False,
-                 update_rho_options=None,
-                 priors=None):
+
+    def __init__(
+            self, alpha=0.01, tau=1., beta=1., eta=1., mode='admm', rho=1.,
+            time_on_axis='first', tol=1e-4, rtol=1e-4, psi='laplacian',
+            phi='laplacian', max_iter=100, verbose=False,
+            assume_centered=False, update_rho_options=None,
+            ensure_posdef=False, priors=None):
         super(DiscriminantAnalysis, self).__init__(
             alpha=alpha, beta=beta, tau=tau, eta=eta, mode=mode, rho=rho,
-            time_on_axis=time_on_axis, tol=tol, rtol=rtol,
-            psi=psi, phi=phi, max_iter=max_iter,
-            verbose=verbose, assume_centered=assume_centered,
+            time_on_axis=time_on_axis, tol=tol, rtol=rtol, psi=psi, phi=phi,
+            max_iter=max_iter, verbose=verbose,
+            assume_centered=assume_centered,
             update_rho_options=update_rho_options)
         self.priors = np.asarray(priors) if priors is not None else None
+        self.ensure_posdef = ensure_posdef
 
     def fit(self, X, y):
         """Fit the model according to the given training data and parameters.
@@ -70,11 +74,17 @@ class DiscriminantAnalysis(LatentTimeGraphLasso, QuadraticDiscriminantAnalysis):
             meang = Xg.mean(0)
             means.append(meang)
             if len(Xg) == 1:
-                raise ValueError('y has only 1 sample in class %s, covariance '
-                                 'is ill defined.' % str(self.classes_[ind]))
+                raise ValueError(
+                    'y has only 1 sample in class %s, covariance '
+                    'is ill defined.' % str(self.classes_[ind]))
             data.append(Xg)
 
         super(DiscriminantAnalysis, self).fit(data)
+        if self.ensure_posdef:
+            # replace diagonal
+            ensure_posdef(self.precision_, inplace=True)
+            self.covariance_ = np.array(
+                [linalg.pinvh(p) for p in self.precision_])
         self.means_ = np.asarray(means)
         return self
 
@@ -116,11 +126,15 @@ class DiscriminantAnalysis(LatentTimeGraphLasso, QuadraticDiscriminantAnalysis):
             meang = Xg.mean(0)
             means.append(meang)
             if len(Xg) == 1:
-                raise ValueError('y has only 1 sample in class %s, covariance '
-                                 'is ill defined.' % str(self.classes_[ind]))
+                raise ValueError(
+                    'y has only 1 sample in class %s, covariance '
+                    'is ill defined.' % str(self.classes_[ind]))
             data.append(Xg)
 
         self.precision_ = np.array(precisions)
+        if self.ensure_posdef:
+            # replace diagonal
+            ensure_posdef(self.precision_, inplace=True)
         self.latent_ = 0
         self.covariance_ = np.array([linalg.pinvh(x) for x in precisions])
         self.means_ = np.asarray(means)
@@ -137,8 +151,8 @@ class DiscriminantAnalysis(LatentTimeGraphLasso, QuadraticDiscriminantAnalysis):
             # X2 = np.dot(Xm, R * (S ** (-0.5)))
             X2 = np.linalg.multi_dot((Xm, precisions[i], Xm.T))
             norm2.append(np.diag(X2))
-        norm2 = np.array(norm2).T   # shape = [len(X), n_classes]
-        u = np.asarray([- fast_logdet(s) for s in precisions])
+        norm2 = np.array(norm2).T  # shape = [len(X), n_classes]
+        u = np.asarray([-fast_logdet(s) for s in precisions])
         return (-0.5 * (norm2 + u) + np.log(self.priors_))
 
     def _decision_function(self, X):
