@@ -51,6 +51,9 @@ def log_likelihood_normal(x, mean, var):
 
 
 def time_multivariate_normal_logpdf(X, Cov):
-    return sum(sum(
+    logp = sum(
         multivariate_normal.logpdf(x, cov=Sigma, allow_singular=True)
-        for x, Sigma in zip(X.transpose(2, 0, 1), Cov.T)))
+        for x, Sigma in zip(X.transpose(2, 0, 1), Cov.T))
+    if not isinstance(logp, float):
+        logp = sum(logp)
+    return logp

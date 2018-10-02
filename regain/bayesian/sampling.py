@@ -1,16 +1,18 @@
 """Sampling module for Wishart processes."""
+from functools import partial
+
 import numpy as np
 from scipy import linalg, stats
 from sklearn.utils.extmath import fast_logdet
 
 from regain.bayesian.stats import (log_likelihood_normal, lognormal_logpdf,
-                                   lognormal_pdf, lognstat,
-                                   time_multivariate_normal_logpdf)
+                                   lognormal_pdf, lognstat)
 from regain.bayesian.wishart_process_ import GWP_construct
 
 
 def elliptical_slice(
-        xx, prior, cur_log_like, variance, angle_range=0, max_iter=20):
+        xx, prior, cur_log_like, likelihood=None, angle_range=0,
+        max_iter=20):
     """Markov chain update for a distribution with a Gaussian "prior" factored out.
 
     A Markov chain update is applied to the D-element array xx leaving a
@@ -51,6 +53,10 @@ def elliptical_slice(
     The Proceedings of the 13th International Conference on Artificial
     Intelligence and Statistics (AISTATS), JMLR W&CP 9:541-548, 2010.
     """
+    if likelihood is None:
+        raise ValueError(
+            "`likelihood` parameter is None, should be a "
+            "function to evaluate likelihood")
     initial_theta = xx.xx
     v, p, N = initial_theta.shape
     D = v * p * N
@@ -61,7 +67,8 @@ def elliptical_slice(
     cur_log_like_start = cur_log_like
     if cur_log_like is None:
         # cur_log_like = log_lik_frob(S, xx.V, variance)
-        cur_log_like = time_multivariate_normal_logpdf(initial_theta, xx.V)
+        # cur_log_like = time_multivariate_normal_logpdf(initial_theta, xx.V)
+        cur_log_like = likelihood(xx.V)
 
     # Set up the ellipse and the slice threshold
     if prior.size == D:
@@ -70,9 +77,11 @@ def elliptical_slice(
     else:
         #  User specified Cholesky of prior covariance:
         if prior.shape != (D, D):
-            raise ValueError('Prior must be given by a D-element sample '
-                             'or DxD chol(Sigma)')
-        nu = np.reshape(prior.T.dot(np.random.normal(size=D)), initial_theta.shape)
+            raise ValueError(
+                'Prior must be given by a D-element sample '
+                'or DxD chol(Sigma)')
+        nu = np.reshape(
+            prior.T.dot(np.random.normal(size=D)), initial_theta.shape)
 
     hh = 0.001 * np.log(np.random.uniform()) + cur_log_like
 
@@ -100,7 +109,8 @@ def elliptical_slice(
         V = GWP_construct(xx_proposal, L, uut=uut)
         # cur_log_like = log_lik_frob(S, V, variance)
         # cur_log_like = stats.wishart.logpdf(V, nu, LLt)
-        cur_log_like = time_multivariate_normal_logpdf(xx_proposal, V)
+        # cur_log_like = time_multivariate_normal_logpdf(xx_proposal, V)
+        cur_log_like = likelihood(V)
 
         if cur_log_like > hh:
             # New point is on slice, ** EXIT LOOP **
@@ -114,8 +124,9 @@ def elliptical_slice(
         else:
             # error = True
             # break
-            raise RuntimeError('BUG DETECTED: Shrunk to current position '
-                               'and still not acceptable.')
+            raise RuntimeError(
+                'BUG DETECTED: Shrunk to current position '
+                'and still not acceptable.')
 
         # Propose new angle difference
         phi = np.random.uniform() * (phi_max - phi_min) + phi_min
@@ -220,14 +231,16 @@ def logpunorm(inverse_width, t, u, kern, mean_prior, var_prior):
     logpugl *= -0.5
 
     mu_prior, sigma_prior = lognstat(mean_prior, var_prior)
-    logp_prior = lognormal_logpdf(inverse_width, mu=mu_prior, sigma=sigma_prior)
+    logp_prior = lognormal_logpdf(
+        inverse_width, mu=mu_prior, sigma=sigma_prior)
 
     logprob = logpugl + logp_prior
     return logprob
 
 
-def sample_ell(Ltau, var_proposal, S, umat, var_err,
-               mu_prior, var_prior, uut=None):
+def sample_ell(
+        Ltau, var_proposal, umat, mu_prior, var_prior, uut=None,
+        likelihood=None):
     """Metropolis-Hastings for sampling the posterior of the elements in L.
 
     Use a spherical normal distribution as the proposal.
@@ -237,17 +250,21 @@ def sample_ell(Ltau, var_proposal, S, umat, var_err,
     L_proposal = np.zeros(free_elements)
     for i in range(free_elements):
         L_proposal[i] = _sample_ell_comp(
-            Ltau, i, var_proposal[i], S, umat, var_err,
-            mu_prior=mu_prior[i], var_prior=var_prior[i], uut=uut)
+            Ltau, i, var_proposal[i], umat, mu_prior=mu_prior[i],
+            var_prior=var_prior[i], uut=uut, likelihood=likelihood)
         Ltau[i] = L_proposal[i]
 
     return L_proposal
 
 
 def _sample_ell_comp(
-        Ltaug, i, sigma2Lprop, S, umat, var_err,
-        mu_prior, var_prior, uut=None):
+        Ltaug, i, sigma2Lprop, umat, mu_prior, var_prior, uut=None,
+        likelihood=None):
     """Sample a single element for L."""
+    if likelihood is None:
+        raise ValueError(
+            "`likelihood` parameter is None, should be a "
+            "function to evaluate likelihood")
     # Propose a sample
     Ltau = Ltaug[i]
     Last = np.random.normal(Ltau, np.sqrt(sigma2Lprop))
@@ -255,26 +272,54 @@ def _sample_ell_comp(
     Lastg[i] = Last
 
     # Criterion to choose whether to accept the proposed sample or not
-    # normpdf = lambda x, m, s: np.exp(-0.5 * ((x - m)/s)**2) / (np.sqrt(2*np.pi) * s)
+    # normpdf = lambda x, m, s: ...
+    # np.exp(-0.5 * ((x - m)/s)**2) / (np.sqrt(2*np.pi) * s)
 
-    logpLast = logp_ell_posterior(Lastg, i, umat, mu_prior, var_prior, uut=uut)
+    logp_post = partial(
+        logp_ell_posterior, i=i, u=umat, mu_prior=mu_prior,
+        var_prior=var_prior, uut=uut, likelihood=likelihood)
+
+    logp_diff = logp_post(Lastg) - logp_post(Ltaug)
     q_ast_tau = stats.norm.pdf(Last, Ltau, np.sqrt(sigma2Lprop))
-
-    logpLtau = logp_ell_posterior(Ltaug, i, umat, mu_prior, var_prior, uut=uut)
     q_tau_ast = stats.norm.pdf(Ltau, Last, np.sqrt(sigma2Lprop))
 
-    A = min(1, np.exp(logpLast - logpLtau) * (q_tau_ast / q_ast_tau))
-
     # Now we decide whether to accept zast or use the previous value
-    return Last if np.random.uniform() < A else Ltau
+    accept = min(1, np.exp(logp_diff) * (q_tau_ast / q_ast_tau))
+    return Last if np.random.uniform() < accept else Ltau
 
 
-def logp_ell_posterior(Lv, i, u, mu_prior, var_prior, uut=None):
+def logp_ell_posterior(
+        ell_lower, i, u, mu_prior, var_prior, uut=None, likelihood=None):
+    """Log-probability of the posterior of L.
+
+    Parameters
+    ----------
+    ell_lower : ndarray
+        Lower Cholesky.
+    i : type
+        Index.
+    u : type
+        Description of parameter `u`.
+    mu_prior : type
+        Description of parameter `mu_prior`.
+    var_prior : type
+        Description of parameter `var_prior`.
+    uut : type
+        Description of parameter `uut` (the default is None).
+    likelihood : function
+        Likelihood function (takes one parameter) (the default is None).
+
+    Returns
+    -------
+    type
+        Description of returned object.
+
+    """
     v, p, n = u.shape
-    L = np.zeros((p, p))
-    L[np.tril_indices_from(L)] = Lv
-    D = GWP_construct(u, L, uut=uut)
+    ell = np.zeros((p, p))
+    ell[np.tril_indices_from(ell)] = ell_lower
+    D = GWP_construct(u, ell, uut=uut)
     # logpS = log_lik_frob(S, D, var_err)
-    logp = time_multivariate_normal_logpdf(u, D)
-    logpL = log_likelihood_normal(Lv[i], mu_prior, var_prior)
-    return logp + logpL
+    posterior = likelihood(D)
+    prior = log_likelihood_normal(ell_lower[i], mu_prior, var_prior)
+    return posterior + prior
