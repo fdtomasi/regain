@@ -1,23 +1,28 @@
-from __future__ import division
+from __future__ import division, print_function
 
 import warnings
 
 import numpy as np
 import six
 from scipy import sparse
+from six.moves import range
 from sklearn.base import RegressorMixin
-from sklearn.linear_model.base import (
-    LinearClassifierMixin, LinearModel, _pre_fit)
+from sklearn.linear_model.base import (LinearClassifierMixin, LinearModel,
+                                       _pre_fit)
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.utils import check_array, check_X_y, deprecated
 from sklearn.utils.extmath import safe_sparse_dot
 from sklearn.utils.validation import check_is_fitted
 
 from regain.prox import soft_thresholding
-from regain.wrapper.paspal.wrapper import group_lasso_overlap_paspal
+from regain.utils import flatten
 from regain.wrapper.paspal.glopridu import glopridu_algorithm
 
-from regain.utils import flatten
+try:
+    from regain.wrapper.paspal.wrapper import group_lasso_overlap_paspal
+    _MATLAB_FOUND_ = True
+except ImportError:
+    _MATLAB_FOUND_ = False
 
 
 def _remove_unused_features(data, groups):
@@ -134,9 +139,14 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
         self.intercept_ = 0.0
         self.random_state = random_state
         self.selection = selection
-        self.mode = mode
         self.matlab_engine = matlab_engine
         self.n_jobs = n_jobs
+
+        self.mode = mode
+        if mode == 'paspal-matlab' and not _MATLAB_FOUND_:
+            raise ValueError(
+                "Cannot use Matlab implementation. Use `mode='admm'` or `mode='paspal'`."
+            )
 
     def fit(self, X, y, check_input=True):
         """Fit model with coordinate descent.
@@ -211,7 +221,7 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
         if self.n_jobs == 1:
             self.n_iter_ = []
             history = []
-            for k in xrange(n_targets):
+            for k in range(n_targets):
                 if self.mode == 'admm':
                     this_coef, hist, this_iter = \
                         group_lasso_overlap(
@@ -245,7 +255,7 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
                             X, y[:, k], lamda=self.alpha, groups=self.groups,
                             rho=self.rho, max_iter=self.max_iter, tol=self.tol,
                             verbose=self.verbose, rtol=self.rtol)
-                        for k in xrange(n_targets)))
+                        for k in range(n_targets)))
             elif self.mode == 'paspal-matlab':  # paspal wrapper
                 coef_, history, self.n_iter_ = \
                     zip(*jl.Parallel(n_jobs=self.n_jobs)(
@@ -254,7 +264,7 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
                             rho=self.rho, max_iter=self.max_iter, tol=self.tol,
                             verbose=self.verbose, rtol=self.rtol,
                             matlab_engine=self.matlab_engine)
-                        for k in xrange(n_targets)))
+                        for k in range(n_targets)))
             elif self.mode == 'paspal':  # paspal wrapper
                 coef_, history, self.n_iter_ = \
                     zip(*jl.Parallel(n_jobs=self.n_jobs)(
@@ -262,7 +272,7 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
                             X, y[:, k], tau=self.alpha, blocks=self.groups,
                             max_iter_ext=self.max_iter, tol_ext=self.tol,
                             verbose=self.verbose, tol_int=self.rtol)
-                        for k in xrange(n_targets)))
+                        for k in range(n_targets)))
             else:
                 raise ValueError(self.mode)
 
@@ -347,7 +357,7 @@ class GroupLassoOverlapClassifier(LinearClassifierMixin, GroupLassoOverlap):
         return self._label_binarizer.classes_
 
 
-def overlapping_group_lasso(
+def _overlapping_group_lasso(
         A, b, lamda=1.0, groups=None, rho=1.0, alpha=1.0, max_iter=100,
         tol=1e-4):
     # % solves the following problem via ADMM:

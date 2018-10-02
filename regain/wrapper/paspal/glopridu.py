@@ -1,5 +1,5 @@
 """PASPAL implementation (in Python, based on the original MATLAB)."""
-from __future__ import print_function
+from __future__ import print_function, division
 
 from itertools import combinations
 
