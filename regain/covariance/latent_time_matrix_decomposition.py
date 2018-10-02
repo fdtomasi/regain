@@ -39,7 +39,7 @@ def latent_time_matrix_decomposition(
     r"""Latent variable time-varying matrix decomposition solver.
 
     Solves the following problem via ADMM:
-        min sum_{i=1}^T || S_i-(K_i+L_i)||^2 + alpha ||K_i||_{od,1}
+        min sum_{i=1}^T || S_i-(K_i-L_i)||^2 + alpha ||K_i||_{od,1}
             + tau ||L_i||_*
             + beta sum_{i=2}^T Psi(K_i - K_{i-1})
             + eta sum_{i=2}^T Phi(L_i - L_{i-1})

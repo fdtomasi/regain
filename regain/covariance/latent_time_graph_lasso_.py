@@ -28,9 +28,11 @@ def objective(S, n_samples, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
         obj += sum(b[0][0] * m for b, m in zip(beta, map(psi, Z_2 - Z_1)))
     else:
         obj += beta * sum(map(psi, Z_2 - Z_1))
-    # obj += beta * sum(map(psi, Z_2 - Z_1))
 
-    obj += eta * sum(map(phi, W_2 - W_1))
+    if isinstance(eta, np.ndarray):
+        obj += sum(b[0][0] * m for b, m in zip(eta, map(phi, W_2 - W_1)))
+    else:
+        obj += eta * sum(map(phi, W_2 - W_1))
     return obj
 
 

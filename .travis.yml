@@ -3,11 +3,8 @@ python:
 - '2.7'
 - '3.5'
 - '3.6'
-
 os:
 - linux
-
-# blocklist
 branches:
   except:
   - legacy
@@ -15,32 +12,31 @@ branches:
   - develop
   - tensorflow
 
+# safelist
+branches:
+  only:
+  - master
+  - stable
+
 cache: pip
-
-# Setup anaconda
 before_install:
-  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-      wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh -O miniconda.sh;
-    else
-      wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
-    fi
-  - bash miniconda.sh -b -p $HOME/miniconda
-  - export PATH="$HOME/miniconda/bin:$PATH"
-  - hash -r
-  - conda config --set always_yes yes --set changeps1 no
-  - conda update -q conda
-  - conda config --set anaconda_upload no
-
+- if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then wget https://repo.continuum.io/miniconda/Miniconda2-latest-Linux-x86_64.sh
+  -O miniconda.sh; else wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh
+  -O miniconda.sh; fi
+- bash miniconda.sh -b -p $HOME/miniconda
+- export PATH="$HOME/miniconda/bin:$PATH"
+- hash -r
+- conda config --set always_yes yes --set changeps1 no
+- conda update -q conda
+- conda config --set anaconda_upload no
 install:
-  - bash travis_install.sh
-
+- bash travis_install.sh
 script:
 - coverage run travis_tests.py
-
 after_success:
-  - codecov
-
+- codecov
 deploy:
+  matrix:
   - provider: pypi
     user: fdtomasi
     password:
@@ -53,7 +49,6 @@ deploy:
   - provider: releases
     api_key:
       secure: IbzvHgN5aRUwSUcTdnnmLqAJw1DZz2InulgYheAT1CrUwepXWguppdD4zYnkhylZ283rNPHgeuyfIBl/x1SXQHqkyOXb5TjjhMU7t2iMM1M5NzZ8p5VsYcV8er3HkDj2br7/kgW0UdyHBaGHwgyLNULTBehCnK5zagvuY0A5M5vjljuJ7DPi/v/UtorBBqpY6/tJ7se+/Qy4XVrRyAxTkq+Nr3bTb742dERZLHyIDiv/kYEYQaMsHC/t4lPTTuZZsz1rs8C9/hi1+C8Dsjmo/nks46m2mmAaYwEGvM3bzBEFyF2o+IDrnV7JE0JhJHzEIEotKmVxG1AVntlbSyLyirZh6qqfLnLSqTYMynRlggNEhT4meOifc1g3f9KtZQtfO6y90ffhEVNpwVOGg7CVIiH1p4DiS01byT9H7bPH2LJyla3P6WG6gJx4jdEYcfv28NK0K7kk90vICKySv0LsCm/9iZlGcHSbd9O55U7sG8oQcXJdJfXYYqml2SBtOjjprI9mwdmvvsInAp3EkAi31+y8IMMPNba6/iv96WF3ZW2nez6l13kbZmC8tBl63TJb7gHYxHGER3T97VeYA7XmHd+va9qtfQ7/lngwJHJgFXm3C5h0QiK4guWGqqwDboluSOgz8zpxrhrzhtd3R/0zA7nASyKfnq+FdOV38Duxkrc=
-    # file: build/regain_$(TRAVIS_TAG)
     skip_cleanup: true
     on:
       repo: fdtomasi/regain
@@ -64,7 +59,8 @@ deploy:
     on:
       repo: fdtomasi/regain
       tags: true
-
+  password:
+    secure: Wvo0RfNjtW3CikjE0gVNkP2gH1mf8qrh/5TCkxrAlqUVN0GnRV76JwKE8C55AH0OrpKBSdWEKb54K1OwtwtWlHojrWdKaJG7R3ASprOv6nVn0sBgSH7qmI6DWnKEQlCb0slr3RP2dOdMSuz3rr0rjEppwViSNvLbigZz6IltiG6uDHnMxgfgTWTGV4uamnOQuuZ6PktRzqOW3Rqp4HQNP2+nIvuPwfe06hll45mGHhzyTJC/rSJmV0/bAfr1mo6cFSO7VD/Lmo1Opu1tTl/8FkGVUbCZtTyCasf/F5IB1v8yNy+Tb2HtnOxR6NbnjJkT/vuftOrMFxQPd8ZWVbbeMO3RRlDUR2al5mNK4nI38efgS54ZZIzkx3ek4duAeCm5fwi/FrL+hndtiiT0DNHbQ2QA+b7o/4Ag9kJgcI5M0jYO7rPPg1sgm4nQ4QEugfR0vY5/pSLQSRZ2EY7AKyJsgPc7pkl/t310v0HtEsbmEzEgwOw0SIcc0+bUou53R9E5h1M1xKcLVV9jqyjTs+GahcRd54xMRGsYpDn+9u7i07kj2GqrYjubzvZeL2QSrPMBtujeeKLMQMWAQZ/TmIyLD0f+zh0xpAUb0EYVIEml3a5p2q/kavPVZJAY202Wa7SbJGDVt+02+dgsUJg0nAEvO3xu9JOyY12WkR6QNnQC0Qk=
 notifications:
   slack:
     rooms:

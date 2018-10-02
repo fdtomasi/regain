@@ -267,7 +267,7 @@ def make_covariance(
     return thetas, thetas_obs, ells
 
 
-@deprecated("it will be removed in v0.1.0. Use `make_covariance` instead")
+@deprecated("it will be removed in v0.2.0. Use `make_covariance` instead")
 def generate_dataset_l1l1(
         n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """Generate matrices according to a l1-l1 model."""
@@ -276,7 +276,7 @@ def generate_dataset_l1l1(
         update_theta='l1', **kwargs)
 
 
-@deprecated("it will be removed in v0.1.0. Use `make_covariance` instead")
+@deprecated("it will be removed in v0.2.0. Use `make_covariance` instead")
 def generate_dataset_l1l2(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """DESCRIZIONE, PRIMA O POI."""
     return make_covariance(
@@ -284,7 +284,7 @@ def generate_dataset_l1l2(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
         update_theta='l1', **kwargs)
 
 
-@deprecated("it will be removed in v0.1.0. Use `make_covariance` instead")
+@deprecated("it will be removed in v0.2.0. Use `make_covariance` instead")
 def generate_dataset_yuan(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """Yuan (2012) model."""
     # number of links for each node
@@ -293,7 +293,7 @@ def generate_dataset_yuan(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
         **kwargs)
 
 
-@deprecated("it will be removed in v0.1.0. Use `make_covariance` instead")
+@deprecated("it will be removed in v0.2.0. Use `make_covariance` instead")
 def make_l2l2(
         n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """Generate dataset with evolving L."""
@@ -302,7 +302,7 @@ def make_l2l2(
         update_theta='l2', normalize_starting_matrices=False, **kwargs)
 
 
-@deprecated("it will be removed in v0.1.0. Use `make_covariance` instead")
+@deprecated("it will be removed in v0.2.0. Use `make_covariance` instead")
 def make_l2l2_norm(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """Generate dataset with evolving L."""
     return make_covariance(
@@ -310,7 +310,7 @@ def make_l2l2_norm(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
         update_theta='l2', normalize_starting_matrices=True, **kwargs)
 
 
-@deprecated("it will be removed in v0.1.0. Use `make_covariance` instead")
+@deprecated("it will be removed in v0.2.0. Use `make_covariance` instead")
 def make_l2(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """Generate precisions with a fixed L matrix."""
     return make_covariance(
@@ -318,7 +318,7 @@ def make_l2(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
         update_theta='l2', normalize_starting_matrices=False, **kwargs)
 
 
-@deprecated("it will be removed in v0.1.0. Use `make_covariance` instead")
+@deprecated("it will be removed in v0.2.0. Use `make_covariance` instead")
 def make_l1(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """Generate precisions with a fixed L matrix."""
     return make_covariance(

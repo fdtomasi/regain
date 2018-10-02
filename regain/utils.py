@@ -21,7 +21,7 @@ from sklearn.metrics import average_precision_score
 
 def namedtuple_with_defaults(typename, field_names, default_values=()):
     T = collections.namedtuple(typename, field_names)
-    T.__new__.__defaults__ = (None,) * len(T._fields)
+    T.__new__.__defaults__ = (None, ) * len(T._fields)
     if isinstance(default_values, collections.Mapping):
         prototype = T(**default_values)
     else:
@@ -57,8 +57,8 @@ def _ensure_filename_ending(filename, possible_extensions='.txt'):
         possible_extensions = [possible_extensions]
 
     return filename + (
-        '' if any(filename.endswith(end) for end in possible_extensions)
-        else possible_extensions[0])
+        '' if any(filename.endswith(end)
+                  for end in possible_extensions) else possible_extensions[0])
 
 
 def init_logger(filename, verbose=True):
@@ -75,8 +75,9 @@ def init_logger(filename, verbose=True):
         _.flush()
         _.close()
 
-    logging.basicConfig(filename=logfile, level=logging.INFO, filemode='w',
-                        format='%(levelname)s (%(asctime)-15s): %(message)s')
+    logging.basicConfig(
+        filename=logfile, level=logging.INFO, filemode='w',
+        format='%(levelname)s (%(asctime)-15s): %(message)s')
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(logging.INFO if verbose else logging.ERROR)
     stream_handler.setFormatter(
@@ -105,8 +106,9 @@ def write_network(dataframe, filename):
     dataframe.stack().to_csv(filename)
 
 
-def read_network(filename, threshold=1., full_network=True, fill_diagonal=True,
-                 delimiter="auto"):
+def read_network(
+        filename, threshold=1., full_network=True, fill_diagonal=True,
+        delimiter="auto"):
     """Read a network from a list of interactions.
 
     Parameters
@@ -147,11 +149,11 @@ def read_network(filename, threshold=1., full_network=True, fill_diagonal=True,
     columns = sorted(nn[0].unique(), key=lambda x: int(x[1:]))
     n_top_edges = int(nn.shape[0] * threshold / (2. if full_network else 1))
 
-    nn = nn.sort_values(2, ascending=False)[:(
-        2 if full_network else 1) * n_top_edges]
+    nn = nn.sort_values(
+        2, ascending=False)[:(2 if full_network else 1) * n_top_edges]
 
-    net_julia = pd.DataFrame(
-        columns=columns, index=columns, dtype=float).fillna(0)
+    net_julia = pd.DataFrame(columns=columns, index=columns,
+                             dtype=float).fillna(0)
 
     for row in nn.itertuples():
         if row[3] > 0:
@@ -171,7 +173,7 @@ def flatten(lst):
 
 def upper_to_full(a):
     """Convert the upper part to a full symmetric matrix."""
-    n = int((np.sqrt(1 + 8*a.shape[0]) - 1) / 2)
+    n = int((np.sqrt(1 + 8 * a.shape[0]) - 1) / 2)
     A = np.zeros((n, n))
     idx = np.triu_indices(n)
     A[idx] = A[idx[::-1]] = a
@@ -180,8 +182,10 @@ def upper_to_full(a):
 
 def compose(*functions):
     """Compose two or more functions."""
+
     def compose2(f, g):
         return lambda x: f(g(x))
+
     return functools.reduce(compose2, functions, lambda x: x)
 
 
@@ -207,9 +211,9 @@ def normalize_matrix(x):
     x *= d.T
 
 
-def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
-               squared=True, upper_triangular=False, nonzero=False,
-               n=False):
+def error_norm(
+        cov, comp_cov, norm='frobenius', scaling=True, squared=True,
+        upper_triangular=False, nonzero=False, n=False):
     """Mean Squared Error between two covariance estimators.
 
     Parameters
@@ -257,7 +261,7 @@ def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
     error = comp_cov - cov
     # compute the error norm
     if norm == "frobenius":
-        squared_norm = np.sum(error ** 2)
+        squared_norm = np.sum(error**2)
     elif norm == "spectral":
         squared_norm = np.amax(np.linalg.svdvals(np.dot(error.T, error)))
     else:
@@ -276,8 +280,8 @@ def error_norm(cov, comp_cov, norm='frobenius', scaling=True,
     return result
 
 
-def error_norm_time(cov, comp_cov, norm='frobenius', scaling=True,
-                    squared=True):
+def error_norm_time(
+        cov, comp_cov, norm='frobenius', scaling=True, squared=True):
     """Mean Squared Error between two covariance estimators.
 
     Parameters
@@ -306,13 +310,15 @@ def error_norm_time(cov, comp_cov, norm='frobenius', scaling=True,
     `self` and `comp_cov` covariance estimators.
 
     """
-    return np.mean([error_norm(
-        x, y, norm=norm, scaling=scaling, squared=squared) for x, y in zip(
-            cov, comp_cov)])
+    return np.mean(
+        [
+            error_norm(x, y, norm=norm, scaling=scaling, squared=squared)
+            for x, y in zip(cov, comp_cov)
+        ])
 
 
-def structure_error(true, pred, thresholding=False, eps=1e-2,
-                    no_diagonal=False):
+def structure_error(
+        true, pred, thresholding=False, eps=1e-2, no_diagonal=False):
     """Error in structure between a precision matrix and predicted.
 
     Parameters
@@ -394,8 +400,8 @@ def structure_error(true, pred, thresholding=False, eps=1e-2,
         negative_likelihood_ratio > 0 else 0
 
     dictionary = dict(
-        tp=TP, tn=TN, fp=FP, fn=FN, precision=precision, recall=recall,
-        f1=f1, accuracy=accuracy, false_omission_rate=false_omission_rate,
+        tp=TP, tn=TN, fp=FP, fn=FN, precision=precision, recall=recall, f1=f1,
+        accuracy=accuracy, false_omission_rate=false_omission_rate,
         fdr=false_discovery_rate, npv=negative_predicted_value,
         prevalence=prevalence, miss_rate=miss_rate, fall_out=fall_out,
         specificity=specificity, plr=positive_likelihood_ratio,
@@ -430,6 +436,20 @@ def positive_definite(x, tol=1e-15):
     if x.ndim == 2:
         return is_pos_def(x)
     return all(is_pos_def(y) for y in x)
+
+
+def ensure_posdef(X, inplace=True):
+    def _ensure_posdef_2d(X, inplace=True):
+        if not inplace:
+            raise NotImplementedError("Only inplace implemented")
+        X.flat[::X.shape[0] +
+               1] = np.abs(X - np.diag(np.diag(X))).sum(axis=1) + 0.1
+
+    if X.ndim == 2:
+        return _ensure_posdef_2d(X, inplace)
+    for x in X:
+        _ensure_posdef_2d(x, inplace)
+    return
 
 
 def threshold(a, threshmin=None, threshmax=None, newval=0):
