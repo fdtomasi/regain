@@ -14,7 +14,7 @@ from sklearn.utils.extmath import fast_logdet
 from sklearn.utils.validation import check_array
 
 from regain.norm import l1_od_norm
-from regain.prox import prox_logdet, soft_thresholding
+from regain.prox import prox_logdet, soft_thresholding_od
 from regain.update_rules import update_rho
 from regain.utils import convergence
 
@@ -99,7 +99,7 @@ def graph_lasso(
 
         # z-update with relaxation
         K_hat = over_relax * K - (1 - over_relax) * Z
-        Z = soft_thresholding(K_hat + U, lamda=alpha / rho)
+        Z = soft_thresholding_od(K_hat + U, lamda=alpha / rho)
 
         # update residuals
         U += K_hat - Z
