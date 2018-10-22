@@ -57,18 +57,47 @@ If you have a single time (`n_times = 1`), ensure a `X = X.reshape(1, *X.shape)`
 
 
 ## Citation
+
+`REGAIN` appeared in the following two publications.
+For the `LatentTimeGraphLasso` please use
+
 ```latex
-@ARTICLE{2018arXiv180203987T,
-   author = {{Tomasi}, F. and {Tozzo}, V. and {Salzo}, S. and {Verri}, A.},
-    title = "{Latent variable time-varying network inference}",
-  journal = {ArXiv e-prints},
-archivePrefix = "arXiv",
-   eprint = {1802.03987},
- primaryClass = "stat.ML",
- keywords = {Statistics - Machine Learning, Computer Science - Learning},
-     year = 2018,
-    month = feb,
-   adsurl = {http://adsabs.harvard.edu/abs/2018arXiv180203987T},
-  adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+@inproceedings{Tomasi:2018:LVT:3219819.3220121,
+ author = {Tomasi, Federico and Tozzo, Veronica and Salzo, Saverio and Verri, Alessandro},
+ title = {Latent Variable Time-varying Network Inference},
+ booktitle = {Proceedings of the 24th ACM SIGKDD International Conference on Knowledge Discovery \&\#38; Data Mining},
+ series = {KDD '18},
+ year = {2018},
+ isbn = {978-1-4503-5552-0},
+ location = {London, United Kingdom},
+ pages = {2338--2346},
+ numpages = {9},
+ url = {http://doi.acm.org/10.1145/3219819.3220121},
+ doi = {10.1145/3219819.3220121},
+ acmid = {3220121},
+ publisher = {ACM},
+ address = {New York, NY, USA},
+ keywords = {convex optimization, graphical models, latent variables, network inference, time-series},
+} 
+```
+
+and for the `TimeGraphLassoForwardBackward` plase use
+
+```latex
+@InProceedings{pmlr-v72-tomasi18a,
+  title = 	 {Forward-Backward Splitting for Time-Varying Graphical Models},
+  author = 	 {Tomasi, Federico and Tozzo, Veronica and Verri, Alessandro and Salzo, Saverio},
+  booktitle = 	 {Proceedings of the Ninth International Conference on Probabilistic Graphical Models},
+  pages = 	 {475--486},
+  year = 	 {2018},
+  editor = 	 {Kratochv\'{i}l, V\'{a}clav and Studen\'{y}, Milan},
+  volume = 	 {72},
+  series = 	 {Proceedings of Machine Learning Research},
+  address = 	 {Prague, Czech Republic},
+  month = 	 {11--14 Sep},
+  publisher = 	 {PMLR},
+  pdf = 	 {http://proceedings.mlr.press/v72/tomasi18a/tomasi18a.pdf},
+  url = 	 {http://proceedings.mlr.press/v72/tomasi18a.html},
+  abstract = 	 {Gaussian graphical models have received much attention in the last years, due to their flexibility and expression power. However, the optimisation of such complex models suffer from computational issues both in terms of convergence rates and memory requirements. Here, we present a forward-backward splitting (FBS) procedure for Gaussian graphical modelling of multivariate time-series which relies on recent theoretical studies ensuring convergence under mild assumptions. Our experiments show that a FBS-based implementation achieves, with very fast convergence rates, optimal results with respect to ground truth and standard methods for dynamical network inference. Optimisation algorithms which are usually exploited for network inference suffer from drawbacks when considering large sets of unknowns. Particularly for increasing data sets and model complexity, we argue for the use of fast and theoretically sound optimisation algorithms to be significant to the graphical modelling community.}
 }
 ```
