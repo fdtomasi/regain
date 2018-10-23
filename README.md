@@ -6,7 +6,7 @@ It inherits functionalities from the [scikit-learn](https://github.com/scikit-le
 
 ## Getting started
 ### Dependencies
-regain requires:
+`REGAIN` requires:
 - Python (>= 2.7 or >= 3.5)
 - NumPy (>= 1.8.2)
 - scikit-learn (>= 0.17)
