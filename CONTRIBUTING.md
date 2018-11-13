@@ -30,7 +30,7 @@ $ git clone https://github.com/yourreponame/regain.git
 and set up the remote
 ```bash
 $ cd regain
-$ git remote add upstream https://github.com/yourreponame/regain.git
+$ git remote add upstream https://github.com/fdtomasi/regain.git
 ```
 Now there are two remotes for this project on your computer:
 
