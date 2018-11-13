@@ -7,17 +7,16 @@ TODO Remove deprecated `decision_function2`
 import numpy as np
 from scipy import linalg
 from six.moves import xrange
+from sklearn.base import BaseEstimator
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.utils import check_array, check_X_y, deprecated
 from sklearn.utils.multiclass import check_classification_targets
 from sklearn.utils.validation import check_is_fitted
 
 from regain.covariance.graph_lasso_ import fast_logdet
-from regain.covariance.latent_time_graph_lasso_ import LatentTimeGraphLasso
 from regain.utils import ensure_posdef
-from sklearn.base import BaseEstimator
 
-__all__ = ("DiscriminantAnalysis", )
+__all__ = ("DiscriminantAnalysis", "PrecomputedDiscriminantAnalysis")
 
 
 class DiscriminantAnalysis(QuadraticDiscriminantAnalysis):
@@ -179,7 +178,7 @@ class DiscriminantAnalysis(QuadraticDiscriminantAnalysis):
 class PrecomputedDiscriminantAnalysis(BaseEstimator):
     def __init__(self, precision):
         self.precision_ = np.array(precision)
-    
+
     def fit(self, X, y=None):
         """Dummy fit."""
         pass
