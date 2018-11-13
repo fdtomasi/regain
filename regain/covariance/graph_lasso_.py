@@ -9,7 +9,7 @@ import warnings
 
 import numpy as np
 from six.moves import range
-from sklearn.covariance import GraphLasso, empirical_covariance
+from sklearn.covariance import empirical_covariance
 from sklearn.utils.extmath import fast_logdet
 from sklearn.utils.validation import check_array
 
@@ -17,6 +17,13 @@ from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding_od
 from regain.update_rules import update_rho
 from regain.utils import convergence
+
+try:
+    # sklean >= 0.20
+    from sklearn.covariance import GraphicalLasso as GraphLasso
+except ImportError:
+    # sklearn < 0.20
+    from sklearn.covariance import GraphLasso
 
 
 def logl(emp_cov, precision):
@@ -26,7 +33,7 @@ def logl(emp_cov, precision):
 
 def objective(emp_cov, x, z, alpha):
     """Graph lasso objective."""
-    return - logl(emp_cov, x) + alpha * l1_od_norm(z)
+    return -logl(emp_cov, x) + alpha * l1_od_norm(z)
 
 
 def graph_lasso(
@@ -112,20 +119,21 @@ def graph_lasso(
             obj=obj, rnorm=rnorm, snorm=snorm,
             e_pri=np.sqrt(K.size) * tol + rtol * max(
                 np.linalg.norm(K, 'fro'), np.linalg.norm(Z, 'fro')),
-            e_dual=np.sqrt(K.size) * tol + rtol * rho * np.linalg.norm(U)
-        )
+            e_dual=np.sqrt(K.size) * tol + rtol * rho * np.linalg.norm(U))
 
         Z_old = Z.copy()
         if verbose:
-            print("obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                  "eps_pri: %.4f, eps_dual: %.4f" % check)
+            print(
+                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
+                "eps_pri: %.4f, eps_dual: %.4f" % check)
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
 
-        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_,
-                             **(update_rho_options or {}))
+        rho_new = update_rho(
+            rho, rnorm, snorm, iteration=iteration_,
+            **(update_rho_options or {}))
         # scaled dual variables should be also rescaled
         U *= rho / rho_new
         rho = rho_new
@@ -198,10 +206,10 @@ class GraphLasso(GraphLasso):
 
     """
 
-    def __init__(self, alpha=0.01, rho=1., over_relax=1., max_iter=100,
-                 mode='admm', tol=1e-4, rtol=1e-4, verbose=False,
-                 assume_centered=False, update_rho_options=None,
-                 compute_objective=True):
+    def __init__(
+            self, alpha=0.01, rho=1., over_relax=1., max_iter=100, mode='admm',
+            tol=1e-4, rtol=1e-4, verbose=False, assume_centered=False,
+            update_rho_options=None, compute_objective=True):
         super(GraphLasso, self).__init__(
             alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
             assume_centered=assume_centered, mode=mode)
@@ -239,8 +247,8 @@ class GraphLasso(GraphLasso):
 
         """
         # Covariance does not make sense for a single feature
-        X = check_array(X, ensure_min_features=2, ensure_min_samples=2,
-                        estimator=self)
+        X = check_array(
+            X, ensure_min_features=2, ensure_min_samples=2, estimator=self)
         if self.assume_centered:
             self.location_ = np.zeros(X.shape[1])
         else:
