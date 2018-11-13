@@ -284,13 +284,13 @@ class TimeGraphLasso(GraphLasso):
 
     """
 
-    def __init__(self, alpha=0.01, beta=1., mode='admm', rho=1.,
-                 time_on_axis='first', tol=1e-4, rtol=1e-4,
-                 psi='laplacian', max_iter=100,
-                 verbose=False, assume_centered=False,
-                 return_history=False,
-                 update_rho_options=None, compute_objective=True,
-                 stop_at=None, stop_when=1e-4):
+    def __init__(
+            self, alpha=0.01, beta=1., mode='admm', rho=1.,
+            time_on_axis='first', tol=1e-4, rtol=1e-4, psi='laplacian',
+            max_iter=100, verbose=False, assume_centered=False,
+            return_history=False, update_rho_options=None,
+            compute_objective=True, stop_at=None, stop_when=1e-4,
+            suppress_warn_list=False):
         super(TimeGraphLasso, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered, mode=mode,
@@ -302,6 +302,7 @@ class TimeGraphLasso(GraphLasso):
         self.return_history = return_history
         self.stop_at = stop_at
         self.stop_when = stop_when
+        self.suppress_warn_list = suppress_warn_list
 
     def get_observed_precision(self):
         """Getter for the observed precision matrix.
@@ -355,7 +356,8 @@ class TimeGraphLasso(GraphLasso):
             raise TypeError("sparse matrices not supported.")
 
         X = check_array_dimensions(
-            X, n_dimensions=3, time_on_axis=self.time_on_axis)
+            X, n_dimensions=3, time_on_axis=self.time_on_axis,
+            suppress_warn_list=self.suppress_warn_list)
 
         is_list = isinstance(X, list)
         # Covariance does not make sense for a single feature

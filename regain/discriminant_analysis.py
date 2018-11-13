@@ -124,6 +124,9 @@ class DiscriminantAnalysis(LatentTimeGraphLasso,
         self.priors = np.asarray(priors) if priors is not None else None
         self.ensure_posdef = ensure_posdef
 
+        # This avoids the warnings when passing a list to TimeGraphLasso
+        self.suppress_warn_list = True
+
     def fit(self, X, y):
         """Fit the model according to the given training data and parameters.
 

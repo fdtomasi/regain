@@ -6,8 +6,9 @@ import numpy as np
 from sklearn.utils.extmath import squared_norm
 
 from regain.norm import l1_norm, node_penalty
-from regain.prox import (blockwise_soft_thresholding, prox_laplacian,
-                         prox_linf, prox_node_penalty, soft_thresholding)
+from regain.prox import (
+    blockwise_soft_thresholding, prox_laplacian, prox_linf, prox_node_penalty,
+    soft_thresholding)
 
 
 def check_norm_prox(function):
@@ -32,21 +33,26 @@ def check_norm_prox(function):
     return norm, prox, function == 'node'
 
 
-def check_array_dimensions(X, n_dimensions=3, time_on_axis='first'):
+def check_array_dimensions(
+        X, n_dimensions=3, time_on_axis='first', suppress_warn_list=False):
     """Validate input matrix."""
     if isinstance(X, list):
-        warnings.warn("Input data is list; assumed to be a list of matrices "
-                      "for each time point")
+        if not suppress_warn_list:
+            warnings.warn(
+                "Input data is list; assumed to be a list of matrices "
+                "for each time point")
         return X
     if X.ndim == n_dimensions - 1:
-        warnings.warn("Input data should have %d"
-                      " dimensions, found %d. Reshaping input into %s"
-                      % (n_dimensions, X.ndim, (1,) + X.shape))
+        warnings.warn(
+            "Input data should have %d"
+            " dimensions, found %d. Reshaping input into %s" %
+            (n_dimensions, X.ndim, (1, ) + X.shape))
         return X[None, ...]
 
     elif X.ndim != n_dimensions:
-        raise ValueError("Input data should have %d"
-                         " dimensions, found %d." % (n_dimensions, X.ndim))
+        raise ValueError(
+            "Input data should have %d"
+            " dimensions, found %d." % (n_dimensions, X.ndim))
 
     if time_on_axis == 'last':
         return X.transpose(2, 0, 1)  # put time as first dimension
