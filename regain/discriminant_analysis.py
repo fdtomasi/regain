@@ -12,9 +12,102 @@ from regain.covariance.latent_time_graph_lasso_ import LatentTimeGraphLasso
 from regain.utils import ensure_posdef
 
 
+__all__ = ("DiscriminantAnalysis",)
+
+
 class DiscriminantAnalysis(LatentTimeGraphLasso,
                            QuadraticDiscriminantAnalysis):
-    """docstring for QuadraticDiscriminantAnalysis."""
+    """Quadratic Discriminant Analysis using LTGL
+
+    A classifier with a quadratic decision boundary, generated
+    by fitting class conditional densities to the data
+    and using Bayes' rule.
+
+    The model fits a Gaussian density to each class using LTGL.
+
+    Parameters
+    ----------
+    priors : array, optional, shape = [n_classes]
+        Priors on classes
+
+        alpha : positive float, default 0.01
+        Regularization parameter for precision matrix. The higher alpha,
+        the more regularization, the sparser the inverse covariance.
+
+    tau : positive float, default 1
+        Regularization parameter for latent variables matrix. The higher tau,
+        the more regularization, the lower rank of the latent matrix.
+
+    beta : positive float, default 1
+        Regularization parameter to constrain precision matrices in time.
+        The higher beta, the more regularization,
+        and consecutive precision matrices in time are more similar.
+
+    psi : {'laplacian', 'l1', 'l2', 'linf', 'node'}, default 'laplacian'
+        Type of norm to enforce for consecutive precision matrices in time.
+
+    eta : positive float, default 1
+        Regularization parameter to constrain latent matrices in time.
+        The higher eta, the more regularization,
+        and consecutive latent matrices in time are more similar.
+
+    phi : {'laplacian', 'l1', 'l2', 'linf', 'node'}, default 'laplacian'
+        Type of norm to enforce for consecutive latent matrices in time.
+
+    rho : positive float, default 1
+        Augmented Lagrangian parameter.
+
+    over_relax : positive float, deafult 1
+        Over-relaxation parameter (typically between 1.0 and 1.8).
+
+    tol : positive float, default 1e-4
+        Absolute tolerance to declare convergence.
+
+    rtol : positive float, default 1e-4
+        Relative tolerance to declare convergence.
+
+    max_iter : integer, default 100
+        The maximum number of iterations.
+
+    verbose : boolean, default False
+        If verbose is True, the objective function, rnorm and snorm are
+        printed at each iteration.
+
+    assume_centered : boolean, default False
+        If True, data are not centered before computation.
+        Useful when working with data whose mean is almost, but not exactly
+        zero.
+        If False, data are centered before computation.
+
+    time_on_axis : {'first', 'last'}, default 'first'
+        If data have time as the last dimension, set this to 'last'.
+        Useful to use scikit-learn functions as train_test_split.
+
+    update_rho_options : dict, default None
+        Options for the update of rho. See `update_rho` function for details.
+
+    Attributes
+    ----------
+    covariance_ : list of array-like, shape = [n_features, n_features]
+        Covariance matrices of each class.
+
+    means_ : array-like, shape = [n_classes, n_features]
+        Class means.
+
+    priors_ : array-like, shape = [n_classes]
+        Class priors (sum to 1).
+
+    rotations_ : list of arrays
+        For each class k an array of shape [n_features, n_k], with
+        ``n_k = min(n_features, number of elements in class k)``
+        It is the rotation of the Gaussian distribution, i.e. its
+        principal axis.
+
+    scalings_ : list of arrays
+        For each class k an array of shape [n_k]. It contains the scaling
+        of the Gaussian distributions along its principal axes, i.e. the
+        variance in the rotated coordinate system.
+    """
 
     def __init__(
             self, alpha=0.01, tau=1., beta=1., eta=1., mode='admm', rho=1.,
@@ -56,7 +149,9 @@ class DiscriminantAnalysis(LatentTimeGraphLasso,
         n_samples, n_features = X.shape
         n_classes = len(self.classes_)
         if n_classes < 2:
-            raise ValueError('y has less than 2 classes')
+            raise ValueError(
+                'The number of classes has to be greater than'
+                ' one; got %d class' % (n_classes))
         if self.priors is None:
             self.priors_ = np.bincount(y) / float(n_samples)
         else:
