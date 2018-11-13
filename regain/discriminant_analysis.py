@@ -2,6 +2,7 @@
 
 import numpy as np
 from scipy import linalg
+from six.moves import xrange
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.utils import check_array, check_X_y
 from sklearn.utils.multiclass import check_classification_targets
@@ -10,7 +11,6 @@ from sklearn.utils.validation import check_is_fitted
 from regain.covariance.graph_lasso_ import fast_logdet
 from regain.covariance.latent_time_graph_lasso_ import LatentTimeGraphLasso
 from regain.utils import ensure_posdef
-
 
 __all__ = ("DiscriminantAnalysis",)
 
