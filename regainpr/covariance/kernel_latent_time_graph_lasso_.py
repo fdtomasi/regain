@@ -154,7 +154,7 @@ def kernel_latent_time_graph_lasso(
         # soft_thresholding_ = partial(soft_thresholding, lamda=alpha / rho)
         # Z_0 = np.array(map(soft_thresholding_, A))
         Z_0 = soft_thresholding(A, lamda=alpha / (rho * n_times))
-        
+
         # update residuals
         X_0 += R - Z_0 + W_0
 
@@ -199,7 +199,9 @@ def kernel_latent_time_graph_lasso(
             A_L = W_0[:-1] + U_L
             A_R = W_0[1:] + U_R
             if not phi_node_penalty:
-                prox_e = prox_phi(A_R - A_L, lamda=2. * np.diag(kernel_phi, m)[:, None, None] / rho)
+                prox_e = prox_phi(
+                    A_R - A_L,
+                    lamda=2. * np.diag(kernel_phi, m)[:, None, None] / rho)
                 W_L = .5 * (A_L + A_R - prox_e)
                 W_R = .5 * (A_L + A_R + prox_e)
             else:
@@ -215,39 +217,52 @@ def kernel_latent_time_graph_lasso(
 
         # diagnostics, reporting, termination checks
         rnorm = np.sqrt(
-            squared_norm(R - Z_0 + W_0) + squared_norm(Z_0[:-1] - Z_1) +
-            squared_norm(Z_0[1:] - Z_2) + squared_norm(W_0[:-1] - W_1) +
-            squared_norm(W_0[1:] - W_2))
+            squared_norm(R - Z_0 + W_0) + sum(
+                squared_norm(Z_0[:-m] - Z_M[m][0]) +
+                squared_norm(Z_0[m:] - Z_M[m][1])
+                for m in range(1, n_times)) + sum(
+                    squared_norm(W_0[:-m] - W_M[m][0]) +
+                    squared_norm(W_0[m:] - W_M[m][1])
+                    for m in range(1, n_times)))
 
         snorm = rho * np.sqrt(
-            squared_norm(R - R_old) + squared_norm(Z_1 - Z_1_old) +
-            squared_norm(Z_2 - Z_2_old) + squared_norm(W_1 - W_1_old) +
-            squared_norm(W_2 - W_2_old))
+            squared_norm(R - R_old) + sum(
+                squared_norm(Z_M[m][0] - Z_M_old[m][0]) +
+                squared_norm(Z_M[m][1] - Z_M_old[m][1])
+                for m in range(1, n_times)) + sum(
+                    squared_norm(W_M[m][0] - W_M_old[m][0]) +
+                    squared_norm(W_M[m][1] - W_M_old[m][1])
+                    for m in range(1, n_times)))
 
-        obj = objective(emp_cov, n_samples, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
-                        alpha, tau, beta, eta, psi, phi) \
+        obj = objective(emp_cov, n_samples, R, Z_0, Z_M, W_0, W_M,
+                        alpha, tau, kernel_psi, kernel_phi, psi, phi) \
             if compute_objective else np.nan
 
         check = convergence(
             obj=obj, rnorm=rnorm, snorm=snorm,
             e_pri=np.sqrt(R.size + 4 * Z_1.size) * tol + rtol * max(
                 np.sqrt(
-                    squared_norm(R) + squared_norm(Z_1) + squared_norm(Z_2) +
-                    squared_norm(W_1) + squared_norm(W_2)),
+                    squared_norm(R) + sum(
+                        squared_norm(Z_M[m][0]) + squared_norm(Z_M[m][1])
+                        for m in range(1, n_times)) + sum(
+                        squared_norm(W_M[m][0]) + squared_norm(W_M[m][1])
+                        for m in range(1, n_times))),
                 np.sqrt(
                     squared_norm(Z_0 - W_0) + squared_norm(Z_0[:-1]) +
                     squared_norm(Z_0[1:]) + squared_norm(W_0[:-1]) +
                     squared_norm(W_0[1:]))),
             e_dual=np.sqrt(R.size + 4 * Z_1.size) * tol + rtol * rho * (
                 np.sqrt(
-                    squared_norm(X_0) + squared_norm(X_1) + squared_norm(X_2) +
-                    squared_norm(U_1) + squared_norm(U_2))))
+                    squared_norm(X_0) + sum(
+                        squared_norm(X_M[m][0]) + squared_norm(X_M[m][1])
+                        for m in range(1, n_times)) + sum(
+                            squared_norm(U_M[m][0]) + squared_norm(U_M[m][1])
+                            for m in range(1, n_times)))))
 
         R_old = R.copy()
-        Z_1_old = Z_1.copy()
-        Z_2_old = Z_2.copy()
-        W_1_old = W_1.copy()
-        W_2_old = W_2.copy()
+        for m in range(1, n_times):
+            Z_M_old[m] = (Z_M[m][0].copy(), Z_M[m][1].copy())
+            W_M_old[m] = (W_M[m][0].copy(), W_M[m][1].copy())
 
         if verbose:
             print(
@@ -263,10 +278,13 @@ def kernel_latent_time_graph_lasso(
             **(update_rho_options or {}))
         # scaled dual variables should be also rescaled
         X_0 *= rho / rho_new
-        X_1 *= rho / rho_new
-        X_2 *= rho / rho_new
-        U_1 *= rho / rho_new
-        U_2 *= rho / rho_new
+        for m in range(1, n_times):
+            X_L, X_R = X_M[m]
+            X_L *= rho / rho_new
+            X_R *= rho / rho_new
+            U_L, U_R = U_M[m]
+            U_L *= rho / rho_new
+            U_R *= rho / rho_new
         rho = rho_new
     else:
         warnings.warn("Objective did not converge.")
