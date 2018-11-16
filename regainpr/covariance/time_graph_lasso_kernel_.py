@@ -1,26 +1,23 @@
 """Sparse inverse covariance selection over time via ADMM.
 
-More information can be found in the paper linked at:
-https://arxiv.org/abs/1703.01958
+This adds the possibility to specify a temporal constraint with a kernel
+function.
 """
 from __future__ import division
 
 import warnings
 
 import numpy as np
-import scipy.sparse as sp
 from scipy import linalg
 from six.moves import map, range, zip
-from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
-from sklearn.utils.validation import check_array
 
 from regain.covariance.time_graph_lasso_ import TimeGraphLasso, loss
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
-from regain.utils import convergence, error_norm_time
-from regain.validation import check_array_dimensions, check_norm_prox
+from regain.utils import convergence
+from regain.validation import check_norm_prox
 
 
 def objective(n_samples, S, K, Z_0, Z_M, alpha, kernel, psi):
@@ -78,8 +75,11 @@ def time_graph_lasso_kernel(
 
     """
     psi, prox_psi, psi_node_penalty = check_norm_prox(psi)
-
     n_times, _, n_features = emp_cov.shape
+
+    if kernel is None:
+        kernel = np.eye(n_times)
+
     covariance_ = emp_cov.copy()
     covariance_ *= 0.95
     K = np.empty_like(emp_cov)
@@ -95,7 +95,6 @@ def time_graph_lasso_kernel(
     Z_M = {}
     U_M = {}
     Z_M_old = {}
-    divisor = {}
     for m in range(1, n_times):
         # all possible markovians jumps
         Z_L = K.copy()[:-m]
@@ -110,18 +109,12 @@ def time_graph_lasso_kernel(
         Z_R_old = np.zeros_like(Z_R)
         Z_M_old[m] = (Z_L_old, Z_R_old)
 
-    # divisor for consensus variables, accounting for two less matrices
-    divisor = np.full(emp_cov.shape[0], 3, dtype=float)
-    divisor[0] -= 1
-    divisor[-1] -= 1
-
     if n_samples is None:
-        n_samples = np.ones(emp_cov.shape[0])
+        n_samples = np.ones(n_times)
 
     checks = [
         convergence(
-            obj=objective(
-                n_samples, emp_cov, Z_0, K, Z_M, alpha, kernel, psi))
+            obj=objective(n_samples, emp_cov, Z_0, K, Z_M, alpha, kernel, psi))
     ]
     for iteration_ in range(max_iter):
         # update K
@@ -129,19 +122,20 @@ def time_graph_lasso_kernel(
         for m in range(1, n_times):
             A[:-m] += Z_M[m][0] - U_M[m][0]
             A[m:] += Z_M[m][1] - U_M[m][1]
-        A /= divisor[:, None, None]
+
+        A /= n_times
         # soft_thresholding_ = partial(soft_thresholding, lamda=alpha / rho)
         # K = np.array(map(soft_thresholding_, A))
         A += A.transpose(0, 2, 1)
         A /= 2.
 
-        A *= -rho * divisor[:, None, None] / n_samples[:, None, None]
+        A *= -rho * n_times / n_samples[:, None, None]
         A += emp_cov
 
         K = np.array(
             [
-                prox_logdet(a, lamda=ni / (rho * div))
-                for a, div, ni in zip(A, divisor, n_samples)
+                prox_logdet(a, lamda=ni / (rho * n_times))
+                for a, ni in zip(A, n_samples)
             ])
 
         # update Z_0
@@ -150,53 +144,65 @@ def time_graph_lasso_kernel(
         A /= 2.
         Z_0 = soft_thresholding(A, lamda=alpha / rho)
 
-        # other Zs
-        A_1 = K[:-1] + U_1
-        A_2 = K[1:] + U_2
-        if not psi_node_penalty:
-            prox_e = prox_psi(A_2 - A_1, lamda=2. * beta / rho)
-            Z_1 = .5 * (A_1 + A_2 - prox_e)
-            Z_2 = .5 * (A_1 + A_2 + prox_e)
-        else:
-            Z_1, Z_2 = prox_psi(
-                np.concatenate((A_1, A_2), axis=1), lamda=.5 * beta / rho,
-                rho=rho, tol=tol, rtol=rtol, max_iter=max_iter)
-
         # update residuals
         U_0 += K - Z_0
-        U_1 += K[:-1] - Z_1
-        U_2 += K[1:] - Z_2
+
+        # other Zs
+        for m in range(1, n_times):
+            U_L, U_R = U_M[m]
+            A_L = K[:-m] + U_L
+            A_R = K[m:] + U_R
+            if not psi_node_penalty:
+                prox_e = prox_psi(
+                    A_R - A_L,
+                    lamda=2. * np.diag(kernel, m)[:, None, None] / rho)
+                Z_L = .5 * (A_L + A_R - prox_e)
+                Z_R = .5 * (A_L + A_R + prox_e)
+            else:
+                Z_L, Z_R = prox_psi(
+                    np.concatenate((A_L, A_R), axis=1),
+                    lamda=.5 * np.diag(kernel, m)[:, None, None] / rho,
+                    rho=rho, tol=tol, rtol=rtol, max_iter=max_iter)
+            Z_M[m] = (Z_L, Z_R)
+
+            # update other residuals
+            U_L += K[:-m] - Z_L
+            U_R += K[m:] - Z_R
 
         # diagnostics, reporting, termination checks
         rnorm = np.sqrt(
-            squared_norm(K - Z_0) + squared_norm(K[:-1] - Z_1) +
-            squared_norm(K[1:] - Z_2))
+            squared_norm(K - Z_0) + sum(
+                squared_norm(K[:-m] - Z_M[m][0]) +
+                squared_norm(K[m:] - Z_M[m][1]) for m in range(1, n_times)))
 
         snorm = rho * np.sqrt(
-            squared_norm(Z_0 - Z_0_old) + squared_norm(Z_1 - Z_1_old) +
-            squared_norm(Z_2 - Z_2_old))
+            squared_norm(Z_0 - Z_0_old) + sum(
+                squared_norm(Z_M[m][0] - Z_M_old[m][0]) +
+                squared_norm(Z_M[m][1] - Z_M_old[m][1])
+                for m in range(1, n_times)))
 
         obj = objective(
-            n_samples, emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi) \
+            n_samples, emp_cov, Z_0, K, Z_M, alpha, kernel, psi) \
             if compute_objective else np.nan
 
         check = convergence(
-            obj=obj,
-            rnorm=rnorm,
-            snorm=snorm,
-            e_pri=np.sqrt(K.size + 2 * Z_1.size) * tol + rtol * max(
+            obj=obj, rnorm=rnorm, snorm=snorm,
+            e_pri=n_features * n_times * tol + rtol * max(
                 np.sqrt(
-                    squared_norm(Z_0) + squared_norm(Z_1) + squared_norm(Z_2)),
+                    squared_norm(Z_0) + sum(
+                        squared_norm(Z_M[m][0]) + squared_norm(Z_M[m][1])
+                        for m in range(1, n_times))),
                 np.sqrt(
-                    squared_norm(K) + squared_norm(K[:-1]) +
-                    squared_norm(K[1:]))),
-            e_dual=np.sqrt(K.size + 2 * Z_1.size) * tol + rtol * rho *
-            np.sqrt(squared_norm(U_0) + squared_norm(U_1) + squared_norm(U_2)),
-            # precision=Z_0.copy()
-        )
+                    squared_norm(K) + sum(
+                        squared_norm(K[:-m]) + squared_norm(K[m:])
+                        for m in range(1, n_times)))),
+            e_dual=n_features * n_times * tol + rtol * rho * np.sqrt(
+                squared_norm(U_0) + sum(
+                    squared_norm(U_M[m][0]) + squared_norm(U_M[m][1])
+                    for m in range(1, n_times))))
         Z_0_old = Z_0.copy()
-        Z_1_old = Z_1.copy()
-        Z_2_old = Z_2.copy()
+        for m in range(1, n_times):
+            Z_M_old[m] = (Z_M[m][0].copy(), Z_M[m][1].copy())
 
         if verbose:
             print(
@@ -216,8 +222,10 @@ def time_graph_lasso_kernel(
             **(update_rho_options or {}))
         # scaled dual variables should be also rescaled
         U_0 *= rho / rho_new
-        U_1 *= rho / rho_new
-        U_2 *= rho / rho_new
+        for m in range(1, n_times):
+            U_L, U_R = U_M[m]
+            U_L *= rho / rho_new
+            U_R *= rho / rho_new
         rho = rho_new
     else:
         warnings.warn("Objective did not converge.")
@@ -231,7 +239,7 @@ def time_graph_lasso_kernel(
     return return_list
 
 
-class KernelTimeGraphLasso(Time):
+class KernelTimeGraphLasso(TimeGraphLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Parameters
@@ -240,10 +248,11 @@ class KernelTimeGraphLasso(Time):
         Regularization parameter for precision matrix. The higher alpha,
         the more regularization, the sparser the inverse covariance.
 
-    beta : positive float, default 1
-        Regularization parameter to constrain precision matrices in time.
-        The higher beta, the more regularization,
-        and consecutive precision matrices in time are more similar.
+    kernel : ndarray, default None
+        Normalised temporal kernel (1 on the diagonal),
+        with dimensions equal to the dimensionality of the data set.
+        If None, it is interpreted as an identity matrix, where there is no
+        constraint on the temporal behaviour of the precision matrices.
 
     psi : {'laplacian', 'l1', 'l2', 'linf', 'node'}, default 'laplacian'
         Type of norm to enforce for consecutive precision matrices in time.
@@ -302,35 +311,21 @@ class KernelTimeGraphLasso(Time):
     """
 
     def __init__(
-            self, alpha=0.01, beta=1., mode='admm', rho=1.,
+            self, alpha=0.01, kernel=None, mode='admm', rho=1.,
             time_on_axis='first', tol=1e-4, rtol=1e-4, psi='laplacian',
             max_iter=100, verbose=False, assume_centered=False,
             return_history=False, update_rho_options=None,
             compute_objective=True, stop_at=None, stop_when=1e-4,
             suppress_warn_list=False):
-        super(TimeGraphLasso, self).__init__(
+        super(KernelTimeGraphLasso, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered, mode=mode,
             update_rho_options=update_rho_options,
-            compute_objective=compute_objective)
-        self.beta = beta
-        self.psi = psi
-        self.time_on_axis = time_on_axis
-        self.return_history = return_history
-        self.stop_at = stop_at
-        self.stop_when = stop_when
-        self.suppress_warn_list = suppress_warn_list
-
-    def get_observed_precision(self):
-        """Getter for the observed precision matrix.
-
-        Returns
-        -------
-        precision_ : array-like,
-            The precision matrix associated to the current covariance object.
-
-        """
-        return self.get_precision()
+            compute_objective=compute_objective,
+            suppress_warn_list=suppress_warn_list, stop_at=stop_at,
+            stop_when=stop_when, return_history=return_history,
+            time_on_axis=time_on_axis, psi=psi)
+        self.kernel = kernel
 
     def _fit(self, emp_cov, n_samples):
         """Fit the TimeGraphLasso model to X.
@@ -341,8 +336,8 @@ class KernelTimeGraphLasso(Time):
             Empirical covariance of data.
 
         """
-        out = time_graph_lasso(
-            emp_cov, alpha=self.alpha, rho=self.rho, beta=self.beta,
+        out = time_graph_lasso_kernel(
+            emp_cov, alpha=self.alpha, rho=self.rho, kernel=self.kernel,
             mode=self.mode, n_samples=n_samples, tol=self.tol, rtol=self.rtol,
             psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
             return_n_iter=True, return_history=self.return_history,
@@ -354,174 +349,3 @@ class KernelTimeGraphLasso(Time):
         else:
             self.precision_, self.covariance_, self.n_iter_ = out
         return self
-
-    def fit(self, X, y=None):
-        """Fit the TimeGraphLasso model to X.
-
-        Parameters
-        ----------
-        X : ndarray, shape (n_time, n_samples, n_features), or
-                (n_samples, n_features, n_time)
-            Data from which to compute the covariance estimate.
-            If shape is (n_samples, n_features, n_time), then set
-            `time_on_axis = 'last'`.
-        y : (ignored)
-
-        """
-        if sp.issparse(X):
-            raise TypeError("sparse matrices not supported.")
-
-        X = check_array_dimensions(
-            X, n_dimensions=3, time_on_axis=self.time_on_axis,
-            suppress_warn_list=self.suppress_warn_list)
-
-        is_list = isinstance(X, list)
-        # Covariance does not make sense for a single feature
-        X = np.array(
-            [
-                check_array(
-                    x, ensure_min_features=2, ensure_min_samples=2,
-                    estimator=self) for x in X
-            ])
-        if is_list:
-            n_times = len(X)
-            if np.unique([x.shape[1] for x in X]).size != 1:
-                raise ValueError(
-                    "Input data cannot have different number "
-                    "of variables.")
-            n_dimensions = X[0].shape[1]
-        else:
-            n_times = X.shape[0]
-            n_dimensions = X.shape[2]
-
-        n_samples = np.array([x.shape[0] for x in X])
-
-        if self.assume_centered:
-            self.location_ = np.zeros((n_times, 1, n_dimensions))
-        else:
-            mean = np.array([x.mean(0) for x in X]) if is_list else X.mean(1)
-            self.location_ = mean.reshape(n_times, 1, n_dimensions)
-        emp_cov = np.array(
-            [
-                empirical_covariance(x, assume_centered=self.assume_centered)
-                for x in X
-            ])
-
-        return self._fit(emp_cov, n_samples)
-
-    def score(self, X_test, y=None):
-        """Computes the log-likelihood of a Gaussian data set with
-        `self.covariance_` as an estimator of its covariance matrix.
-
-        Parameters
-        ----------
-        X_test : array-like, shape = [n_samples, n_features]
-            Test data of which we compute the likelihood, where n_samples is
-            the number of samples and n_features is the number of features.
-            X_test is assumed to be drawn from the same distribution than
-            the data used in fit (including centering).
-
-        y : not used, present for API consistence purpose.
-
-        Returns
-        -------
-        res : float
-            The likelihood of the data set with `self.covariance_` as an
-            estimator of its covariance matrix.
-
-        """
-        if sp.issparse(X_test):
-            raise TypeError("sparse matrices not supported.")
-
-        X_test = check_array_dimensions(
-            X_test, n_dimensions=3, time_on_axis=self.time_on_axis)
-
-        # Covariance does not make sense for a single feature
-        X_test = np.array(
-            [
-                check_array(
-                    x, ensure_min_features=2, ensure_min_samples=2,
-                    estimator=self) for x in X_test
-            ])
-
-        # compute empirical covariance of the test set
-        test_cov = np.array(
-            [
-                empirical_covariance(x, assume_centered=True)
-                for x in X_test - self.location_
-            ])
-
-        n_samples = np.array([x.shape[0] for x in X_test])
-        res = sum(
-            n * log_likelihood(S, K) for S, K, n in zip(
-                test_cov, self.get_observed_precision(), n_samples))
-
-        # ALLA  MATLAB1
-        # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
-        # scores_ranks = np.square(ranks-np.sqrt(L.shape[1]))
-
-        return res  # - np.sum(scores_ranks)
-
-    def error_norm(
-            self, comp_cov, norm='frobenius', scaling=True, squared=True):
-        """Compute the Mean Squared Error between two covariance estimators.
-        (In the sense of the Frobenius norm).
-
-        Parameters
-        ----------
-        comp_cov : array-like, shape = [n_features, n_features]
-            The covariance to compare with.
-
-        norm : str
-            The type of norm used to compute the error. Available error types:
-            - 'frobenius' (default): sqrt(tr(A^t.A))
-            - 'spectral': sqrt(max(eigenvalues(A^t.A))
-            where A is the error ``(comp_cov - self.covariance_)``.
-
-        scaling : bool
-            If True (default), the squared error norm is divided by n_features.
-            If False, the squared error norm is not rescaled.
-
-        squared : bool
-            Whether to compute the squared error norm or the error norm.
-            If True (default), the squared error norm is returned.
-            If False, the error norm is returned.
-
-        Returns
-        -------
-        The Mean Squared Error (in the sense of the Frobenius norm) between
-        `self` and `comp_cov` covariance estimators.
-
-        """
-        return error_norm_time(
-            self.covariance_, comp_cov, norm=norm, scaling=scaling,
-            squared=squared)
-
-    def mahalanobis(self, observations):
-        """Computes the squared Mahalanobis distances of given observations.
-
-        Parameters
-        ----------
-        observations : array-like, shape = [n_observations, n_features]
-            The observations, the Mahalanobis distances of the which we
-            compute. Observations are assumed to be drawn from the same
-            distribution than the data used in fit.
-
-        Returns
-        -------
-        mahalanobis_distance : array, shape = [n_observations,]
-            Squared Mahalanobis distances of the observations.
-
-        """
-        if self.time_on_axis == 'last':
-            # put time as first dimension
-            observations = observations.transpose(2, 0, 1)
-        precision = self.get_observed_precision()
-        # compute mahalanobis distances
-        sum_ = 0.
-        for obs, loc in zip(observations, self.location_):
-            centered_obs = observations - self.location_
-            sum_ += np.sum(np.dot(centered_obs, precision) * centered_obs, 1)
-
-        mahalanobis_dist = sum_ / len(observations)
-        return mahalanobis_dist

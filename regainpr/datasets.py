@@ -21,11 +21,11 @@ def normalize_matrix(x):
     x *= d.T
 
 
-def make_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
-                 mode=None, time_on_axis='first',
-                 update_ell='l2', update_theta='l2',
-                 normalize_starting_matrices=False, degree=2, epsilon=1e-2,
-                 keep_sparsity=False, proportional=False, **kwargs):
+def make_dataset(
+        n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10, mode=None,
+        time_on_axis='first', update_ell='l2', update_theta='l2',
+        normalize_starting_matrices=False, degree=2, epsilon=1e-2,
+        keep_sparsity=False, proportional=False, **kwargs):
     """Generate a synthetic dataset.
 
     Parameters
@@ -69,22 +69,28 @@ def make_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
         fixedl1=make_l1,
         yuan=generate_dataset_yuan,
         l1l2=generate_dataset_l1l2,
-        norm=make_l2l2_norm, l1l1=generate_dataset_l1l1,
+        norm=make_l2l2_norm,
+        l1l1=generate_dataset_l1l1,
 
         # the previous are deprecated
         sin=make_sin,
-        fixed_sparsity=make_fixed_sparsity, sincos=make_sin_cos,
-        fede=make_fede, sklearn=make_sparse_low_rank,
-        ma=make_ma_xue_zou, mak=make_ma_xue_zou_rand_k)
+        fixed_sparsity=make_fixed_sparsity,
+        sincos=make_sin_cos,
+        fede=make_fede,
+        sklearn=make_sparse_low_rank,
+        ma=make_ma_xue_zou,
+        mak=make_ma_xue_zou_rand_k)
 
     if mode is not None:
         # mode overrides other parameters, for back compatibility
         func = mode if callable(mode) else modes.get(mode, None)
         if func is None:
-            raise ValueError("Unknown mode %s. "
-                             "Choices are: %s" % (mode, modes.keys()))
-        kwargs.update(degree=degree, epsilon=epsilon,
-                      keep_sparsity=keep_sparsity, proportional=proportional)
+            raise ValueError(
+                "Unknown mode %s. "
+                "Choices are: %s" % (mode, modes.keys()))
+        kwargs.update(
+            degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity,
+            proportional=proportional)
     else:
         func = partial(
             make_covariance, update_ell=update_ell, update_theta=update_theta,
@@ -96,14 +102,17 @@ def make_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
     sigmas = map(np.linalg.inv, thetas_obs)
     # map(normalize_matrix, sigmas)  # in place
 
-    data = np.array([np.random.multivariate_normal(
-        np.zeros(n_dim_obs), sigma, size=n_samples) for sigma in sigmas])
+    data = np.array(
+        [
+            np.random.multivariate_normal(
+                np.zeros(n_dim_obs), sigma, size=n_samples) for sigma in sigmas
+        ])
 
     if time_on_axis == "last":
         data = data.transpose(1, 2, 0)
-    return Bunch(data=data, thetas=np.array(thetas),
-                 thetas_observed=np.array(thetas_obs),
-                 ells=np.array(ells))
+    return Bunch(
+        data=data, thetas=np.array(thetas),
+        thetas_observed=np.array(thetas_obs), ells=np.array(ells))
 
 
 def make_ell(n_dim_obs=100, n_dim_lat=10):
@@ -116,7 +125,7 @@ def make_ell(n_dim_obs=100, n_dim_lat=10):
 
     K_HO /= np.sum(K_HO, axis=1)[:, None] / 2
     L = K_HO.T.dot(K_HO)
-    assert(is_pos_semidef(L))
+    assert (is_pos_semidef(L))
     assert np.linalg.matrix_rank(L) == n_dim_lat
     # from sklearn.datasets import make_low_rank_matrix
     # L = make_low_rank_matrix(n_dim_obs, n_dim_obs, effective_rank=n_dim_lat)
@@ -132,9 +141,11 @@ def make_starting(n_dim_obs=100, n_dim_lat=10, degree=2, normalize=False):
     if normalize:
         theta = np.zeros((n_dim_obs, n_dim_obs))
         for i in range(n_dim_obs):
-            possible_idx = list(set(range(n_dim_obs)) - (
-                set(np.nonzero(theta[i, :])[0]) |
-                set(np.where(np.count_nonzero(theta, axis=1) > degree)[0])))
+            possible_idx = list(
+                set(range(n_dim_obs)) - (
+                    set(np.nonzero(theta[i, :])[0]) | set(
+                        np.where(np.count_nonzero(theta, axis=1) > degree)[0]))
+            )
             if not possible_idx:
                 continue
             n_choice = degree - (np.count_nonzero(theta[i, :]) - 1)
@@ -142,14 +153,16 @@ def make_starting(n_dim_obs=100, n_dim_lat=10, degree=2, normalize=False):
                 indices = np.random.choice(possible_idx, n_choice)
             theta[i, indices] = theta[indices, i] = 1. / degree
 
-        theta.flat[::n_dim_obs+1] = np.sum(theta, axis=1) + 0.002
+        theta.flat[::n_dim_obs + 1] = np.sum(theta, axis=1) + 0.002
 
     else:
         theta = np.eye(n_dim_obs)
         for i in range(n_dim_obs):
-            possible_idx = list(set(range(n_dim_obs)) - (
-                set(np.nonzero(theta[i, :])[0]) |
-                set(np.where(np.count_nonzero(theta, axis=1) > degree)[0])))
+            possible_idx = list(
+                set(range(n_dim_obs)) - (
+                    set(np.nonzero(theta[i, :])[0]) | set(
+                        np.where(np.count_nonzero(theta, axis=1) > degree)[0]))
+            )
             if not possible_idx:
                 continue
             n_choice = degree - (np.count_nonzero(theta[i, :]) - 1)
@@ -157,9 +170,9 @@ def make_starting(n_dim_obs=100, n_dim_lat=10, degree=2, normalize=False):
                 indices = np.random.choice(possible_idx, n_choice)
                 theta[i, indices] = theta[indices, i] = .5 / degree
 
-    assert(is_pos_def(theta))
+    assert (is_pos_def(theta))
     theta_observed = theta - L
-    assert(is_pos_def(theta_observed))
+    assert (is_pos_def(theta_observed))
     return theta, theta_observed, L, K_HO
 
 
@@ -190,9 +203,11 @@ def update_theta_l1(theta_init, no, n_dim_obs):
         rows = np.random.randint(0, n_dim_obs, no)
         cols = np.random.randint(0, n_dim_obs, no)
     for r, c in zip(rows, cols):
-        theta[r, c] = np.random.choice([0.12, 0, 0]) if theta[r, c] == 0 else .06  # np.random.rand(1) * .35
+        theta[r, c] = np.random.choice(
+            [0.12, 0,
+             0]) if theta[r, c] == 0 else .06  # np.random.rand(1) * .35
         theta[c, r] = theta[r, c]
-    assert(is_pos_def(theta))
+    assert (is_pos_def(theta))
     return theta
 
 
@@ -208,8 +223,8 @@ def update_ell_l2(K_HO_old, epsilon, n_dim_obs):
 
 
 def make_covariance(
-    n_dim_obs=100, n_dim_lat=10, T=10, update_ell='l1', update_theta='l1',
-    normalize_starting_matrices=True, degree=2, epsilon=1e-2,
+        n_dim_obs=100, n_dim_lat=10, T=10, update_ell='l1', update_theta='l1',
+        normalize_starting_matrices=True, degree=2, epsilon=1e-2,
         keep_sparsity=False, proportional=False):
     no = int(np.ceil(n_dim_obs / 20)) if proportional else 1
 
@@ -225,16 +240,20 @@ def make_covariance(
     for i in range(1, T):
         if update_theta == 'l1':
             if keep_sparsity:
-                warnings.warn("keep_sparsity is specified but is not "
-                              "implemented with l1.")
+                warnings.warn(
+                    "keep_sparsity is specified but is not "
+                    "implemented with l1.")
             theta = update_theta_l1(thetas[-1], no, n_dim_obs)
         elif update_theta == 'l2':
-            theta = update_theta_l2(thetas[-1], n_dim_obs, degree, epsilon,
-                                    keep_sparsity=keep_sparsity, indices=idx)
+            theta = update_theta_l2(
+                thetas[-1], n_dim_obs, degree, epsilon,
+                keep_sparsity=keep_sparsity, indices=idx)
         else:
             raise ValueError(update_theta)
 
-        if update_ell == 'l1':
+        if update_ell == 'fixed' or n_dim_lat < 1:
+            pass  # L is fixed or empty
+        elif update_ell == 'l1':
             K_HO = K_HOs[-1].copy()
             picks = np.random.permutation(K_HO.size)[:no]
             K_HO = K_HO.ravel()
@@ -250,14 +269,12 @@ def make_covariance(
             r = np.random.randint(0, n_dim_lat, 1)
             K_HO[r, c] = 0.12 if K_HO[r, c] == 0 else 0
             L = K_HO.T.dot(K_HO)
-        elif update_ell == 'fixed':
-            pass  # L is fixed
         else:
             raise ValueError(update_ell)
 
         assert np.linalg.matrix_rank(L) == n_dim_lat
-        assert(is_pos_semidef(L))
-        assert(is_pos_def(theta - L))
+        assert (is_pos_semidef(L))
+        assert (is_pos_def(theta - L))
 
         thetas.append(theta)
         thetas_obs.append(theta - L)
@@ -268,8 +285,7 @@ def make_covariance(
 
 
 @deprecated("it will be removed in v0.2.0. Use `make_covariance` instead")
-def generate_dataset_l1l1(
-        n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
+def generate_dataset_l1l1(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """Generate matrices according to a l1-l1 model."""
     return make_covariance(
         n_dim_lat=n_dim_lat, n_dim_obs=n_dim_obs, T=T, update_ell='l1',
@@ -294,8 +310,7 @@ def generate_dataset_yuan(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
 
 
 @deprecated("it will be removed in v0.2.0. Use `make_covariance` instead")
-def make_l2l2(
-        n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
+def make_l2l2(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """Generate dataset with evolving L."""
     return make_covariance(
         n_dim_lat=n_dim_lat, n_dim_obs=n_dim_obs, T=T, update_ell='l2',
@@ -336,7 +351,7 @@ def make_fixed_sparsity(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
 
     theta = np.abs(theta)
     theta_observed = theta - L
-    nonzeros = np.nonzero(theta-np.diag(theta))
+    nonzeros = np.nonzero(theta - np.diag(theta))
 
     thetas = [theta]
     thetas_obs = [theta_observed]
@@ -352,7 +367,7 @@ def make_fixed_sparsity(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
         theta[theta < epsilon] = 0
         theta.flat[::n_dim_obs + 1] = np.sum(np.abs(theta), axis=1) \
                                     + np.sum(np.abs(L), axis=1) + .1
-        nonzeros = np.nonzero(theta-np.diag(theta))
+        nonzeros = np.nonzero(theta - np.diag(theta))
 
         theta_observed = theta - L
         assert is_pos_def(theta_observed)
@@ -362,11 +377,12 @@ def make_fixed_sparsity(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     return thetas, thetas_obs, np.array([L] * T)
 
 
-def make_sin(n_dim_obs, n_dim_lat, T, shape='smooth', closeness=1,
-             normalize=False, **kwargs):
+def make_sin(
+        n_dim_obs, n_dim_lat, T, shape='smooth', closeness=1, normalize=False,
+        **kwargs):
     upper_idx = np.triu_indices(n_dim_obs, 1)
     n_interactions = len(upper_idx[0])
-    x = np.tile(np.linspace(0, (T-1.) / closeness, T), (n_interactions, 1))
+    x = np.tile(np.linspace(0, (T - 1.) / closeness, T), (n_interactions, 1))
     phase = np.random.rand(n_interactions, 1)
     freq = np.random.rand(n_interactions, 1) - .50
     A = (np.random.rand(n_interactions, 1) + 1) / 2.
@@ -379,8 +395,11 @@ def make_sin(n_dim_obs, n_dim_lat, T, shape='smooth', closeness=1,
     # threshold
     y = np.maximum(y, 0)
 
-    Y = np.array([squareform(y[:, j]) + np.diag(np.sum(squareform(y[:, j]), axis=1))
-                  for j in range(y.shape[1])])
+    Y = np.array(
+        [
+            squareform(y[:, j]) + np.diag(np.sum(squareform(y[:, j]), axis=1))
+            for j in range(y.shape[1])
+        ])
 
     if normalize:
         map(normalize_matrix, Y)  # in place
@@ -410,25 +429,25 @@ def make_sin_cos(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
 
     thetas = np.array([np.eye(n_dim_obs) for i in range(T)])
 
-    x = np.linspace(0, 2*np.pi, T)
+    x = np.linspace(0, 2 * np.pi, T)
     for i in range(T):
         for r in range(n_dim_obs):
             for c in range(n_dim_obs):
                 if r == c:
                     continue
                 if clip[r, c]:
-                    thetas[i, r, c] = np.sin((x[i]+phase[r, c])/T**2)
+                    thetas[i, r, c] = np.sin((x[i] + phase[r, c]) / T**2)
                 else:
-                    thetas[i, r, c] = np.sin((x[i]+phase[r, c]))
+                    thetas[i, r, c] = np.sin((x[i] + phase[r, c]))
         thetas[i][clip == 1] = np.clip(thetas[i][clip == 1], 0, 1)
         thetas[i][np.abs(thetas[i]) < eps] = 0
 
-        assert(is_pos_def(thetas[i]))
+        assert (is_pos_def(thetas[i]))
         theta_observed = thetas[i] - L
-        assert(is_pos_def(theta_observed))
+        assert (is_pos_def(theta_observed))
         thetas_obs = [theta_observed]
 
-    return thetas, thetas_obs, np.array([L]*T)
+    return thetas, thetas_obs, np.array([L] * T)
 
 
 def make_fede(
@@ -483,8 +502,8 @@ def make_sparse_low_rank(
 
     for i in range(1, T):
         K = K + make_sparse_spd_matrix(n_dim_obs)
-        L = L + make_low_rank_matrix(n_dim_obs, n_dim_obs,
-                                     effective_rank=n_dim_lat)
+        L = L + make_low_rank_matrix(
+            n_dim_obs, n_dim_obs, effective_rank=n_dim_lat)
 
         # assert is_pos_def(K - L)
         # assert is_pos_semidef(L)
@@ -503,8 +522,8 @@ def make_ma_xue_zou(n_dim_obs=12, n_latent=3, T=1, epsilon=1e-3, sparsity=0.1):
     po = n_dim_obs
     ph = p - n_dim_obs
     W = np.zeros((p, p))
-    non_zeros = int(round(p*p*sparsity))
-    picks = np.random.permutation(p*p)[:non_zeros]
+    non_zeros = int(round(p * p * sparsity))
+    picks = np.random.permutation(p * p)[:non_zeros]
     W = W.ravel(order='F')
     W[picks] = np.random.randn(non_zeros)
     W = np.reshape(W, (p, p), order="F")
