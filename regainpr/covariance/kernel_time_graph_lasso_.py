@@ -33,7 +33,7 @@ def objective(n_samples, S, K, Z_0, Z_M, alpha, kernel, psi):
     return obj
 
 
-def time_graph_lasso_kernel(
+def kernel_time_graph_lasso(
         emp_cov, alpha=0.01, rho=1, kernel=None, max_iter=100, n_samples=None,
         verbose=False, psi='laplacian', tol=1e-4, rtol=1e-4,
         return_history=False, return_n_iter=True, mode='admm',
@@ -42,7 +42,8 @@ def time_graph_lasso_kernel(
     """Time-varying graphical lasso solver.
 
     Solves the following problem via ADMM:
-        TODO
+        min sum_{i=1}^T -n_i log_likelihood(K_i-L_i) + alpha ||K_i||_{od,1}
+            + sum_{s>t}^T k_psi(s,t) Psi(K_s - K_t)
 
     where S is the empirical covariance of the data
     matrix D (training observations by features).
@@ -336,7 +337,7 @@ class KernelTimeGraphLasso(TimeGraphLasso):
             Empirical covariance of data.
 
         """
-        out = time_graph_lasso_kernel(
+        out = kernel_time_graph_lasso(
             emp_cov, alpha=self.alpha, rho=self.rho, kernel=self.kernel,
             mode=self.mode, n_samples=n_samples, tol=self.tol, rtol=self.rtol,
             psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
