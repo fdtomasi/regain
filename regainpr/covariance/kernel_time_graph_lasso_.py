@@ -261,9 +261,6 @@ class KernelTimeGraphLasso(TimeGraphLasso):
     rho : positive float, default 1
         Augmented Lagrangian parameter.
 
-    over_relax : positive float, deafult 1
-        Over-relaxation parameter (typically between 1.0 and 1.8).
-
     tol : positive float, default 1e-4
         Absolute tolerance to declare convergence.
 

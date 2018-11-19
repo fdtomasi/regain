@@ -13,8 +13,7 @@ from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.utils.extmath import squared_norm
 
-from regain.covariance.time_graph_lasso_ import TimeGraphLasso, logl
-from regain.norm import l1_od_norm
+from regain.covariance.latent_time_graph_lasso_ import LatentTimeGraphLasso
 from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence
@@ -151,18 +150,29 @@ def kernel_latent_time_graph_lasso(
             A[m:] += Z_M[m][1] - X_M[m][1]
 
         A /= n_times
-        # soft_thresholding_ = partial(soft_thresholding, lamda=alpha / rho)
-        # Z_0 = np.array(map(soft_thresholding_, A))
         Z_0 = soft_thresholding(A, lamda=alpha / (rho * n_times))
+
+        # update W_0
+        A = Z_0 - R - X_0
+        for m in range(1, n_times):
+            A[:-m] += W_M[m][0] - U_M[m][0]
+            A[m:] += W_M[m][1] - U_M[m][1]
+
+        A /= n_times
+        A += A.transpose(0, 2, 1)
+        A /= 2.
+
+        W_0 = np.array(
+            [prox_trace_indicator(a, lamda=tau / (rho * n_times)) for a in A])
 
         # update residuals
         X_0 += R - Z_0 + W_0
 
-        # other Zs
         for m in range(1, n_times):
+            # other Zs
             X_L, X_R = X_M[m]
-            A_L = Z_0[:-1] + X_L
-            A_R = Z_0[1:] + X_R
+            A_L = Z_0[:-m] + X_L
+            A_R = Z_0[m:] + X_R
             if not psi_node_penalty:
                 prox_e = prox_psi(
                     A_R - A_L,
@@ -180,24 +190,10 @@ def kernel_latent_time_graph_lasso(
             X_L += Z_0[:-m] - Z_L
             X_R += Z_0[m:] - Z_R
 
-        # update W_0
-        A = Z_0 - R - X_0
-        for m in range(1, n_times):
-            A[:-m] += W_M[m][0] - U_M[m][0]
-            A[m:] += W_M[m][1] - U_M[m][1]
-
-        A /= n_times
-        A += A.transpose(0, 2, 1)
-        A /= 2.
-
-        W_0 = np.array(
-            [prox_trace_indicator(a, lamda=tau / (rho * n_times)) for a in A])
-
-        # other Ws
-        for m in range(1, n_times):
+            # other Ws
             U_L, U_R = U_M[m]
-            A_L = W_0[:-1] + U_L
-            A_R = W_0[1:] + U_R
+            A_L = W_0[:-m] + U_L
+            A_R = W_0[m:] + U_R
             if not phi_node_penalty:
                 prox_e = prox_phi(
                     A_R - A_L,
@@ -218,21 +214,17 @@ def kernel_latent_time_graph_lasso(
         # diagnostics, reporting, termination checks
         rnorm = np.sqrt(
             squared_norm(R - Z_0 + W_0) + sum(
-                squared_norm(Z_0[:-m] - Z_M[m][0]) +
-                squared_norm(Z_0[m:] - Z_M[m][1])
-                for m in range(1, n_times)) + sum(
-                    squared_norm(W_0[:-m] - W_M[m][0]) +
-                    squared_norm(W_0[m:] - W_M[m][1])
-                    for m in range(1, n_times)))
+                squared_norm(Z_0[:-m] - Z_M[m][0]) + squared_norm(
+                    Z_0[m:] - Z_M[m][1]) + squared_norm(W_0[:-m] - W_M[m][0]) +
+                squared_norm(W_0[m:] - W_M[m][1]) for m in range(1, n_times)))
 
         snorm = rho * np.sqrt(
             squared_norm(R - R_old) + sum(
                 squared_norm(Z_M[m][0] - Z_M_old[m][0]) +
-                squared_norm(Z_M[m][1] - Z_M_old[m][1])
-                for m in range(1, n_times)) + sum(
-                    squared_norm(W_M[m][0] - W_M_old[m][0]) +
-                    squared_norm(W_M[m][1] - W_M_old[m][1])
-                    for m in range(1, n_times)))
+                squared_norm(Z_M[m][1] - Z_M_old[m][1]) +
+                squared_norm(W_M[m][0] - W_M_old[m][0]) +
+                squared_norm(W_M[m][1] - W_M_old[m][1])
+                for m in range(1, n_times)))
 
         obj = objective(emp_cov, n_samples, R, Z_0, Z_M, W_0, W_M,
                         alpha, tau, kernel_psi, kernel_phi, psi, phi) \
@@ -240,24 +232,24 @@ def kernel_latent_time_graph_lasso(
 
         check = convergence(
             obj=obj, rnorm=rnorm, snorm=snorm,
-            e_pri=np.sqrt(R.size + 4 * Z_1.size) * tol + rtol * max(
+            e_pri=n_features * np.sqrt(n_times * (2 * n_times - 1)) * tol +
+            rtol * max(
                 np.sqrt(
                     squared_norm(R) + sum(
-                        squared_norm(Z_M[m][0]) + squared_norm(Z_M[m][1])
-                        for m in range(1, n_times)) + sum(
+                        squared_norm(Z_M[m][0]) + squared_norm(Z_M[m][1]) +
                         squared_norm(W_M[m][0]) + squared_norm(W_M[m][1])
                         for m in range(1, n_times))),
                 np.sqrt(
-                    squared_norm(Z_0 - W_0) + squared_norm(Z_0[:-1]) +
-                    squared_norm(Z_0[1:]) + squared_norm(W_0[:-1]) +
-                    squared_norm(W_0[1:]))),
-            e_dual=np.sqrt(R.size + 4 * Z_1.size) * tol + rtol * rho * (
-                np.sqrt(
-                    squared_norm(X_0) + sum(
-                        squared_norm(X_M[m][0]) + squared_norm(X_M[m][1])
-                        for m in range(1, n_times)) + sum(
-                            squared_norm(U_M[m][0]) + squared_norm(U_M[m][1])
-                            for m in range(1, n_times)))))
+                    squared_norm(Z_0 - W_0) + sum(
+                        squared_norm(Z_0[:-m]) + squared_norm(Z_0[m:]) +
+                        squared_norm(W_0[:-m]) + squared_norm(W_0[m:])
+                        for m in range(1, n_times)))),
+            e_dual=n_features * np.sqrt(n_times * (2 * n_times - 1)) * tol +
+            rtol * rho * np.sqrt(
+                squared_norm(X_0) + sum(
+                    squared_norm(X_M[m][0]) + squared_norm(X_M[m][1]) +
+                    squared_norm(U_M[m][0]) + squared_norm(U_M[m][1])
+                    for m in range(1, n_times))))
 
         R_old = R.copy()
         for m in range(1, n_times):
@@ -282,6 +274,7 @@ def kernel_latent_time_graph_lasso(
             X_L, X_R = X_M[m]
             X_L *= rho / rho_new
             X_R *= rho / rho_new
+
             U_L, U_R = U_M[m]
             U_L *= rho / rho_new
             U_R *= rho / rho_new
@@ -298,7 +291,7 @@ def kernel_latent_time_graph_lasso(
     return return_list
 
 
-class LatentTimeGraphLasso(TimeGraphLasso):
+class KernelLatentTimeGraphLasso(LatentTimeGraphLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Parameters
@@ -311,27 +304,20 @@ class LatentTimeGraphLasso(TimeGraphLasso):
         Regularization parameter for latent variables matrix. The higher tau,
         the more regularization, the lower rank of the latent matrix.
 
-    beta : positive float, default 1
-        Regularization parameter to constrain precision matrices in time.
-        The higher beta, the more regularization,
-        and consecutive precision matrices in time are more similar.
-
     psi : {'laplacian', 'l1', 'l2', 'linf', 'node'}, default 'laplacian'
         Type of norm to enforce for consecutive precision matrices in time.
-
-    eta : positive float, default 1
-        Regularization parameter to constrain latent matrices in time.
-        The higher eta, the more regularization,
-        and consecutive latent matrices in time are more similar.
 
     phi : {'laplacian', 'l1', 'l2', 'linf', 'node'}, default 'laplacian'
         Type of norm to enforce for consecutive latent matrices in time.
 
+    kernel_{psi,phi} : ndarray, default None
+        Normalised temporal kernel (1 on the diagonal),
+        with dimensions equal to the dimensionality of the data set.
+        If None, it is interpreted as an identity matrix, where there is no
+        constraint on the temporal behaviour of {precision,latent} matrices.
+
     rho : positive float, default 1
         Augmented Lagrangian parameter.
-
-    over_relax : positive float, deafult 1
-        Over-relaxation parameter (typically between 1.0 and 1.8).
 
     tol : positive float, default 1e-4
         Absolute tolerance to declare convergence.
@@ -384,32 +370,19 @@ class LatentTimeGraphLasso(TimeGraphLasso):
     """
 
     def __init__(
-            self, alpha=0.01, tau=1., beta=1., eta=1., mode='admm', rho=1.,
-            time_on_axis='first', tol=1e-4, rtol=1e-4, psi='laplacian',
-            phi='laplacian', max_iter=100, verbose=False,
+            self, alpha=0.01, tau=1., kernel_psi=None, kernel_phi=None,
+            mode='admm', rho=1., time_on_axis='first', tol=1e-4, rtol=1e-4,
+            psi='laplacian', phi='laplacian', max_iter=100, verbose=False,
             assume_centered=False, update_rho_options=None,
             compute_objective=True):
-        super(LatentTimeGraphLasso, self).__init__(
-            alpha=alpha, beta=beta, mode=mode, rho=rho, tol=tol, rtol=rtol,
-            psi=psi, max_iter=max_iter, verbose=verbose,
+        super(KernelLatentTimeGraphLasso, self).__init__(
+            alpha=alpha, tau=tau, mode=mode, rho=rho, tol=tol, rtol=rtol,
+            psi=psi, phi=phi, max_iter=max_iter, verbose=verbose,
             time_on_axis=time_on_axis, assume_centered=assume_centered,
             update_rho_options=update_rho_options,
             compute_objective=compute_objective)
-        self.tau = tau
-        self.eta = eta
-        self.phi = phi
-
-    def get_observed_precision(self):
-        """Getter for the observed precision matrix.
-
-        Returns
-        -------
-        precision_ : array-like,
-            The precision matrix associated to the current covariance object.
-            Note that this is the observed precision matrix.
-
-        """
-        return self.precision_ - self.latent_
+        self.kernel_psi = kernel_psi
+        self.kernel_phi = kernel_phi
 
     def _fit(self, emp_cov, n_samples):
         """Fit the LatentTimeGraphLasso model to X.
@@ -421,11 +394,12 @@ class LatentTimeGraphLasso(TimeGraphLasso):
 
         """
         self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
-            latent_time_graph_lasso(
+            kernel_latent_time_graph_lasso(
                 emp_cov, n_samples=n_samples,
                 alpha=self.alpha, tau=self.tau, rho=self.rho,
-                beta=self.beta, eta=self.eta, mode=self.mode,
-                tol=self.tol, rtol=self.rtol, psi=self.psi, phi=self.phi,
+                kernel_phi=self.kernel_phi, kernel_psi=self.kernel_psi,
+                mode=self.mode, tol=self.tol, rtol=self.rtol,
+                psi=self.psi, phi=self.phi,
                 max_iter=self.max_iter, verbose=self.verbose,
                 return_n_iter=True, return_history=False,
                 update_rho_options=self.update_rho_options,
