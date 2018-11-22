@@ -560,7 +560,6 @@ def make_ma_xue_zou_rand_k(
     # p = n_dim_obs + n_latent  # int(n_dim_obs * 0.05)
     p = n_dim_obs + int(n_dim_obs * 0.05)
     po = n_dim_obs
-    ph = p - n_dim_obs
     nnzr = int(sparsity * (np.triu_indices(p, 1)[0].size))
 
     # Generate A, the original inverse covariance, with random sparsity pattern...
