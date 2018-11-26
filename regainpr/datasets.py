@@ -10,7 +10,8 @@ from scipy.spatial.distance import squareform
 from sklearn.datasets.base import Bunch
 from sklearn.utils import deprecated
 
-from regain.utils import is_pos_def, is_pos_semidef, positive_definite
+from regain.utils import (ensure_posdef, is_pos_def, is_pos_semidef,
+                          positive_definite)
 
 
 def normalize_matrix(x):
@@ -403,7 +404,8 @@ def make_sin(
 
     if normalize:
         map(normalize_matrix, Y)  # in place
-    assert positive_definite(Y)
+    # assert positive_definite(Y)
+    ensure_posdef(Y)
 
     return Y, Y, np.zeros_like(Y)
 

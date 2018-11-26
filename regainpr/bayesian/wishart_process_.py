@@ -3,15 +3,19 @@ from __future__ import print_function
 from functools import partial
 
 import numpy as np
+import scipy.sparse as sp
 from scipy import linalg
 from sklearn.base import BaseEstimator
 from sklearn.datasets.base import Bunch
 from sklearn.metrics.pairwise import rbf_kernel
+from sklearn.utils.validation import check_array
 
 from regain.bayesian import stats
 from regain.bayesian.gaussian_process_ import sample as sample_gp
 from regain.bayesian.sampling import elliptical_slice, sample_hyper_kernel
+from regain.validation import check_array_dimensions
 from regainpr.bayesian.sampling import sample_ell
+from regain.covariance.time_graph_lasso_ import TimeGraphLasso
 
 
 def GWP_construct(umat, L, uut=None):
@@ -42,7 +46,7 @@ def fit(
         lp, var_prop, mu_prior, var_prior, var_Lprop, mu_Lprior, var_Lprior,
         kern, p, nu=None, t=None, n_iter=500, verbose=False, likelihood=None):
     """Sample the parameters of kernel and lower Cholesky.
-    
+ 
     Parameters
     ----------
     lp, var_prop, mu_prior, var_prior : sampling kernel hyperparameters
@@ -68,12 +72,11 @@ def fit(
     cur_log_like = likelihood(D)
 
     # The struct ff is formed for the ESS procedure
-    ff = Bunch(xx=umat, V=D, L=L)
+    ff = Bunch(xx=umat, V=D, L=L, uut=np.array([u.dot(u.T) for u in umat.T]))
 
     Ltau = L[np.tril_indices_from(L)]
     L__ = np.zeros((p, p))
     L__[np.tril_indices_from(L__)] = Ltau
-    ff.uut = np.array([u.dot(u.T) for u in umat.T])
 
     samples_u = []  # np.zeros((uvec.size, niters));
     loglikes = np.zeros(n_iter)
@@ -82,7 +85,7 @@ def fit(
 
     for i in range(n_iter):
         # We first do ESS to obtain a new sample for u
-        if verbose and i > 0:
+        if verbose:
             print(i, "%.3e" % cur_log_like, end='\r')
 
         ff, cur_log_like = elliptical_slice(
@@ -106,7 +109,7 @@ def fit(
             K = kern(t[:, None], inverse_width=lp)
             while True:
                 try:
-                    umat = sample_gp(K + 1e-8 * np.eye(t.size), nu=nu, p=p)
+                    umat = sample_gp(K, nu=nu, p=p)
                     break
                 except:
                     K += 1e-8 * np.eye(t.size)
@@ -175,14 +178,18 @@ def kernel(X, Y=None, var=None, inverse_width=None, normalised=False):
     return k
 
 
-class WishartProcess(BaseEstimator):
+class WishartProcess(TimeGraphLasso):
     def __init__(
             self, theta=100, var_prop=1, mu_prior=1, var_prior=10,
             var_Lprop=10, mu_Lprior=1, var_Lprior=1, n_iter=500, burn_in=None,
-            verbose=False):
+            verbose=False, time_on_axis='last', suppress_warn_list=False,
+            assume_centered=False):
         self.n_iter = n_iter
         self.burn_in = n_iter // 4 if burn_in is None else burn_in
         self.verbose = verbose
+        self.suppress_warn_list = suppress_warn_list
+        self.assume_centered = assume_centered
+        self.time_on_axis = time_on_axis
 
         # parameter initialisation
         self.theta = theta  # Inverse width
@@ -195,7 +202,7 @@ class WishartProcess(BaseEstimator):
         self.var_Lprior = var_Lprior
 
     def fit(self, X, y=None):
-        """Fit.
+        """Fit the WishartProcess model to X.
 
         Parameters
         ----------
@@ -204,9 +211,42 @@ class WishartProcess(BaseEstimator):
         y : ndarray, shape = (n_times,)
             Indicate the temporal belonging of each matrix.
         """
+        if sp.issparse(X):
+            raise TypeError("sparse matrices not supported.")
 
+        X = check_array_dimensions(
+            X, n_dimensions=3, time_on_axis=self.time_on_axis,
+            suppress_warn_list=self.suppress_warn_list)
+
+        is_list = isinstance(X, list)
+        # Covariance does not make sense for a single feature
+        X = np.array(
+            [
+                check_array(
+                    x, ensure_min_features=2, ensure_min_samples=2,
+                    estimator=self) for x in X
+            ])
+        if is_list:
+            n_times = len(X)
+            if np.unique([x.shape[1] for x in X]).size != 1:
+                raise ValueError(
+                    "Input data cannot have different number "
+                    "of variables.")
+            n_dimensions = X[0].shape[1]
+        else:
+            n_times = X.shape[0]
+            n_dimensions = X.shape[2]
+
+        # n_samples = np.array([x.shape[0] for x in X])
+        if self.assume_centered:
+            self.location_ = np.zeros((n_times, 1, n_dimensions))
+        else:
+            mean = np.array([x.mean(0) for x in X]) if is_list else X.mean(1)
+            self.location_ = mean.reshape(n_times, 1, n_dimensions)
+
+        X = (X - self.location_).transpose(1, 2, 0)  # put time last
         kern = partial(kernel, var=1)
-        likelihood = partial(stats.time_multivariate_normal_logpdf, X)
+        self.likelihood = partial(stats.time_multivariate_normal_logpdf, X)
 
         n_dims = X.shape[1]
         nu = n_dims + 1
@@ -216,7 +256,7 @@ class WishartProcess(BaseEstimator):
             self.theta, self.var_prop, self.mu_prior, self.var_prior,
             self.var_Lprop, self.mu_Lprior, self.var_Lprior, kern=kern, t=t,
             nu=nu, p=n_dims, n_iter=self.n_iter, verbose=self.verbose,
-            likelihood=likelihood)
+            likelihood=self.likelihood)
 
         # Burn in
         self.lps_after_burnin = lps[self.burn_in:]
