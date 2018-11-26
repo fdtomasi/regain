@@ -51,6 +51,15 @@ def log_likelihood_normal(x, mean, var):
 
 
 def time_multivariate_normal_logpdf(X, Cov):
+    """Normal log likelihood based on Cov (mu = 0).
+    
+    Parameters
+    ----------
+    X : ndarray, shape = (n_samples, n_dimensions, n_times)
+        Data tensor.
+    Cov : ndarray, shape = (n_dimensions, n_dimensions, n_times)
+        Tensor of covariance matrices over time.
+    """
     logp = sum(
         multivariate_normal.logpdf(x, cov=Sigma, allow_singular=True)
         for x, Sigma in zip(X.transpose(2, 0, 1), Cov.T))

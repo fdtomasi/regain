@@ -248,6 +248,14 @@ def sample_ell(
     # Run the MH individually per component of L
     free_elements = Ltau.size
     L_proposal = np.zeros(free_elements)
+
+    if not isinstance(var_proposal, np.ndarray):
+        var_proposal = var_proposal * np.ones(free_elements)
+    if not isinstance(mu_prior, np.ndarray):
+        mu_prior = mu_prior * np.ones(free_elements)
+    if not isinstance(var_prior, np.ndarray):
+        var_prior = var_prior * np.ones(free_elements)
+
     for i in range(free_elements):
         L_proposal[i] = _sample_ell_comp(
             Ltau, i, var_proposal[i], umat, mu_prior=mu_prior[i],
