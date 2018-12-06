@@ -10,8 +10,8 @@ from scipy.spatial.distance import squareform
 from sklearn.datasets.base import Bunch
 from sklearn.utils import deprecated
 
-from regain.utils import (ensure_posdef, is_pos_def, is_pos_semidef,
-                          positive_definite)
+from regain.utils import (
+    ensure_posdef, is_pos_def, is_pos_semidef, positive_definite)
 
 
 def normalize_matrix(x):
@@ -77,6 +77,7 @@ def make_dataset(
         sin=make_sin,
         fixed_sparsity=make_fixed_sparsity,
         sincos=make_sin_cos,
+        gp=make_exp_sine_squared,
         fede=make_fede,
         sklearn=make_sparse_low_rank,
         ma=make_ma_xue_zou,
@@ -450,6 +451,42 @@ def make_sin_cos(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
         thetas_obs = [theta_observed]
 
     return thetas, thetas_obs, np.array([L] * T)
+
+
+def make_exp_sine_squared(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
+    from regain.bayesian.gaussian_process_ import sample as samplegp
+    from scipy.spatial.distance import squareform
+    from sklearn.gaussian_process import kernels
+
+    L, K_HO = make_ell(n_dim_obs, n_dim_lat)
+
+    periodicity = kwargs.get('periodicity', np.pi)
+    length_scale = kwargs.get('length_scale', 2)
+    epsilon = kwargs.get('epsilon', 0.5)
+    sparse = kwargs.get('sparse', True)
+    temporal_kernel = kernels.ExpSineSquared(
+        periodicity=periodicity, length_scale=length_scale)(
+            np.arange(T)[:, None])
+
+    u = samplegp(temporal_kernel, p=n_dim_obs * (n_dim_obs - 1) // 2)[0]
+    K, K_obs = [], []
+    for uu in u.T:
+        theta = squareform(uu)
+
+        if sparse:
+            # sparsify
+            theta[np.abs(theta) < epsilon] = 0
+
+        theta += np.diag(np.sum(np.abs(theta), axis=1) + 0.01)
+        K.append(theta)
+
+        assert (is_pos_def(theta))
+        theta_observed = theta - L
+        assert (is_pos_def(theta_observed))
+        K_obs.append(theta_observed)
+
+    thetas = np.array(K)
+    return thetas, np.array(K_obs), np.array([L] * T)
 
 
 def make_fede(

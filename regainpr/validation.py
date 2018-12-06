@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.utils.extmath import squared_norm
 
 from regain.norm import l1_norm, node_penalty
-from regain.prox import (
+from regainpr.prox import (
     blockwise_soft_thresholding, prox_laplacian, prox_linf, prox_node_penalty,
     soft_thresholding)
 
