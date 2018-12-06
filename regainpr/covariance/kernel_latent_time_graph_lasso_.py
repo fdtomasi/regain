@@ -98,7 +98,7 @@ def kernel_latent_time_graph_lasso(
     R_old = np.zeros_like(Z_0)
 
     Z_M = {}
-    X_M = {}
+    Y_M = {}
     Z_M_old = {}
     W_M = {}
     U_M = {}
@@ -112,9 +112,9 @@ def kernel_latent_time_graph_lasso(
         W_R = np.zeros_like(Z_R)
         W_M[m] = (W_L, W_R)
 
-        X_L = np.zeros_like(Z_L)
-        X_R = np.zeros_like(Z_R)
-        X_M[m] = (X_L, X_R)
+        Y_L = np.zeros_like(Z_L)
+        Y_R = np.zeros_like(Z_R)
+        Y_M[m] = (Y_L, Y_R)
 
         U_L = np.zeros_like(W_L)
         U_R = np.zeros_like(W_R)
@@ -147,8 +147,8 @@ def kernel_latent_time_graph_lasso(
         # update Z_0
         A = R + W_0 + X_0
         for m in range(1, n_times):
-            A[:-m] += Z_M[m][0] - X_M[m][0]
-            A[m:] += Z_M[m][1] - X_M[m][1]
+            A[:-m] += Z_M[m][0] - Y_M[m][0]
+            A[m:] += Z_M[m][1] - Y_M[m][1]
 
         A /= n_times
         Z_0 = soft_thresholding(A, lamda=alpha / (rho * n_times))
@@ -171,9 +171,9 @@ def kernel_latent_time_graph_lasso(
 
         for m in range(1, n_times):
             # other Zs
-            X_L, X_R = X_M[m]
-            A_L = Z_0[:-m] + X_L
-            A_R = Z_0[m:] + X_R
+            Y_L, Y_R = Y_M[m]
+            A_L = Z_0[:-m] + Y_L
+            A_R = Z_0[m:] + Y_R
             if not psi_node_penalty:
                 prox_e = prox_psi(
                     A_R - A_L,
@@ -188,8 +188,8 @@ def kernel_latent_time_graph_lasso(
             Z_M[m] = (Z_L, Z_R)
 
             # update other residuals
-            X_L += Z_0[:-m] - Z_L
-            X_R += Z_0[m:] - Z_R
+            Y_L += Z_0[:-m] - Z_L
+            Y_R += Z_0[m:] - Z_R
 
             # other Ws
             U_L, U_R = U_M[m]
@@ -248,7 +248,7 @@ def kernel_latent_time_graph_lasso(
             e_dual=n_features * np.sqrt(n_times * (2 * n_times - 1)) * tol +
             rtol * rho * np.sqrt(
                 squared_norm(X_0) + sum(
-                    squared_norm(X_M[m][0]) + squared_norm(X_M[m][1]) +
+                    squared_norm(Y_M[m][0]) + squared_norm(Y_M[m][1]) +
                     squared_norm(U_M[m][0]) + squared_norm(U_M[m][1])
                     for m in range(1, n_times))))
 
@@ -272,9 +272,9 @@ def kernel_latent_time_graph_lasso(
         # scaled dual variables should be also rescaled
         X_0 *= rho / rho_new
         for m in range(1, n_times):
-            X_L, X_R = X_M[m]
-            X_L *= rho / rho_new
-            X_R *= rho / rho_new
+            Y_L, Y_R = Y_M[m]
+            Y_L *= rho / rho_new
+            Y_R *= rho / rho_new
 
             U_L, U_R = U_M[m]
             U_L *= rho / rho_new
@@ -509,8 +509,15 @@ class NewKernelLatentTimeGraphLasso(NewKernelTimeGraphLasso):
 
     def _fit(self, emp_cov, n_samples):
         if callable(self.kernel_phi):
-            kernel_phi = self.kernel_phi(length_scale=self.length_scale)(
-                self.classes_[:, None])
+            try:
+                # this works if it is a ExpSineSquared kernel
+                kernel_phi = self.kernel_phi(length_scale=self.length_scale)(
+                    self.classes_[:, None])
+            except TypeError:
+                # maybe it's a ConstantKernel
+                kernel_phi = self.kernel_phi(constant_value=self.length_scale)(
+                    self.classes_[:, None])
+
         else:
             kernel_phi = self.kernel_phi
             if kernel_phi.shape[0] != self.classes_.size:
@@ -519,8 +526,14 @@ class NewKernelLatentTimeGraphLasso(NewKernelTimeGraphLasso):
                     "got {} classes and kernel_phi has shape {}".format(
                         self.classes_.size, kernel_phi.shape[0]))
         if callable(self.kernel_psi):
-            kernel_psi = self.kernel_psi(length_scale=self.length_scale)(
-                self.classes_[:, None])
+            try:
+                # this works if it is a ExpSineSquared kernel
+                kernel_psi = self.kernel_psi(length_scale=self.length_scale)(
+                    self.classes_[:, None])
+            except TypeError:
+                # maybe it's a ConstantKernel
+                kernel_psi = self.kernel_psi(constant_value=self.length_scale)(
+                    self.classes_[:, None])
         else:
             kernel_psi = self.kernel_psi
             if kernel_psi.shape[0] != self.classes_.size:
