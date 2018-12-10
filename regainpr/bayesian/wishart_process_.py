@@ -5,7 +5,6 @@ from functools import partial
 import numpy as np
 import scipy.sparse as sp
 from scipy import linalg
-from sklearn.base import BaseEstimator
 from sklearn.datasets.base import Bunch
 from sklearn.metrics.pairwise import rbf_kernel
 from sklearn.utils.validation import check_array
@@ -246,7 +245,7 @@ class WishartProcess(TimeGraphLasso):
 
         X = (X - self.location_).transpose(1, 2, 0)  # put time last
         kern = partial(kernel, var=1)
-        self.likelihood = partial(stats.time_multivariate_normal_logpdf, X)
+        self.likelihood = partial(stats.t_mvn_logpdf, X)
 
         n_dims = X.shape[1]
         nu = n_dims + 1
@@ -276,3 +275,41 @@ class WishartProcess(TimeGraphLasso):
         self.precision_ = np.array(
             [linalg.pinvh(cov) for cov in self.covariance_])
         return self
+
+    def score(self, X_test, y=None):
+        """Computes the log-likelihood of a Gaussian data set with
+        `self.covariance_` as an estimator of its covariance matrix.
+
+        Parameters
+        ----------
+        X_test : array-like, shape = [n_samples, n_features]
+            Test data of which we compute the likelihood, where n_samples is
+            the number of samples and n_features is the number of features.
+            X_test is assumed to be drawn from the same distribution than
+            the data used in fit (including centering).
+
+        y : not used, present for API consistence purpose.
+
+        Returns
+        -------
+        res : float
+            The likelihood of the data set with `self.covariance_` as an
+            estimator of its covariance matrix.
+
+        """
+        if sp.issparse(X_test):
+            raise TypeError("sparse matrices not supported.")
+
+        X_test = check_array_dimensions(
+            X_test, n_dimensions=3, time_on_axis=self.time_on_axis)
+
+        # Covariance does not make sense for a single feature
+        X_test = np.array(
+            [
+                check_array(
+                    x, ensure_min_features=2, ensure_min_samples=2,
+                    estimator=self) for x in X_test
+            ])
+
+        res = stats.t_mvn_logpdf(X_test - self.location_, self.D_map)
+        return res
