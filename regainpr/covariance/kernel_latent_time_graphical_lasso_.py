@@ -19,8 +19,10 @@ from regain.update_rules import update_rho
 from regain.utils import convergence
 from regain.validation import check_norm_prox
 
-from regainpr.covariance.kernel_time_graph_lasso_ import objective as obj_ktgl
-from regainpr.covariance.kernel_time_graph_lasso_ import NewKernelTimeGraphLasso
+from regainpr.covariance.kernel_time_graphical_lasso_ import \
+    objective as obj_ktgl
+from regainpr.covariance.kernel_time_graphical_lasso_ import \
+    KernelTimeGraphicalLasso
 
 
 def objective(
@@ -39,7 +41,7 @@ def objective(
     return obj
 
 
-def kernel_latent_time_graph_lasso(
+def kernel_latent_time_graphical_lasso(
         emp_cov, alpha=0.01, tau=1., rho=1., kernel_psi=None, kernel_phi=None,
         max_iter=100, verbose=False, psi='laplacian', phi='laplacian',
         mode='admm', tol=1e-4, rtol=1e-4, assume_centered=False,
@@ -292,7 +294,7 @@ def kernel_latent_time_graph_lasso(
     return return_list
 
 
-class KernelLatentTimeGraphLasso(LatentTimeGraphLasso):
+class KernelLatentTimeGraphicalLasso_(LatentTimeGraphLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Parameters
@@ -376,7 +378,7 @@ class KernelLatentTimeGraphLasso(LatentTimeGraphLasso):
             psi='laplacian', phi='laplacian', max_iter=100, verbose=False,
             assume_centered=False, update_rho_options=None,
             compute_objective=True):
-        super(KernelLatentTimeGraphLasso, self).__init__(
+        super(KernelLatentTimeGraphicalLasso_, self).__init__(
             alpha=alpha, tau=tau, mode=mode, rho=rho, tol=tol, rtol=rtol,
             psi=psi, phi=phi, max_iter=max_iter, verbose=verbose,
             time_on_axis=time_on_axis, assume_centered=assume_centered,
@@ -395,7 +397,7 @@ class KernelLatentTimeGraphLasso(LatentTimeGraphLasso):
 
         """
         self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
-            kernel_latent_time_graph_lasso(
+            kernel_latent_time_graphical_lasso(
                 emp_cov, n_samples=n_samples,
                 alpha=self.alpha, tau=self.tau, rho=self.rho,
                 kernel_phi=self.kernel_phi, kernel_psi=self.kernel_psi,
@@ -408,7 +410,7 @@ class KernelLatentTimeGraphLasso(LatentTimeGraphLasso):
         return self
 
 
-class NewKernelLatentTimeGraphLasso(NewKernelTimeGraphLasso):
+class KernelLatentTimeGraphicalLasso(KernelTimeGraphicalLasso):
     """As KernelLatentTimeGraphLasso, but X is 2d and y specifies time.
 
     Parameters
@@ -481,8 +483,8 @@ class NewKernelLatentTimeGraphLasso(NewKernelTimeGraphLasso):
             tol=1e-4, rtol=1e-4, psi='laplacian', phi='laplacian',
             max_iter=100, verbose=False, assume_centered=False,
             return_history=False, update_rho_options=None,
-            compute_objective=True, length_scale_psi=1, length_scale_phi=1):
-        super(NewKernelLatentTimeGraphLasso, self).__init__(
+            compute_objective=True, ker_psi_param=1, ker_phi_param=1):
+        super(KernelLatentTimeGraphicalLasso, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered,
             update_rho_options=update_rho_options,
@@ -492,8 +494,8 @@ class NewKernelLatentTimeGraphLasso(NewKernelTimeGraphLasso):
         self.kernel_phi = kernel_phi
         self.tau = tau
         self.phi = phi
-        self.length_scale_psi = length_scale_psi
-        self.length_scale_phi = length_scale_phi
+        self.ker_psi_param = ker_psi_param
+        self.ker_phi_param = ker_phi_param
 
     def get_observed_precision(self):
         """Getter for the observed precision matrix.
@@ -510,13 +512,13 @@ class NewKernelLatentTimeGraphLasso(NewKernelTimeGraphLasso):
     def _fit(self, emp_cov, n_samples):
         if callable(self.kernel_phi):
             try:
-                # this works if it is a ExpSineSquared kernel
-                kernel_phi = self.kernel_phi(length_scale=self.length_scale)(
+                # this works if it is a ExpSineSquared or RBF kernel
+                kernel_phi = self.kernel_phi(length_scale=self.ker_phi_param)(
                     self.classes_[:, None])
             except TypeError:
                 # maybe it's a ConstantKernel
-                kernel_phi = self.kernel_phi(constant_value=self.length_scale)(
-                    self.classes_[:, None])
+                kernel_phi = self.kernel_phi(
+                    constant_value=self.ker_phi_param)(self.classes_[:, None])
 
         else:
             kernel_phi = self.kernel_phi
@@ -528,12 +530,12 @@ class NewKernelLatentTimeGraphLasso(NewKernelTimeGraphLasso):
         if callable(self.kernel_psi):
             try:
                 # this works if it is a ExpSineSquared kernel
-                kernel_psi = self.kernel_psi(length_scale=self.length_scale)(
+                kernel_psi = self.kernel_psi(length_scale=self.ker_psi_param)(
                     self.classes_[:, None])
             except TypeError:
                 # maybe it's a ConstantKernel
-                kernel_psi = self.kernel_psi(constant_value=self.length_scale)(
-                    self.classes_[:, None])
+                kernel_psi = self.kernel_psi(
+                    constant_value=self.ker_psi_param)(self.classes_[:, None])
         else:
             kernel_psi = self.kernel_psi
             if kernel_psi.shape[0] != self.classes_.size:
@@ -542,7 +544,7 @@ class NewKernelLatentTimeGraphLasso(NewKernelTimeGraphLasso):
                     "got {} classes and kernel_psi has shape {}".format(
                         self.classes_.size, kernel_psi.shape[0]))
 
-        out = kernel_latent_time_graph_lasso(
+        out = kernel_latent_time_graphical_lasso(
             emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
             kernel_phi=kernel_phi, kernel_psi=kernel_psi, n_samples=n_samples,
             tol=self.tol, rtol=self.rtol, psi=self.psi, max_iter=self.max_iter,

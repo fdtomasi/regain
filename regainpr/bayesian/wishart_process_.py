@@ -180,14 +180,11 @@ class WishartProcess(TimeGraphLasso):
     def __init__(
             self, theta=100, var_prop=1, mu_prior=1, var_prior=10,
             var_Lprop=10, mu_Lprior=1, var_Lprior=1, n_iter=500, burn_in=None,
-            verbose=False, time_on_axis='last', suppress_warn_list=False,
-            assume_centered=False):
+            verbose=False, assume_centered=False):
         self.n_iter = n_iter
         self.burn_in = n_iter // 4 if burn_in is None else burn_in
         self.verbose = verbose
-        self.suppress_warn_list = suppress_warn_list
         self.assume_centered = assume_centered
-        self.time_on_axis = time_on_axis
 
         # parameter initialisation
         self.theta = theta  # Inverse width
@@ -226,19 +223,18 @@ class WishartProcess(TimeGraphLasso):
                 [X[y == cl].mean(0) for cl in self.classes_])
 
         # X = (X - self.location_).transpose(1, 2, 0)  # put time last
-        X_center = np.array(
-            [
-                X[y == cl] - self.location_[i]
-                for i, cl in enumerate(self.classes_)
-            ])
+        X_center = [
+            X[y == cl] - self.location_[i]
+            for i, cl in enumerate(self.classes_)
+        ]
         kern = partial(kernel, var=1)
         self.likelihood = partial(stats.t_mvn_logpdf, X_center)
 
-        self.nu_ = n_dimensions + 1
+        self.nu_ = 1
         samples_u, loglikes, lps, Ls = fit(
             self.theta, self.var_prop, self.mu_prior, self.var_prior,
-            self.var_Lprop, self.mu_Lprior, self.var_Lprior, kern=kern, t=y,
-            nu=self.nu_, p=n_dimensions, n_iter=self.n_iter,
+            self.var_Lprop, self.mu_Lprior, self.var_Lprior, kern=kern,
+            t=self.classes_, nu=self.nu_, p=n_dimensions, n_iter=self.n_iter,
             verbose=self.verbose, likelihood=self.likelihood)
 
         # Burn in

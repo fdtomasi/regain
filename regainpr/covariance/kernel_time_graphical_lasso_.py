@@ -35,7 +35,7 @@ def objective(n_samples, S, K, Z_0, Z_M, alpha, kernel, psi):
     return obj
 
 
-def kernel_time_graph_lasso(
+def kernel_time_graphical_lasso(
         emp_cov, alpha=0.01, rho=1, kernel=None, max_iter=100, n_samples=None,
         verbose=False, psi='laplacian', tol=1e-4, rtol=1e-4,
         return_history=False, return_n_iter=True, mode='admm',
@@ -242,7 +242,7 @@ def kernel_time_graph_lasso(
     return return_list
 
 
-class KernelTimeGraphLasso(TimeGraphLasso):
+class KernelTimeGraphLasso_(TimeGraphLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Parameters
@@ -317,7 +317,7 @@ class KernelTimeGraphLasso(TimeGraphLasso):
             return_history=False, update_rho_options=None,
             compute_objective=True, stop_at=None, stop_when=1e-4,
             suppress_warn_list=False):
-        super(KernelTimeGraphLasso, self).__init__(
+        super(KernelTimeGraphLasso_, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered, mode=mode,
             update_rho_options=update_rho_options,
@@ -336,7 +336,7 @@ class KernelTimeGraphLasso(TimeGraphLasso):
             Empirical covariance of data.
 
         """
-        out = kernel_time_graph_lasso(
+        out = kernel_time_graphical_lasso(
             emp_cov, alpha=self.alpha, rho=self.rho, kernel=self.kernel,
             mode=self.mode, n_samples=n_samples, tol=self.tol, rtol=self.rtol,
             psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
@@ -351,7 +351,7 @@ class KernelTimeGraphLasso(TimeGraphLasso):
         return self
 
 
-class NewKernelTimeGraphLasso(TimeGraphLasso):
+class KernelTimeGraphicalLasso(TimeGraphLasso):
     """As KernelTimeGraphLasso, but X is 2d and y specifies time.
 
     Parameters
@@ -420,23 +420,29 @@ class NewKernelTimeGraphLasso(TimeGraphLasso):
     """
 
     def __init__(
-            self, alpha=0.01, kernel=None, rho=1.,
-            tol=1e-4, rtol=1e-4, psi='laplacian', max_iter=100, verbose=False,
+            self, alpha=0.01, kernel=None, rho=1., tol=1e-4, rtol=1e-4,
+            psi='laplacian', max_iter=100, verbose=False,
             assume_centered=False, return_history=False,
-            update_rho_options=None, compute_objective=True, length_scale=1):
-        super(NewKernelTimeGraphLasso, self).__init__(
+            update_rho_options=None, compute_objective=True, ker_param=1):
+        super(KernelTimeGraphicalLasso, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered,
             update_rho_options=update_rho_options,
-            compute_objective=compute_objective,
-            return_history=return_history, psi=psi)
+            compute_objective=compute_objective, return_history=return_history,
+            psi=psi)
         self.kernel = kernel
-        self.length_scale = length_scale
+        self.ker_param = ker_param
 
     def _fit(self, emp_cov, n_samples):
         if callable(self.kernel):
-            kernel = self.kernel(length_scale=self.length_scale)(
-                self.classes_[:, None])
+            try:
+                # this works if it is a ExpSineSquared or RBF kernel
+                kernel = self.kernel(length_scale=self.ker_param)(
+                    self.classes_[:, None])
+            except TypeError:
+                # maybe it's a ConstantKernel
+                kernel = self.kernel(constant_value=self.ker_param)(
+                    self.classes_[:, None])
         else:
             kernel = self.kernel
             if kernel.shape[0] != self.classes_.size:
@@ -445,11 +451,11 @@ class NewKernelTimeGraphLasso(TimeGraphLasso):
                     "got {} classes and kernel has shape {}".format(
                         self.classes_.size, kernel.shape[0]))
 
-        out = kernel_time_graph_lasso(
+        out = kernel_time_graphical_lasso(
             emp_cov, alpha=self.alpha, rho=self.rho, kernel=kernel,
-            n_samples=n_samples, tol=self.tol, rtol=self.rtol,
-            psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
-            return_n_iter=True, return_history=self.return_history,
+            n_samples=n_samples, tol=self.tol, rtol=self.rtol, psi=self.psi,
+            max_iter=self.max_iter, verbose=self.verbose, return_n_iter=True,
+            return_history=self.return_history,
             update_rho_options=self.update_rho_options,
             compute_objective=self.compute_objective)
         if self.return_history:
