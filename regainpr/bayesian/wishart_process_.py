@@ -230,7 +230,7 @@ class WishartProcess(TimeGraphLasso):
             [
                 X[y == cl] - self.location_[i]
                 for i, cl in enumerate(self.classes_)
-            ]).transpose(1, 2, 0)
+            ])
         kern = partial(kernel, var=1)
         self.likelihood = partial(stats.t_mvn_logpdf, X_center)
 
@@ -290,6 +290,6 @@ class WishartProcess(TimeGraphLasso):
             [
                 X[y == cl] - self.location_[i]
                 for i, cl in enumerate(self.classes_)
-            ]).transpose(1, 2, 0)
+            ])
         logp = stats.t_mvn_logpdf(X_center, self.D_map)
         return logp
