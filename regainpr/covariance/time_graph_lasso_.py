@@ -8,19 +8,17 @@ from __future__ import division
 import warnings
 
 import numpy as np
-import scipy.sparse as sp
 from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
-from sklearn.utils.validation import check_array
 
 from regain.covariance.graph_lasso_ import GraphLasso, logl
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence, error_norm_time
-from regain.validation import check_array_dimensions, check_norm_prox
+from regain.validation import check_norm_prox
 from regainpr.validation import check_input
 
 
