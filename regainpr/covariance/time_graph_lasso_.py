@@ -21,14 +21,16 @@ from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence, error_norm_time
 from regain.validation import check_array_dimensions, check_norm_prox
+from regainpr.validation import check_input
 
 
 def loss(S, K, n_samples=None):
     """Loss function for time-varying graphical lasso."""
     if n_samples is None:
         n_samples = np.ones(S.shape[0])
-    return sum(-ni * logl(emp_cov, precision)
-               for emp_cov, precision, ni in zip(S, K, n_samples))
+    return sum(
+        -ni * logl(emp_cov, precision)
+        for emp_cov, precision, ni in zip(S, K, n_samples))
 
 
 def objective(n_samples, S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
@@ -43,8 +45,8 @@ def time_graph_lasso(
         emp_cov, alpha=0.01, rho=1, beta=1, max_iter=100, n_samples=None,
         verbose=False, psi='laplacian', tol=1e-4, rtol=1e-4,
         return_history=False, return_n_iter=True, mode='admm',
-        update_rho_options=None, compute_objective=True,
-        stop_at=None, stop_when=1e-4):
+        update_rho_options=None, compute_objective=True, stop_at=None,
+        stop_when=1e-4):
     """Time-varying graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -92,9 +94,9 @@ def time_graph_lasso(
         K[i] = linalg.pinvh(c)
 
     # K = np.zeros_like(emp_cov)
-    Z_0 = K.copy() # np.zeros_like(emp_cov)
-    Z_1 = K.copy()[:-1] # np.zeros_like(emp_cov)[:-1]
-    Z_2 = K.copy()[1:] # np.zeros_like(emp_cov)[1:]
+    Z_0 = K.copy()  # np.zeros_like(emp_cov)
+    Z_1 = K.copy()[:-1]  # np.zeros_like(emp_cov)[:-1]
+    Z_2 = K.copy()[1:]  # np.zeros_like(emp_cov)[1:]
     # Z_0 = K.copy()
     # Z_1 = K.copy()[:-1]
     # Z_2 = K.copy()[1:]
@@ -115,8 +117,11 @@ def time_graph_lasso(
     if n_samples is None:
         n_samples = np.ones(emp_cov.shape[0])
 
-    checks = [convergence(obj=objective(
-        n_samples, emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi))]
+    checks = [
+        convergence(
+            obj=objective(
+                n_samples, emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi))
+    ]
     for iteration_ in range(max_iter):
         # update K
         A = Z_0 - U_0
@@ -128,11 +133,14 @@ def time_graph_lasso(
         A += A.transpose(0, 2, 1)
         A /= 2.
 
-        A *= - rho * divisor[:, None, None] / n_samples[:, None, None]
+        A *= -rho * divisor[:, None, None] / n_samples[:, None, None]
         A += emp_cov
 
-        K = np.array([prox_logdet(a, lamda=ni / (rho * div))
-                      for a, div, ni in zip(A, divisor, n_samples)])
+        K = np.array(
+            [
+                prox_logdet(a, lamda=ni / (rho * div))
+                for a, div, ni in zip(A, divisor, n_samples)
+            ])
 
         # update Z_0
         A = K + U_0
@@ -148,9 +156,9 @@ def time_graph_lasso(
             Z_1 = .5 * (A_1 + A_2 - prox_e)
             Z_2 = .5 * (A_1 + A_2 + prox_e)
         else:
-            Z_1, Z_2 = prox_psi(np.concatenate((A_1, A_2), axis=1),
-                                lamda=.5 * beta / rho,
-                                rho=rho, tol=tol, rtol=rtol, max_iter=max_iter)
+            Z_1, Z_2 = prox_psi(
+                np.concatenate((A_1, A_2), axis=1), lamda=.5 * beta / rho,
+                rho=rho, tol=tol, rtol=rtol, max_iter=max_iter)
 
         # update residuals
         U_0 += K - Z_0
@@ -158,25 +166,30 @@ def time_graph_lasso(
         U_2 += K[1:] - Z_2
 
         # diagnostics, reporting, termination checks
-        rnorm = np.sqrt(squared_norm(K - Z_0) +
-                        squared_norm(K[:-1] - Z_1) +
-                        squared_norm(K[1:] - Z_2))
+        rnorm = np.sqrt(
+            squared_norm(K - Z_0) + squared_norm(K[:-1] - Z_1) +
+            squared_norm(K[1:] - Z_2))
 
-        snorm = rho * np.sqrt(squared_norm(Z_0 - Z_0_old) +
-                              squared_norm(Z_1 - Z_1_old) +
-                              squared_norm(Z_2 - Z_2_old))
+        snorm = rho * np.sqrt(
+            squared_norm(Z_0 - Z_0_old) + squared_norm(Z_1 - Z_1_old) +
+            squared_norm(Z_2 - Z_2_old))
 
         obj = objective(
             n_samples, emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi) \
             if compute_objective else np.nan
 
         check = convergence(
-            obj=obj, rnorm=rnorm, snorm=snorm,
+            obj=obj,
+            rnorm=rnorm,
+            snorm=snorm,
             e_pri=np.sqrt(K.size + 2 * Z_1.size) * tol + rtol * max(
-                np.sqrt(squared_norm(Z_0) + squared_norm(Z_1) + squared_norm(Z_2)),
-                np.sqrt(squared_norm(K) + squared_norm(K[:-1]) + squared_norm(K[1:]))),
-            e_dual=np.sqrt(K.size + 2 * Z_1.size) * tol + rtol * rho * np.sqrt(
-                squared_norm(U_0) + squared_norm(U_1) + squared_norm(U_2)),
+                np.sqrt(
+                    squared_norm(Z_0) + squared_norm(Z_1) + squared_norm(Z_2)),
+                np.sqrt(
+                    squared_norm(K) + squared_norm(K[:-1]) +
+                    squared_norm(K[1:]))),
+            e_dual=np.sqrt(K.size + 2 * Z_1.size) * tol + rtol * rho *
+            np.sqrt(squared_norm(U_0) + squared_norm(U_1) + squared_norm(U_2)),
             # precision=Z_0.copy()
         )
         Z_0_old = Z_0.copy()
@@ -184,8 +197,9 @@ def time_graph_lasso(
         Z_2_old = Z_2.copy()
 
         if verbose:
-            print("obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                  "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
+            print(
+                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
+                "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
 
         checks.append(check)
         if stop_at is not None:
@@ -195,8 +209,9 @@ def time_graph_lasso(
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
 
-        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_,
-                             **(update_rho_options or {}))
+        rho_new = update_rho(
+            rho, rnorm, snorm, iteration=iteration_,
+            **(update_rho_options or {}))
         # scaled dual variables should be also rescaled
         U_0 *= rho / rho_new
         U_1 *= rho / rho_new
@@ -325,14 +340,13 @@ class TimeGraphLasso(GraphLasso):
 
         """
         out = time_graph_lasso(
-                emp_cov, alpha=self.alpha, rho=self.rho,
-                beta=self.beta, mode=self.mode, n_samples=n_samples,
-                tol=self.tol, rtol=self.rtol, psi=self.psi,
-                max_iter=self.max_iter, verbose=self.verbose,
-                return_n_iter=True, return_history=self.return_history,
-                update_rho_options=self.update_rho_options,
-                compute_objective=self.compute_objective,
-                stop_at=self.stop_at, stop_when=self.stop_when)
+            emp_cov, alpha=self.alpha, rho=self.rho, beta=self.beta,
+            mode=self.mode, n_samples=n_samples, tol=self.tol, rtol=self.rtol,
+            psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
+            return_n_iter=True, return_history=self.return_history,
+            update_rho_options=self.update_rho_options,
+            compute_objective=self.compute_objective, stop_at=self.stop_at,
+            stop_when=self.stop_when)
         if self.return_history:
             self.precision_, self.covariance_, self.history_, self.n_iter_ = out
         else:
@@ -352,36 +366,21 @@ class TimeGraphLasso(GraphLasso):
         y : (ignored)
 
         """
-        if sp.issparse(X):
-            raise TypeError("sparse matrices not supported.")
-
-        X = check_array_dimensions(
-            X, n_dimensions=3, time_on_axis=self.time_on_axis,
-            suppress_warn_list=self.suppress_warn_list)
-
         is_list = isinstance(X, list)
-        # Covariance does not make sense for a single feature
-        X = np.array([check_array(x, ensure_min_features=2,
-                      ensure_min_samples=2, estimator=self) for x in X])
-        if is_list:
-            n_times = len(X)
-            if np.unique([x.shape[1] for x in X]).size != 1:
-                raise ValueError("Input data cannot have different number "
-                                 "of variables.")
-            n_dimensions = X[0].shape[1]
-        else:
-            n_times = X.shape[0]
-            n_dimensions = X.shape[2]
-
-        n_samples = np.array([x.shape[0] for x in X])
+        X, n_samples, n_dimensions, n_times = check_input(
+            X, y=None, time_on_axis=self.time_on_axis,
+            suppress_warn_list=self.suppress_warn_list, estimator=self)
 
         if self.assume_centered:
             self.location_ = np.zeros((n_times, 1, n_dimensions))
         else:
             mean = np.array([x.mean(0) for x in X]) if is_list else X.mean(1)
             self.location_ = mean.reshape(n_times, 1, n_dimensions)
-        emp_cov = np.array([empirical_covariance(
-            x, assume_centered=self.assume_centered) for x in X])
+        emp_cov = np.array(
+            [
+                empirical_covariance(x, assume_centered=self.assume_centered)
+                for x in X
+            ])
 
         return self._fit(emp_cov, n_samples)
 
@@ -401,38 +400,34 @@ class TimeGraphLasso(GraphLasso):
 
         Returns
         -------
-        res : float
+        logp : float
             The likelihood of the data set with `self.covariance_` as an
             estimator of its covariance matrix.
 
         """
-        if sp.issparse(X_test):
-            raise TypeError("sparse matrices not supported.")
-
-        X_test = check_array_dimensions(
-            X_test, n_dimensions=3, time_on_axis=self.time_on_axis)
-
-        # Covariance does not make sense for a single feature
-        X_test = np.array([
-            check_array(x, ensure_min_features=2,
-                        ensure_min_samples=2, estimator=self) for x in X_test])
+        X_test, n_samples, _, _ = check_input(
+            X_test, y=None, time_on_axis=self.time_on_axis,
+            suppress_warn_list=self.suppress_warn_list, estimator=self)
 
         # compute empirical covariance of the test set
-        test_cov = np.array([empirical_covariance(
-            x, assume_centered=True) for x in X_test - self.location_])
+        test_cov = np.array(
+            [
+                empirical_covariance(x, assume_centered=True)
+                for x in X_test - self.location_
+            ])
 
-        n_samples = np.array([x.shape[0] for x in X_test])
-        res = sum(n * log_likelihood(S, K) for S, K, n in zip(
-            test_cov, self.get_observed_precision(), n_samples))
+        logp = sum(
+            n * log_likelihood(S, K) for S, K, n in zip(
+                test_cov, self.get_observed_precision(), n_samples))
 
         # ALLA  MATLAB1
         # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
         # scores_ranks = np.square(ranks-np.sqrt(L.shape[1]))
 
-        return res  # - np.sum(scores_ranks)
+        return logp  # - np.sum(scores_ranks)
 
-    def error_norm(self, comp_cov, norm='frobenius', scaling=True,
-                   squared=True):
+    def error_norm(
+            self, comp_cov, norm='frobenius', scaling=True, squared=True):
         """Compute the Mean Squared Error between two covariance estimators.
         (In the sense of the Frobenius norm).
 
@@ -462,8 +457,9 @@ class TimeGraphLasso(GraphLasso):
         `self` and `comp_cov` covariance estimators.
 
         """
-        return error_norm_time(self.covariance_, comp_cov, norm=norm,
-                               scaling=scaling, squared=squared)
+        return error_norm_time(
+            self.covariance_, comp_cov, norm=norm, scaling=scaling,
+            squared=squared)
 
     def mahalanobis(self, observations):
         """Computes the squared Mahalanobis distances of given observations.
@@ -489,8 +485,7 @@ class TimeGraphLasso(GraphLasso):
         sum_ = 0.
         for obs, loc in zip(observations, self.location_):
             centered_obs = observations - self.location_
-            sum_ += np.sum(
-                np.dot(centered_obs, precision) * centered_obs, 1)
+            sum_ += np.sum(np.dot(centered_obs, precision) * centered_obs, 1)
 
         mahalanobis_dist = sum_ / len(observations)
         return mahalanobis_dist

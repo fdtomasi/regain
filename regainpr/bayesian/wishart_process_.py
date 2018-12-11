@@ -3,18 +3,17 @@ from __future__ import print_function
 from functools import partial
 
 import numpy as np
-import scipy.sparse as sp
 from scipy import linalg
 from sklearn.datasets.base import Bunch
 from sklearn.metrics.pairwise import rbf_kernel
-from sklearn.utils.validation import check_array
+from sklearn.utils.validation import check_X_y
 
 from regain.bayesian import stats
 from regain.bayesian.gaussian_process_ import sample as sample_gp
 from regain.bayesian.sampling import elliptical_slice, sample_hyper_kernel
-from regain.validation import check_array_dimensions
-from regainpr.bayesian.sampling import sample_ell
 from regain.covariance.time_graph_lasso_ import TimeGraphLasso
+
+from regainpr.bayesian.sampling import sample_ell
 
 
 def GWP_construct(umat, L, uut=None):
@@ -164,7 +163,7 @@ def predict(t_test, t_train, u_map, L_map, kern, inverse_width_map):
     # Covariance of test data is
     # I_p - AK^{-1}A^T
     test_size = t_test.size
-    test_covariance = np.eye(test_size) - A_invKb.dot(A.T)
+    # test_covariance = np.eye(test_size) - A_invKb.dot(A.T)
 
     return GWP_construct(u_test, L_map)
 
@@ -200,62 +199,47 @@ class WishartProcess(TimeGraphLasso):
         self.mu_Lprior = mu_Lprior
         self.var_Lprior = var_Lprior
 
-    def fit(self, X, y=None):
+    def fit(self, X, y):
         """Fit the WishartProcess model to X.
 
         Parameters
         ----------
-        X : ndarray, shape = (n_samples, n_dimensions, n_times)
-            Data tensor.
+        X : ndarray, shape = (n_samples * n_times, n_dimensions)
+            Data matrix.
         y : ndarray, shape = (n_times,)
             Indicate the temporal belonging of each matrix.
         """
-        if sp.issparse(X):
-            raise TypeError("sparse matrices not supported.")
-
-        X = check_array_dimensions(
-            X, n_dimensions=3, time_on_axis=self.time_on_axis,
-            suppress_warn_list=self.suppress_warn_list)
-
-        is_list = isinstance(X, list)
         # Covariance does not make sense for a single feature
-        X = np.array(
-            [
-                check_array(
-                    x, ensure_min_features=2, ensure_min_samples=2,
-                    estimator=self) for x in X
-            ])
-        if is_list:
-            n_times = len(X)
-            if np.unique([x.shape[1] for x in X]).size != 1:
-                raise ValueError(
-                    "Input data cannot have different number "
-                    "of variables.")
-            n_dimensions = X[0].shape[1]
-        else:
-            n_times = X.shape[0]
-            n_dimensions = X.shape[2]
+        X, y = check_X_y(
+            X, y, accept_sparse=False, dtype=np.float64, order="C",
+            ensure_min_features=2, estimator=self)
+
+        n_dimensions = X.shape[1]
+        self.classes_, n_samples = np.unique(y, return_counts=True)
+        n_times = self.classes_.size
 
         # n_samples = np.array([x.shape[0] for x in X])
         if self.assume_centered:
-            self.location_ = np.zeros((n_times, 1, n_dimensions))
+            self.location_ = np.zeros((n_times, n_dimensions))
         else:
-            mean = np.array([x.mean(0) for x in X]) if is_list else X.mean(1)
-            self.location_ = mean.reshape(n_times, 1, n_dimensions)
+            self.location_ = np.array(
+                [X[y == cl].mean(0) for cl in self.classes_])
 
-        X = (X - self.location_).transpose(1, 2, 0)  # put time last
+        # X = (X - self.location_).transpose(1, 2, 0)  # put time last
+        X_center = np.array(
+            [
+                X[y == cl] - self.location_[i]
+                for i, cl in enumerate(self.classes_)
+            ]).transpose(1, 2, 0)
         kern = partial(kernel, var=1)
-        self.likelihood = partial(stats.t_mvn_logpdf, X)
+        self.likelihood = partial(stats.t_mvn_logpdf, X_center)
 
-        n_dims = X.shape[1]
-        nu = n_dims + 1
-        t = np.arange(X.shape[-1]) if y is None else y
-
+        self.nu_ = n_dimensions + 1
         samples_u, loglikes, lps, Ls = fit(
             self.theta, self.var_prop, self.mu_prior, self.var_prior,
-            self.var_Lprop, self.mu_Lprior, self.var_Lprior, kern=kern, t=t,
-            nu=nu, p=n_dims, n_iter=self.n_iter, verbose=self.verbose,
-            likelihood=self.likelihood)
+            self.var_Lprop, self.mu_Lprior, self.var_Lprior, kern=kern, t=y,
+            nu=self.nu_, p=n_dimensions, n_iter=self.n_iter,
+            verbose=self.verbose, likelihood=self.likelihood)
 
         # Burn in
         self.lps_after_burnin = lps[self.burn_in:]
@@ -276,16 +260,16 @@ class WishartProcess(TimeGraphLasso):
             [linalg.pinvh(cov) for cov in self.covariance_])
         return self
 
-    def score(self, X_test, y=None):
+    def score(self, X, y):
         """Computes the log-likelihood of a Gaussian data set with
         `self.covariance_` as an estimator of its covariance matrix.
 
         Parameters
         ----------
-        X_test : array-like, shape = [n_samples, n_features]
+        X : array-like, shape = [n_samples * n_times, n_features]
             Test data of which we compute the likelihood, where n_samples is
             the number of samples and n_features is the number of features.
-            X_test is assumed to be drawn from the same distribution than
+            X is assumed to be drawn from the same distribution than
             the data used in fit (including centering).
 
         y : not used, present for API consistence purpose.
@@ -297,19 +281,15 @@ class WishartProcess(TimeGraphLasso):
             estimator of its covariance matrix.
 
         """
-        if sp.issparse(X_test):
-            raise TypeError("sparse matrices not supported.")
-
-        X_test = check_array_dimensions(
-            X_test, n_dimensions=3, time_on_axis=self.time_on_axis)
-
         # Covariance does not make sense for a single feature
-        X_test = np.array(
-            [
-                check_array(
-                    x, ensure_min_features=2, ensure_min_samples=2,
-                    estimator=self) for x in X_test
-            ])
+        X, y = check_X_y(
+            X, y, accept_sparse=False, dtype=np.float64, order="C",
+            ensure_min_features=2, estimator=self)
 
-        res = stats.t_mvn_logpdf(X_test - self.location_, self.D_map)
-        return res
+        X_center = np.array(
+            [
+                X[y == cl] - self.location_[i]
+                for i, cl in enumerate(self.classes_)
+            ]).transpose(1, 2, 0)
+        logp = stats.t_mvn_logpdf(X_center, self.D_map)
+        return logp
