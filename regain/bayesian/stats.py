@@ -37,23 +37,34 @@ def lognstat(mean, variance):
 
 def log_lik_frob(S, D, variance):
     """Frobenius norm log likelihood."""
-    logl = -0.5 * (S.size * np.log(2. * np.pi * variance)
-                   + squared_norm(S - D) / variance)
+    logl = -0.5 * (
+        S.size * np.log(2. * np.pi * variance) +
+        squared_norm(S - D) / variance)
     return logl
 
 
 def log_likelihood_normal(x, mean, var):
     """Normal log likelihood."""
-    logl = -0.5 * (np.log(2 * np.pi * var) + (x - mean) ** 2 / var)
+    logl = -0.5 * (np.log(2 * np.pi * var) + (x - mean)**2 / var)
     # logl2 = stats.norm.logpdf(x, loc=mean, scale=np.sqrt(var))
     # assert logl == logl2, (logl, logl2)
     return logl
 
 
 def t_mvn_logpdf(X, Cov):
+    """Normal log likelihood based on Cov (mu = 0).
+    
+    Parameters
+    ----------
+    X : ndarray, shape = (n_samples, n_dimensions, n_times)
+        Data tensor.
+    Cov : ndarray, shape = (n_dimensions, n_dimensions, n_times)
+        Tensor of covariance matrices over time.
+    """
     logp = sum(
-        x.shape[0] * multivariate_normal.logpdf(x, cov=Sigma, allow_singular=True)
-        for x, Sigma in zip(X.transpose(2, 0, 1), Cov.T))
+        x.shape[0] *
+        multivariate_normal.logpdf(x, cov=Sigma, allow_singular=True)
+        for x, Sigma in zip(X, Cov.T))
     if not isinstance(logp, float):
         logp = sum(logp)
     return logp
