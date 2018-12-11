@@ -63,7 +63,7 @@ def t_mvn_logpdf(X, Cov):
     """
     logp = sum(
         x.shape[0] *
-        multivariate_normal.logpdf(x, cov=Sigma, allow_singular=True)
+        multivariate_normal.logpdf(x, cov=Sigma, allow_singular=True).sum()
         for x, Sigma in zip(X, Cov.T))
     if not isinstance(logp, float):
         logp = sum(logp)

@@ -34,8 +34,16 @@ def loss(S, K, n_samples=None):
 def objective(n_samples, S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
     """Objective function for time-varying graphical lasso."""
     obj = loss(S, K, n_samples=n_samples)
-    obj += alpha * sum(map(l1_od_norm, Z_0))
-    obj += beta * sum(map(psi, Z_2 - Z_1))
+
+    if isinstance(alpha, np.ndarray):
+        obj += sum(l1_od_norm(a * z) for a, z in zip(alpha, Z_0))
+    else:
+        obj += alpha * sum(map(l1_od_norm, Z_0))
+    
+    if isinstance(beta, np.ndarray):
+        obj += sum(b[0][0] * m for b, m in zip(beta, map(psi, Z_2 - Z_1)))
+    else:
+        obj += beta * sum(map(psi, Z_2 - Z_1))
     return obj
 
 
