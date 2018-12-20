@@ -539,4 +539,4 @@ class KernelTimeGraphicalLasso(TimeGraphLasso):
             X[y == cl].shape[0] * log_likelihood(S, K) for S, K, n in zip(
                 test_cov, self.get_observed_precision(), self.classes_))
 
-        return res
+        return -99999999 if res == -np.inf else res

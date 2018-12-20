@@ -121,12 +121,13 @@ def make_ell(n_dim_obs=100, n_dim_lat=10):
     """Doc."""
     K_HO = np.zeros((n_dim_lat, n_dim_obs))
     for i in range(n_dim_lat):
-        percentage = int(n_dim_obs * 0.8)
+        percentage = int(n_dim_obs * 0.99)
         indices = np.random.randint(0, high=n_dim_obs, size=percentage)
         K_HO[i, indices] = np.random.rand(percentage) * 0.12
 
-    K_HO /= np.sum(K_HO, axis=1)[:, None] / 2
+    K_HO /= np.sum(K_HO, axis=1)[:, None] / 2.
     L = K_HO.T.dot(K_HO)
+    print("{}%".format(np.nonzero(L)[0].size / L.size))
     assert (is_pos_semidef(L))
     assert np.linalg.matrix_rank(L) == n_dim_lat
     # from sklearn.datasets import make_low_rank_matrix

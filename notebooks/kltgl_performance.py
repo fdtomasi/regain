@@ -1,71 +1,57 @@
-from __future__ import print_function, division
+from __future__ import division, print_function
+
+import time
+from functools import partial
 
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
-
-from itertools import product
-from functools import partial
-from sklearn.datasets import make_sparse_spd_matrix
-from sklearn.datasets.base import Bunch
-from sklearn.utils.extmath import squared_norm
-from sklearn.covariance import GraphLasso, empirical_covariance
-from sklearn.datasets.base import Bunch
-from sklearn.model_selection import GridSearchCV, ShuffleSplit
 from sklearn.gaussian_process import kernels
-from sklearn.model_selection import StratifiedKFold, KFold
+from sklearn.model_selection import KFold, StratifiedKFold
 
-from skopt import BayesSearchCV
-from skopt import searchcv
-from skopt.space import Categorical
-
-from regain import prox
-from regain.covariance import time_graph_lasso_
-reload(time_graph_lasso_)
-from regain.covariance import latent_time_graph_lasso_
-reload(latent_time_graph_lasso_)
-import time
-
-from regainpr.bayesian import wishart_process_
-reload(wishart_process_)
 from regain.bayesian import stats
+from regain.covariance import latent_time_graph_lasso_, time_graph_lasso_
+from regainpr import datasets, utils
+from regainpr.bayesian import wishart_process_
+from regainpr.covariance import (
+    kernel_latent_time_graphical_lasso_, kernel_time_graphical_lasso_)
+from skopt.searchcv import BayesSearchCV
+
+reload(time_graph_lasso_)
+reload(latent_time_graph_lasso_)
+
+reload(wishart_process_)
 reload(stats)
 
-from regainpr.covariance import kernel_time_graphical_lasso_
 reload(kernel_time_graphical_lasso_)
-from regainpr.covariance import kernel_latent_time_graphical_lasso_
 reload(kernel_latent_time_graphical_lasso_)
 
-from regainpr import datasets
 reload(datasets)
-from regainpr import utils
 reload(utils)
 
 
 def use_bscv(mdl, search_spaces, data, y=None):
+    n_iter = 100 if isinstance(
+        mdl, (
+            kernel_time_graphical_lasso_.KernelTimeGraphicalLasso,
+            kernel_latent_time_graphical_lasso_.KernelLatentTimeGraphicalLasso
+        )) else 50
     bscv = BayesSearchCV(
-        mdl, search_spaces=search_spaces, n_iter=200, n_points=3,
+        mdl, search_spaces=search_spaces, n_iter=n_iter, n_points=3,
         verbose=False, cv=StratifiedKFold(3)
         if y is not None else KFold(3), error_score=-np.inf)
-    if y is None:
-        bscv.fit(data)
-    else:
-        bscv.fit(data, y)
-
+    bscv.fit(data, y)
     return bscv.best_estimator_
 
 
 def base_results(mdl, X, y, K, K_obs, ells, search_spaces=None, **params):
     ll = mdl.set_params(**params)
 
+    tic = time.time()
     if search_spaces is None:
-        tic = time.time()
         ll.fit(X, y)
-        tac = time.time()
     else:
-        tic = time.time()
         ll = use_bscv(ll, search_spaces, X, y)
-        tac = time.time()
+    tac = time.time()
 
     ss = utils.structure_error(K, ll.precision_)
     MSE_precision = utils.error_norm(K, ll.precision_, upper_triangular=True)
@@ -164,7 +150,7 @@ def wp_results(data_list, K, **params):
 def run_results(data, df, scores):
     idx = pd.IndexSlice
     for i, res in enumerate(data):
-        if i < 4: continue
+        # if i > 3: continue
         # dim = k[0]
         data_list = res.data
         K = res.thetas
@@ -243,7 +229,7 @@ def run_results(data, df, scores):
             res.get(x, None) for x in scores
         ]
 
-        print("starting WP ...\r", end='')
-        res = wp_results(data_list, K)
-        df.loc[idx['WP', T], idx[:, i]] = [res.get(x, None) for x in scores]
+        # print("starting WP ...\r", end='')
+        # res = wp_results(data_list, K)
+        # df.loc[idx['WP', T], idx[:, i]] = [res.get(x, None) for x in scores]
     return df
