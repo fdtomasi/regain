@@ -30,13 +30,15 @@ reload(utils)
 
 
 def use_bscv(mdl, search_spaces, data, y=None):
-    n_iter = 100 if isinstance(
-        mdl, (
-            kernel_time_graphical_lasso_.KernelTimeGraphicalLasso,
-            kernel_latent_time_graphical_lasso_.KernelLatentTimeGraphicalLasso
-        )) else 50
+    # n_iter = 100 if isinstance(
+    #     mdl, (
+    #         kernel_time_graphical_lasso_.KernelTimeGraphicalLasso,
+    #         kernel_latent_time_graphical_lasso_.KernelLatentTimeGraphicalLasso
+    #     )) else 50
+    # n_iter = 10**len(search_spaces.keys())
+    n_iter = 100
     bscv = BayesSearchCV(
-        mdl, search_spaces=search_spaces, n_iter=n_iter, n_points=3,
+        mdl, search_spaces=search_spaces, n_iter=n_iter, n_points=3, n_jobs=-1,
         verbose=False, cv=StratifiedKFold(3)
         if y is not None else KFold(3), error_score=-np.inf)
     bscv.fit(data, y)
@@ -73,7 +75,7 @@ def base_results(mdl, X, y, K, K_obs, ells, search_spaces=None, **params):
 def tgl_results(data_grid, K, K_obs, ells, search_spaces=None, **params):
     mdl = time_graph_lasso_.TimeGraphLasso(
         time_on_axis='last', assume_centered=0, verbose=0, rtol=1e-5, tol=1e-5,
-        max_iter=500, rho=1. / np.sqrt(data_grid.shape[0]))
+        max_iter=1000, rho=1. / np.sqrt(data_grid.shape[0]))
 
     return base_results(
         mdl, data_grid, None, K, K_obs, ells, search_spaces, **params)
@@ -92,7 +94,7 @@ def ltgl_results(data_grid, K, K_obs, ells, search_spaces=None, **params):
 def ktgl_results(data_list, K, K_obs, ells, search_spaces=None, **params):
     mdl = kernel_time_graphical_lasso_.KernelTimeGraphicalLasso(
         alpha=0.5, psi='laplacian', assume_centered=0, rtol=1e-5, tol=1e-5,
-        max_iter=500, rho=1. / np.sqrt(data_list.shape[1]),
+        max_iter=1000, rho=1. / np.sqrt(data_list.shape[1]),
         update_rho_options=dict(mu=5), kernel=partial(
             kernels.ExpSineSquared, periodicity=np.pi), ker_param=2)
 
@@ -107,7 +109,7 @@ def kltgl_results(data_list, K, K_obs, ells, search_spaces=None, **params):
         alpha=0.5,
         rtol=1e-5,
         tol=1e-5,
-        max_iter=500,
+        max_iter=1000,
         rho=1. / np.sqrt(data_list.shape[1]),
         update_rho_options=dict(mu=5),
         kernel_psi=partial(kernels.ExpSineSquared, periodicity=np.pi),
@@ -161,51 +163,55 @@ def run_results(data, df, scores):
         T = data_list.shape[0]
         print("Start with: dim=%d, T=%d (it %d)" % (data_list.shape[-1], T, i))
 
-        print("starting TGL ...\r", end='')
-        res = tgl_results(
-            data_grid,
-            K,
-            K_obs,
-            ells,
-            search_spaces={'alpha': (1e-4, 1e+1, 'log-uniform')},
-        )
-        df.loc[idx['TGL', T], idx[:, i]] = [res.get(x, None) for x in scores]
+        # print("starting TGL ...\r", end='')
+        # res = tgl_results(
+        #     data_grid,
+        #     K,
+        #     K_obs,
+        #     ells,
+        #     search_spaces={'alpha': (1e-4, 1e+1, 'log-uniform')},
+        # )
+        # df.loc[idx['TGL', T], idx[:, i]] = [res.get(x, None) for x in scores]
 
-        print("starting KTGL - exp...\r", end='')
-        res = ktgl_results(
-            data_list, K, K_obs, ells, search_spaces={
-                'alpha': (1e-4, 1e+1, 'log-uniform'),
-                'ker_param': (1e-4, 1e+1, 'log-uniform')
-            })
-        df.loc[idx['KTGL-exp', T], idx[:, i]] = [
-            res.get(x, None) for x in scores
-        ]
+        # print("starting KTGL - exp...\r", end='')
+        # res = ktgl_results(
+        #     data_list, K, K_obs, ells, search_spaces={
+        #         'alpha': (1e-4, 1e+1, 'log-uniform'),
+        #         'ker_param': (1e-4, 1e+1, 'log-uniform')
+        #     })
+        # df.loc[idx['KTGL-exp', T], idx[:, i]] = [
+        #     res.get(x, None) for x in scores
+        # ]
 
-        print("starting KTGL - rbf ...\r", end='')
-        res = ktgl_results(
-            data_list, K, K_obs, ells, search_spaces={
-                'alpha': (1e-4, 1e+1, 'log-uniform'),
-                'ker_param': (1e-4, 1e+1, 'log-uniform')
-            }, kernel=partial(kernels.RBF))
-        df.loc[idx['KTGL-rbf', T], idx[:, i]] = [
-            res.get(x, None) for x in scores
-        ]
+        # print("starting KTGL - rbf ...\r", end='')
+        # res = ktgl_results(
+        #     data_list, K, K_obs, ells, search_spaces={
+        #         'alpha': (1e-4, 1e+1, 'log-uniform'),
+        #         'ker_param': (1e-4, 1e+1, 'log-uniform')
+        #     }, kernel=partial(kernels.RBF))
+        # df.loc[idx['KTGL-rbf', T], idx[:, i]] = [
+        #     res.get(x, None) for x in scores
+        # ]
 
         print("starting LTGL ...\r", end='')
         res = ltgl_results(
             data_grid, K, K_obs, ells, search_spaces={
                 'alpha': (1e-4, 1e+1, 'log-uniform'),
-                'tau': (1e-4, 1e+1, 'log-uniform')
-            })
+                'tau': (1e-4, 1e+1, 'log-uniform'),
+                'beta': (1e-4, 1e+1, 'log-uniform'),
+            }, eta=20)
         df.loc[idx['LTGL', T], idx[:, i]] = [res.get(x, None) for x in scores]
+        alpha = res['estimator'].alpha
+        tau = res['estimator'].tau
 
         print("starting KLTGL - exp ...\r", end='')
         res = kltgl_results(
             data_list, K, K_obs, ells, search_spaces={
-                'alpha': (1e-4, 1e+1, 'log-uniform'),
-                'tau': (1e-4, 1e+1, 'log-uniform'),
+                # 'alpha': (1e-4, 1e+1, 'log-uniform'),
+                # 'tau': (1e-4, 1e+1, 'log-uniform'),
                 'ker_psi_param': (1e-4, 1e+1, 'log-uniform'),
-            }, ker_phi_param=20, kernel_phi=partial(kernels.ConstantKernel))
+            }, alpha=alpha, tau=tau,
+            ker_phi_param=20, kernel_phi=partial(kernels.ConstantKernel))
         df.loc[idx['KLTGL-exp', T], idx[:, i]] = [
             res.get(x, None) for x in scores
         ]
@@ -217,10 +223,12 @@ def run_results(data, df, scores):
             K_obs,
             ells,
             search_spaces={
-                'alpha': (1e-4, 1e+1, 'log-uniform'),
-                'tau': (1e-4, 1e+1, 'log-uniform'),
+                # 'alpha': (1e-4, 1e+1, 'log-uniform'),
+                # 'tau': (1e-4, 1e+1, 'log-uniform'),
                 'ker_psi_param': (1e-4, 1e+1, 'log-uniform'),
             },
+            alpha=alpha,
+            tau=tau,
             ker_phi_param=20,
             kernel_phi=partial(kernels.ConstantKernel),
             kernel_psi=partial(kernels.RBF),
