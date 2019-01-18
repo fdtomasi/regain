@@ -5,16 +5,15 @@ from functools import partial
 import numpy as np
 from scipy import linalg
 from sklearn.datasets.base import Bunch
-from sklearn.metrics.pairwise import rbf_kernel
 from sklearn.gaussian_process import kernels
+from sklearn.metrics.pairwise import rbf_kernel
 from sklearn.utils.validation import check_X_y
 
 from regain.bayesian import stats
 from regain.bayesian.gaussian_process_ import sample as sample_gp
 from regain.bayesian.sampling import elliptical_slice, sample_hyper_kernel
 from regain.covariance.time_graph_lasso_ import TimeGraphLasso
-
-from regainpr.bayesian.sampling import sample_ell
+from regain.bayesian.sampling import sample_ell
 
 
 def GWP_construct(umat, L, uut=None):
@@ -45,7 +44,7 @@ def fit(
         lp, var_prop, mu_prior, var_prior, var_Lprop, mu_Lprior, var_Lprior,
         kern, p, nu=None, t=None, n_iter=500, verbose=False, likelihood=None):
     """Sample the parameters of kernel and lower Cholesky.
- 
+
     Parameters
     ----------
     lp, var_prop, mu_prior, var_prior : sampling kernel hyperparameters
