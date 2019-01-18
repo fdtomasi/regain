@@ -4,15 +4,15 @@ from functools import partial
 import numpy as np
 from scipy import linalg, stats
 from sklearn.utils.extmath import fast_logdet
+from sklearn.covariance import empirical_covariance, log_likelihood
 
-from regain.bayesian.stats import (log_likelihood_normal, lognormal_logpdf,
-                                   lognormal_pdf, lognstat)
+from regain.bayesian.stats import (
+    log_likelihood_normal, lognormal_logpdf, lognormal_pdf, lognstat)
 from regain.bayesian.wishart_process_ import GWP_construct
 
 
 def elliptical_slice(
-        xx, prior, cur_log_like, likelihood=None, angle_range=0,
-        max_iter=20):
+        xx, prior, cur_log_like, likelihood=None, angle_range=0, max_iter=20):
     """Markov chain update for a distribution with a Gaussian "prior" factored out.
 
     A Markov chain update is applied to the D-element array xx leaving a
@@ -224,11 +224,14 @@ def logpunorm(inverse_width, t, u, kern, mean_prior, var_prior):
     k_inverse = linalg.pinvh(K)
 
     v, p, n = u.shape
-    F = np.tensordot(u, u, axes=([1, 0], [1, 0]))
+    # F = np.tensordot(u, u, axes=([1, 0], [1, 0]))
+    # logpugl = v * p * fast_logdet(k_inverse) - np.sum(F * k_inverse)
+    # logpugl -= v * p * n * np.log(2 * np.pi)
+    # logpugl /= 2.
 
-    logpugl = v * p * fast_logdet(K) + np.sum(F * k_inverse)
-    logpugl += u.size * np.log(2 * np.pi)
-    logpugl *= -0.5
+    # creates a (vp * n) matrix, then compute centered empirical covariance
+    ustack = np.vstack(u)
+    logpugl = v * p * log_likelihood(empirical_covariance(ustack), k_inverse)
 
     mu_prior, sigma_prior = lognstat(mean_prior, var_prior)
     logp_prior = lognormal_logpdf(
@@ -248,6 +251,14 @@ def sample_ell(
     # Run the MH individually per component of L
     free_elements = Ltau.size
     L_proposal = np.zeros(free_elements)
+
+    if not isinstance(var_proposal, np.ndarray):
+        var_proposal = var_proposal * np.ones(free_elements)
+    if not isinstance(mu_prior, np.ndarray):
+        mu_prior = mu_prior * np.ones(free_elements)
+    if not isinstance(var_prior, np.ndarray):
+        var_prior = var_prior * np.ones(free_elements)
+
     for i in range(free_elements):
         L_proposal[i] = _sample_ell_comp(
             Ltau, i, var_proposal[i], umat, mu_prior=mu_prior[i],
