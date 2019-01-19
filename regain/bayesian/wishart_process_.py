@@ -11,33 +11,8 @@ from sklearn.utils.validation import check_X_y
 
 from regain.bayesian import stats
 from regain.bayesian.gaussian_process_ import sample as sample_gp
-from regain.bayesian.sampling import elliptical_slice, sample_hyper_kernel
+from regain.bayesian.sampling import elliptical_slice, sample_hyper_kernel, sample_ell, GWP_construct
 from regain.covariance.time_graph_lasso_ import TimeGraphLasso
-from regain.bayesian.sampling import sample_ell
-
-
-def GWP_construct(umat, L, uut=None):
-    """Build the sample from the GWP.
-
-    Optimised with uut:
-    uut = np.array([u.dot(u.T) for u in umat.T])
-    """
-
-    if uut is None:
-        v, p, n = umat.shape
-        M = np.zeros((p, p, n))
-        for i in range(n):
-            for j in range(v):
-                Lu = L.dot(umat[j, :, i])
-                LuuL = Lu[:, None].dot(Lu[None, :])
-                M[..., i] += LuuL
-
-    else:
-        M = np.array(
-            [np.linalg.multi_dot((L, uu_i, L.T)) for uu_i in uut]).transpose()
-
-    # assert np.allclose(N, M)
-    return M
 
 
 def fit(

@@ -8,7 +8,30 @@ from sklearn.covariance import empirical_covariance, log_likelihood
 
 from regain.bayesian.stats import (
     log_likelihood_normal, lognormal_logpdf, lognormal_pdf, lognstat)
-from regain.bayesian.wishart_process_ import GWP_construct
+
+
+def GWP_construct(umat, L, uut=None):
+    """Build the sample from the GWP.
+
+    Optimised with uut:
+    uut = np.array([u.dot(u.T) for u in umat.T])
+    """
+
+    if uut is None:
+        v, p, n = umat.shape
+        M = np.zeros((p, p, n))
+        for i in range(n):
+            for j in range(v):
+                Lu = L.dot(umat[j, :, i])
+                LuuL = Lu[:, None].dot(Lu[None, :])
+                M[..., i] += LuuL
+
+    else:
+        M = np.array(
+            [np.linalg.multi_dot((L, uu_i, L.T)) for uu_i in uut]).transpose()
+
+    # assert np.allclose(N, M)
+    return M
 
 
 def elliptical_slice(
