@@ -6,6 +6,7 @@ import numpy as np
 from scipy import linalg
 from sklearn.datasets.base import Bunch
 from sklearn.metrics.pairwise import rbf_kernel
+from sklearn.gaussian_process import kernels
 from sklearn.utils.validation import check_X_y
 
 from regain.bayesian import stats
@@ -176,11 +177,16 @@ def kernel(X, Y=None, var=None, inverse_width=None, normalised=False):
     return k
 
 
+def periodic_kernel(X, Y=None, inverse_width=None):
+    k = kernels.ExpSineSquared(length_scale=inverse_width)(X, Y=Y)
+    return k
+
+
 class WishartProcess(TimeGraphLasso):
     def __init__(
             self, theta=100, var_prop=1, mu_prior=1, var_prior=10,
             var_Lprop=10, mu_Lprior=1, var_Lprior=1, n_iter=500, burn_in=None,
-            verbose=False, assume_centered=False):
+            verbose=False, assume_centered=False, kernel=None):
         self.n_iter = n_iter
         self.burn_in = n_iter // 4 if burn_in is None else burn_in
         self.verbose = verbose
@@ -195,6 +201,7 @@ class WishartProcess(TimeGraphLasso):
         self.var_Lprop = var_Lprop
         self.mu_Lprior = mu_Lprior
         self.var_Lprior = var_Lprior
+        self.kernel = kernel
 
     def fit(self, X, y):
         """Fit the WishartProcess model to X.
@@ -227,7 +234,11 @@ class WishartProcess(TimeGraphLasso):
             X[y == cl] - self.location_[i]
             for i, cl in enumerate(self.classes_)
         ]
-        kern = partial(kernel, var=1)
+        if self.kernel is None or self.kernel.lower() == 'rbf':
+            kern = partial(kernel, var=1)
+        else:
+            kern = periodic_kernel
+
         self.likelihood = partial(stats.t_mvn_logpdf, X_center)
 
         self.nu_ = 1

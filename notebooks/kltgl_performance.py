@@ -28,16 +28,19 @@ reload(kernel_latent_time_graphical_lasso_)
 reload(datasets)
 reload(utils)
 
-
 def use_bscv(mdl, search_spaces, data, y=None):
-    n_iter = 100 if isinstance(
-        mdl, (
-            kernel_time_graphical_lasso_.KernelTimeGraphicalLasso,
-            kernel_latent_time_graphical_lasso_.KernelLatentTimeGraphicalLasso
-        )) else 50
+    # n_iter = 200 if isinstance(
+    #    mdl, (
+    #        kernel_time_graphical_lasso_.KernelTimeGraphicalLasso,
+    #        kernel_latent_time_graphical_lasso_.KernelLatentTimeGraphicalLasso,
+    #        latent_time_graph_lasso_.LatentTimeGraphLasso,
+    #    )) else 100
+    # n_iter = 10 ** len(search_spaces.keys())
+    n_iter = 100
+    print("asd4")
     bscv = BayesSearchCV(
         mdl, search_spaces=search_spaces, n_iter=n_iter, n_points=3,
-        verbose=False, cv=StratifiedKFold(3)
+        n_jobs=14, verbose=False, cv=StratifiedKFold(3)
         if y is not None else KFold(3), error_score=-np.inf)
     bscv.fit(data, y)
     return bscv.best_estimator_
@@ -124,7 +127,8 @@ def kltgl_results(data_list, K, K_obs, ells, search_spaces=None, **params):
 
 def wp_results(data_list, K, **params):
     n_iter = 1000
-    mdl = wishart_process_.WishartProcess(verbose=True, n_iter=n_iter)
+    print("asd6")
+    mdl = wishart_process_.WishartProcess(verbose=True, n_iter=n_iter, **params)
 
     X = np.vstack(data_list)
     y = np.array([np.ones(x.shape[0]) * i
@@ -167,7 +171,10 @@ def run_results(data, df, scores):
             K,
             K_obs,
             ells,
-            search_spaces={'alpha': (1e-4, 1e+1, 'log-uniform')},
+            search_spaces={
+                'alpha': (1e-4, 1e+1, 'log-uniform'),
+                'beta': (1e-4, 1e+1, 'log-uniform'),
+            },
         )
         df.loc[idx['TGL', T], idx[:, i]] = [res.get(x, None) for x in scores]
 
@@ -195,8 +202,9 @@ def run_results(data, df, scores):
         res = ltgl_results(
             data_grid, K, K_obs, ells, search_spaces={
                 'alpha': (1e-4, 1e+1, 'log-uniform'),
-                'tau': (1e-4, 1e+1, 'log-uniform')
-            })
+                'tau': (1e-4, 1e+1, 'log-uniform'),
+                'beta': (1e-4, 1e+1, 'log-uniform'),
+            }, eta=20)
         df.loc[idx['LTGL', T], idx[:, i]] = [res.get(x, None) for x in scores]
 
         print("starting KLTGL - exp ...\r", end='')
