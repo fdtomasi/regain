@@ -8,6 +8,7 @@ from __future__ import division
 import warnings
 
 import numpy as np
+from scipy import linalg
 from six.moves import range
 from sklearn.covariance import empirical_covariance
 from sklearn.utils.extmath import fast_logdet
@@ -32,21 +33,21 @@ def logl(emp_cov, precision):
 
 
 def objective(emp_cov, x, z, alpha):
-    """Graph lasso objective."""
+    """Graphical lasso objective."""
     return -logl(emp_cov, x) + alpha * l1_od_norm(z)
 
 
-def graph_lasso(
+def graphical_lasso(
         emp_cov, alpha=0.01, rho=1, over_relax=1, max_iter=100, verbose=False,
         tol=1e-4, rtol=1e-4, return_history=False, return_n_iter=True,
-        update_rho_options=None, compute_objective=True, mode='admm'):
-    """Graph lasso solver via ADMM.
+        update_rho_options=None, compute_objective=True, init='empirical'):
+    r"""Graphical lasso solver via ADMM.
 
-    Solves the following problem via ADMM:
+    Solves the following problem:
         minimize  trace(S*X) - log det X + alpha ||X||_{od,1}
 
-    where S is the empirical covariance of the data
-    matrix D (training observations by features).
+    where S = (1/n) X^T \times X is the empirical covariance of the data
+    matrix X (training observations by features).
 
     Parameters
     ----------
@@ -70,6 +71,14 @@ def graph_lasso(
         Return the number of iteration before convergence.
     verbose : bool, default False
         Print info at each iteration.
+    update_rho_options : dict, optional
+        Arguments for the rho update.
+        See regain.update_rules.update_rho function for more information.
+    compute_objective : bool, default True
+        Choose to compute the objective value.
+    init : ('empirical', 'zero')
+        Choose how to initialize the precision matrix, with the inverse
+        empirical covariance or zero matrix.
 
     Returns
     -------
@@ -86,13 +95,15 @@ def graph_lasso(
 
     """
     _, n_features = emp_cov.shape
-    covariance_ = emp_cov.copy()
-    covariance_ *= 0.95
-    covariance_.flat[::n_features + 1] = emp_cov.flat[::n_features + 1]
-    from scipy import linalg
-    Z = linalg.pinvh(covariance_)
 
-    # Z = np.zeros_like(emp_cov)
+    if init == 'empirical':
+        covariance_ = emp_cov.copy()
+        covariance_ *= 0.95
+        covariance_.flat[::n_features + 1] = emp_cov.flat[::n_features + 1]
+        Z = linalg.pinvh(covariance_)
+    else:
+        Z = np.zeros_like(emp_cov)
+
     U = np.zeros_like(emp_cov)
     Z_old = np.zeros_like(Z)
 
@@ -116,9 +127,8 @@ def graph_lasso(
         rnorm = np.linalg.norm(K - Z, 'fro')
         snorm = rho * np.linalg.norm(Z - Z_old, 'fro')
         check = convergence(
-            obj=obj, rnorm=rnorm, snorm=snorm,
-            e_pri=np.sqrt(K.size) * tol + rtol * max(
-                np.linalg.norm(K, 'fro'), np.linalg.norm(Z, 'fro')),
+            obj=obj, rnorm=rnorm, snorm=snorm, e_pri=np.sqrt(K.size) * tol +
+            rtol * max(np.linalg.norm(K, 'fro'), np.linalg.norm(Z, 'fro')),
             e_dual=np.sqrt(K.size) * tol + rtol * rho * np.linalg.norm(U))
 
         Z_old = Z.copy()
@@ -148,7 +158,7 @@ def graph_lasso(
     return return_list
 
 
-class GraphLasso(GraphLasso):
+class GraphicalLasso(GraphLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Parameters
@@ -220,7 +230,7 @@ class GraphLasso(GraphLasso):
         self.compute_objective = compute_objective
 
     def _fit(self, emp_cov):
-        """Fit the GraphLasso model to X.
+        """Fit the GraphicalLasso model to X.
 
         Parameters
         ----------
@@ -228,7 +238,7 @@ class GraphLasso(GraphLasso):
             Empirical covariance of data.
 
         """
-        self.precision_, self.covariance_, self.n_iter_ = graph_lasso(
+        self.precision_, self.covariance_, self.n_iter_ = graphical_lasso(
             emp_cov, alpha=self.alpha, tol=self.tol, rtol=self.rtol,
             max_iter=self.max_iter, over_relax=self.over_relax, rho=self.rho,
             verbose=self.verbose, return_n_iter=True, return_history=False,
@@ -237,7 +247,7 @@ class GraphLasso(GraphLasso):
         return self
 
     def fit(self, X, y=None):
-        """Fit the GraphLasso model to X.
+        """Fit the GraphicalLasso model to X.
 
         Parameters
         ----------
