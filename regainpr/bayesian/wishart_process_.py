@@ -5,40 +5,15 @@ from functools import partial
 import numpy as np
 from scipy import linalg
 from sklearn.datasets.base import Bunch
-from sklearn.metrics.pairwise import rbf_kernel
 from sklearn.gaussian_process import kernels
+from sklearn.metrics.pairwise import rbf_kernel
 from sklearn.utils.validation import check_X_y
 
 from regain.bayesian import stats
 from regain.bayesian.gaussian_process_ import sample as sample_gp
-from regain.bayesian.sampling import elliptical_slice, sample_hyper_kernel
-from regain.covariance.time_graph_lasso_ import TimeGraphLasso
-
-from regainpr.bayesian.sampling import sample_ell
-
-
-def GWP_construct(umat, L, uut=None):
-    """Build the sample from the GWP.
-
-    Optimised with uut:
-    uut = np.array([u.dot(u.T) for u in umat.T])
-    """
-
-    if uut is None:
-        v, p, n = umat.shape
-        M = np.zeros((p, p, n))
-        for i in range(n):
-            for j in range(v):
-                Lu = L.dot(umat[j, :, i])
-                LuuL = Lu[:, None].dot(Lu[None, :])
-                M[..., i] += LuuL
-
-    else:
-        M = np.array(
-            [np.linalg.multi_dot((L, uu_i, L.T)) for uu_i in uut]).transpose()
-
-    # assert np.allclose(N, M)
-    return M
+from regain.bayesian.sampling import (GWP_construct, elliptical_slice,
+                                      sample_ell, sample_hyper_kernel)
+from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso
 
 
 def fit(
@@ -177,12 +152,11 @@ def kernel(X, Y=None, var=None, inverse_width=None, normalised=False):
     return k
 
 
-def periodic_kernel(X, Y=None, inverse_width=None):
-    k = kernels.ExpSineSquared(length_scale=inverse_width)(X, Y=Y)
-    return k
+def periodic_kernel(X, Y=None, inverse_width=1):
+    return kernels.ExpSineSquared(length_scale=inverse_width)(X, Y=Y)
 
 
-class WishartProcess(TimeGraphLasso):
+class WishartProcess(TimeGraphicalLasso):
     def __init__(
             self, theta=100, var_prop=1, mu_prior=1, var_prior=10,
             var_Lprop=10, mu_Lprior=1, var_Lprior=1, n_iter=500, burn_in=None,

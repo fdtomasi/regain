@@ -5,14 +5,36 @@ import numpy as np
 from scipy import linalg, stats
 from sklearn.utils.extmath import fast_logdet
 
-from regain.bayesian.stats import (log_likelihood_normal, lognormal_logpdf,
-                                   lognormal_pdf, lognstat)
-from regain.bayesian.wishart_process_ import GWP_construct
+from regain.bayesian.stats import (
+    log_likelihood_normal, lognormal_logpdf, lognormal_pdf, lognstat)
+
+
+def GWP_construct(umat, L, uut=None):
+    """Build the sample from the GWP.
+
+    Optimised with uut:
+    uut = np.array([u.dot(u.T) for u in umat.T])
+    """
+
+    if uut is None:
+        v, p, n = umat.shape
+        M = np.zeros((p, p, n))
+        for i in range(n):
+            for j in range(v):
+                Lu = L.dot(umat[j, :, i])
+                LuuL = Lu[:, None].dot(Lu[None, :])
+                M[..., i] += LuuL
+
+    else:
+        M = np.array(
+            [np.linalg.multi_dot((L, uu_i, L.T)) for uu_i in uut]).transpose()
+
+    # assert np.allclose(N, M)
+    return M
 
 
 def elliptical_slice(
-        xx, prior, cur_log_like, likelihood=None, angle_range=0,
-        max_iter=20):
+        xx, prior, cur_log_like, likelihood=None, angle_range=0, max_iter=20):
     """Markov chain update for a distribution with a Gaussian "prior" factored out.
 
     A Markov chain update is applied to the D-element array xx leaving a
@@ -189,7 +211,8 @@ def sample_hyper_kernel(
     qztauzast = lognormal_pdf(initial_theta, mu=mu, sigma=sigma)
 
     acceptance_proba = min(
-        1, np.exp(logpzast - logpztau) * (qztauzast / qzastztau))
+        1,
+        np.exp(logpzast - logpztau) * (qztauzast / qzastztau))
 
     # Now we decide whether to accept zast or use the previous value
     accept = np.random.uniform() < acceptance_proba
