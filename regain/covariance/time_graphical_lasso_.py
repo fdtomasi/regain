@@ -377,28 +377,10 @@ class TimeGraphicalLasso(GraphicalLasso):
         y : (ignored)
 
         """
-        if sp.issparse(X):
-            raise TypeError("sparse matrices not supported.")
-
-        X = check_array_dimensions(
-            X, n_dimensions=3, time_on_axis=self.time_on_axis,
-            suppress_warn_list=self.suppress_warn_list)
-
         is_list = isinstance(X, list)
-        # Covariance does not make sense for a single feature
-        X = np.array([check_array(x, ensure_min_features=2,
-                      ensure_min_samples=2, estimator=self) for x in X])
-        if is_list:
-            n_times = len(X)
-            if np.unique([x.shape[1] for x in X]).size != 1:
-                raise ValueError("Input data cannot have different number "
-                                 "of variables.")
-            n_dimensions = X[0].shape[1]
-        else:
-            n_times = X.shape[0]
-            n_dimensions = X.shape[2]
-
-        n_samples = np.array([x.shape[0] for x in X])
+        X, n_samples, n_dimensions, n_times = check_input(
+            X, y=None, time_on_axis=self.time_on_axis,
+            suppress_warn_list=self.suppress_warn_list, estimator=self)
 
         if self.assume_centered:
             self.location_ = np.zeros((n_times, 1, n_dimensions))
@@ -426,35 +408,28 @@ class TimeGraphicalLasso(GraphicalLasso):
 
         Returns
         -------
-        res : float
+        logp : float
             The likelihood of the data set with `self.covariance_` as an
             estimator of its covariance matrix.
 
         """
-        if sp.issparse(X_test):
-            raise TypeError("sparse matrices not supported.")
-
-        X_test = check_array_dimensions(
-            X_test, n_dimensions=3, time_on_axis=self.time_on_axis)
-
-        # Covariance does not make sense for a single feature
-        X_test = np.array([
-            check_array(x, ensure_min_features=2,
-                        ensure_min_samples=2, estimator=self) for x in X_test])
+        X_test, n_samples, _, _ = check_input(
+            X_test, y=None, time_on_axis=self.time_on_axis,
+            suppress_warn_list=self.suppress_warn_list, estimator=self)
 
         # compute empirical covariance of the test set
         test_cov = np.array([empirical_covariance(
             x, assume_centered=True) for x in X_test - self.location_])
 
-        n_samples = np.array([x.shape[0] for x in X_test])
-        res = sum(n * log_likelihood(S, K) for S, K, n in zip(
-            test_cov, self.get_observed_precision(), n_samples))
+        logp = sum(
+            n * log_likelihood(S, K) for S, K, n in zip(
+                test_cov, self.get_observed_precision(), n_samples))
 
         # ALLA  MATLAB1
         # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
         # scores_ranks = np.square(ranks-np.sqrt(L.shape[1]))
 
-        return res  # - np.sum(scores_ranks)
+        return logp  # - np.sum(scores_ranks)
 
     def error_norm(self, comp_cov, norm='frobenius', scaling=True,
                    squared=True):
