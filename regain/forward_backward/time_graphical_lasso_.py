@@ -9,8 +9,9 @@ from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.covariance import empirical_covariance
 
-from regain.covariance.graph_lasso_ import logl
-from regain.covariance.time_graph_lasso_ import TimeGraphLasso
+from regain.covariance.graphical_lasso_ import logl
+from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso
+from regain.covariance.time_graphical_lasso_ import loss as loss_tgl
 from regain.norm import l1_od_norm, vector_p_norm
 from regain.prox import prox_FL
 from regain.utils import convergence, positive_definite
@@ -18,11 +19,7 @@ from regain.utils import convergence, positive_definite
 
 def loss(S, K, n_samples=None, vareps=0):
     """Loss function for time-varying graphical lasso."""
-    if n_samples is None:
-        n_samples = np.ones(S.shape[0])
-    loss_ = sum(-ni * logl(emp_cov, precision)
-                for emp_cov, precision, ni in zip(S, K, n_samples))
-    # loss_ += vareps / 2. * squared_norm(K)
+    loss_ = loss_tgl(S, K, n_samples=n_samples)
     loss_ += vareps / 2. * _scalar_product(K, K)
     return loss_
 
@@ -43,10 +40,16 @@ def grad_loss(x, emp_cov, n_samples, x_inv=None, vareps=0):
 def penalty(precision, alpha, beta, psi):
     """Penalty for time-varying graphical lasso."""
     if isinstance(alpha, np.ndarray):
-        obj = sum(a[0][0] * m for a, m in zip(alpha, map(l1_od_norm, precision)))
+        obj = sum(
+            a[0][0] * m for a, m in zip(alpha, map(l1_od_norm, precision)))
     else:
         obj = alpha * sum(map(l1_od_norm, precision))
-    obj += beta * psi(precision[1:] - precision[:-1])
+    if isinstance(beta, np.ndarray):
+        obj += sum(
+            b[0][0] * m
+            for b, m in zip(beta, map(psi, precision[1:] - precision[:-1])))
+    else:
+        obj += beta * psi(precision[1:] - precision[:-1])
     return obj
 
 
@@ -71,9 +74,9 @@ def _scalar_product(x, y):
     # return x.ravel().dot(y.ravel())
 
 
-def choose_gamma(gamma, x, emp_cov, n_samples, beta, alpha, lamda, grad,
-                 delta=1e-4, eps=0.5, max_iter=1000, p=1, x_inv=None,
-                 vareps=1e-5, choose='gamma'):
+def choose_gamma(
+        gamma, x, emp_cov, n_samples, beta, alpha, lamda, grad, delta=1e-4,
+        eps=0.5, max_iter=1000, p=1, x_inv=None, vareps=1e-5, choose='gamma'):
     """Choose gamma for backtracking.
 
     References
@@ -105,10 +108,10 @@ def choose_gamma(gamma, x, emp_cov, n_samples, beta, alpha, lamda, grad,
     return gamma, prox
 
 
-def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
-                 eps=0.5, max_iter=1000, criterion='b', p=1, x_inv=None,
-                 grad=None, prox=None, min_eigen_x=None,
-                 vareps=1e-5):
+def choose_lamda(
+        lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4, eps=0.5,
+        max_iter=1000, criterion='b', p=1, x_inv=None, grad=None, prox=None,
+        min_eigen_x=None, vareps=1e-5):
     """Choose lambda for backtracking.
 
     References
@@ -162,7 +165,8 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
                 n_samples, emp_cov, x1, alpha, beta, psi, vareps=vareps) \
                     - objective_x
             # if positive_definite(x1) and obj_diff <= lamda * tolerance:
-            cond = True # lamda > 0 if min_eigen_y >= 0 else lamda < min_eigen_x / (min_eigen_x - min_eigen_y)
+            cond = True
+            # COND IS lamda > 0 if min_eigen_y >= 0 else lamda < min_eigen_x / (min_eigen_x - min_eigen_y)
             if cond and obj_diff <= lamda * tolerance:
                 break
         else:
@@ -172,8 +176,8 @@ def choose_lamda(lamda, x, emp_cov, n_samples, beta, alpha, gamma, delta=1e-4,
 
 
 def fista_step(Y, Y_diff, t):
-    t_next = (1. + np.sqrt(1.0 + 4.0 * t*t)) / 2.
-    return Y + ((t - 1.0)/t_next) * Y_diff, t_next
+    t_next = (1. + np.sqrt(1.0 + 4.0 * t * t)) / 2.
+    return Y + ((t - 1.0) / t_next) * Y_diff, t_next
 
 
 def upper_diag_3d(x):
@@ -229,8 +233,8 @@ def time_graph_lasso(
     """
     available_choose = ('gamma', 'lamda', 'fixed', 'both')
     if choose not in available_choose:
-        raise ValueError("`choose` parameter must be one of %s." %
-                         available_choose)
+        raise ValueError(
+            "`choose` parameter must be one of %s." % available_choose)
 
     n_times, _, n_features = emp_cov.shape
     covariance_ = emp_cov.copy()
@@ -246,9 +250,8 @@ def time_graph_lasso(
     # assert positive_definite(K)
 
     obj_partial = partial(
-        objective, n_samples=n_samples, emp_cov=emp_cov,
-        alpha=alpha, beta=beta, psi=partial(vector_p_norm, p=time_norm),
-        vareps=vareps)
+        objective, n_samples=n_samples, emp_cov=emp_cov, alpha=alpha,
+        beta=beta, psi=partial(vector_p_norm, p=time_norm), vareps=vareps)
 
     max_residual = -np.inf
     n_linesearch = 0
@@ -274,23 +277,34 @@ def time_graph_lasso(
         if choose in ['gamma', 'both']:
             gamma, y = choose_gamma(
                 gamma / eps if iteration_ > 0 else gamma, K, emp_cov,
-                n_samples=n_samples,
-                beta=beta, alpha=alpha, lamda=lamda, grad=grad,
-                delta=delta, eps=eps, max_iter=200, p=time_norm, x_inv=x_inv,
-                vareps=vareps, choose=choose)
+                n_samples=n_samples, beta=beta, alpha=alpha, lamda=lamda,
+                grad=grad, delta=delta, eps=eps, max_iter=200, p=time_norm,
+                x_inv=x_inv, vareps=vareps, choose=choose)
         # print(gamma)
 
         x_hat = K - gamma * grad
         if choose not in ['gamma', 'both']:
-            y = prox_FL(x_hat, beta * gamma, alpha * gamma, p=time_norm, symmetric=True)
+            y = prox_FL(
+                x_hat, beta * gamma, alpha * gamma, p=time_norm,
+                symmetric=True)
 
         if choose in ['lamda', 'both']:
             lamda, n_ls = choose_lamda(
                 min(lamda / eps if iteration_ > 0 else lamda, 1),
-                K, emp_cov, n_samples=n_samples,
-                beta=beta, alpha=alpha, gamma=gamma, delta=delta, eps=eps,
-                criterion=lamda_criterion, max_iter=200, p=time_norm,
-                x_inv=x_inv, grad=grad, prox=y,
+                K,
+                emp_cov,
+                n_samples=n_samples,
+                beta=beta,
+                alpha=alpha,
+                gamma=gamma,
+                delta=delta,
+                eps=eps,
+                criterion=lamda_criterion,
+                max_iter=200,
+                p=time_norm,
+                x_inv=x_inv,
+                grad=grad,
+                prox=y,
                 # min_eigen_x=np.min(eigens),
                 vareps=vareps)
             n_linesearch += n_ls
@@ -309,11 +323,12 @@ def time_graph_lasso(
                 np.linalg.norm(upper_diag_3d(k_previous))),
             e_dual=tol,
             # precision=K.copy()
-            )
+        )
 
         if verbose and iteration_ % (50 if verbose < 2 else 1) == 0:
-            print("obj: %.4f, rnorm: %.7f, snorm: %.4f,"
-                  "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
+            print(
+                "obj: %.4f, rnorm: %.7f, snorm: %.4f,"
+                "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
 
         if return_history:
             checks.append(check)
@@ -333,19 +348,20 @@ def time_graph_lasso(
 
                 if iteration_ == 0:
                     normalizer = res_norm + 1e-6
-                max_residual = max(np.linalg.norm(grad),
-                                   np.linalg.norm(subgrad)) + 1e-6
+                max_residual = max(
+                    np.linalg.norm(grad), np.linalg.norm(subgrad)) + 1e-6
             else:
                 res_norm = np.linalg.norm(K - k_previous) / gamma
                 max_residual = max(max_residual, res_norm)
-                normalizer = max(np.linalg.norm(grad),
-                                 np.linalg.norm(subgrad)) + 1e-6
+                normalizer = max(
+                    np.linalg.norm(grad), np.linalg.norm(subgrad)) + 1e-6
 
             r_rel = res_norm / max_residual
             r_norm = res_norm / normalizer
 
-            if not debug and (r_rel <= tol or r_norm <= tol) and iteration_ > 0: # or (
-                    # check.rnorm <= check.e_pri and iteration_ > 0):
+            if not debug and (r_rel <= tol
+                              or r_norm <= tol) and iteration_ > 0:  # or (
+                # check.rnorm <= check.e_pri and iteration_ > 0):
                 break
             # pass
         # if check.rnorm <= check.e_pri and iteration_ > 0:
@@ -367,7 +383,7 @@ def time_graph_lasso(
     return return_list
 
 
-class TimeGraphLassoForwardBackward(TimeGraphLasso):
+class TimeGraphicalLassoForwardBackward(TimeGraphicalLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Parameters
@@ -437,16 +453,16 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
 
     """
 
-    def __init__(self, alpha=0.01, beta=1., time_on_axis='first', tol=1e-4,
-                 max_iter=100, verbose=False, assume_centered=False,
-                 compute_objective=True, eps=0.5, choose='gamma', lamda=1,
-                 delta=1e-4, gamma=1., lamda_criterion='b', time_norm=1,
-                 return_history=False, debug=False,
-                 return_n_linesearch=False,
-                 vareps=1e-5, stop_at=None, stop_when=1e-4):
-        super(TimeGraphLassoForwardBackward, self).__init__(
-            alpha=alpha, tol=tol, max_iter=max_iter,
-            verbose=verbose, assume_centered=assume_centered,
+    def __init__(
+            self, alpha=0.01, beta=1., time_on_axis='first', tol=1e-4,
+            max_iter=100, verbose=False, assume_centered=False,
+            compute_objective=True, eps=0.5, choose='gamma', lamda=1,
+            delta=1e-4, gamma=1., lamda_criterion='b', time_norm=1,
+            return_history=False, debug=False, return_n_linesearch=False,
+            vareps=1e-5, stop_at=None, stop_when=1e-4):
+        super(TimeGraphicalLassoForwardBackward, self).__init__(
+            alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
+            assume_centered=assume_centered,
             compute_objective=compute_objective, beta=beta,
             time_on_axis=time_on_axis)
         self.delta = delta
@@ -480,12 +496,11 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
             emp_cov, n_samples=n_samples, alpha=self.alpha, beta=self.beta,
             tol=self.tol, max_iter=self.max_iter, verbose=self.verbose,
             return_n_iter=True, return_history=self.return_history,
-            compute_objective=self.compute_objective,
-            time_norm=self.time_norm, lamda_criterion=self.lamda_criterion,
-            gamma=self.gamma, delta=self.delta, eps=self.eps,
-            choose=self.choose, lamda=self.lamda, debug=self.debug,
-            return_n_linesearch=self.return_n_linesearch,
-            vareps=self.vareps,
+            compute_objective=self.compute_objective, time_norm=self.time_norm,
+            lamda_criterion=self.lamda_criterion, gamma=self.gamma,
+            delta=self.delta, eps=self.eps, choose=self.choose,
+            lamda=self.lamda, debug=self.debug,
+            return_n_linesearch=self.return_n_linesearch, vareps=self.vareps,
             stop_at=self.stop_at, stop_when=self.stop_when)
 
         if self.return_history:
@@ -506,8 +521,11 @@ class TimeGraphLassoForwardBackward(TimeGraphLasso):
         if is_covariance:
             emp_cov = X
         else:
-            emp_cov = np.array([empirical_covariance(
-                x, assume_centered=self.assume_centered) for x in X])
+            emp_cov = np.array(
+                [
+                    empirical_covariance(
+                        x, assume_centered=self.assume_centered) for x in X
+                ])
         return max(alpha_max(e) for e in emp_cov)
 
 

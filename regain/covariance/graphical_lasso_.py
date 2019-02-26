@@ -220,7 +220,7 @@ class GraphicalLasso(GraphLasso):
             self, alpha=0.01, rho=1., over_relax=1., max_iter=100, mode='admm',
             tol=1e-4, rtol=1e-4, verbose=False, assume_centered=False,
             update_rho_options=None, compute_objective=True):
-        super(GraphLasso, self).__init__(
+        super(GraphicalLasso, self).__init__(
             alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
             assume_centered=assume_centered, mode=mode)
         self.rho = rho
@@ -242,7 +242,7 @@ class GraphicalLasso(GraphLasso):
             emp_cov, alpha=self.alpha, tol=self.tol, rtol=self.rtol,
             max_iter=self.max_iter, over_relax=self.over_relax, rho=self.rho,
             verbose=self.verbose, return_n_iter=True, return_history=False,
-            mode=self.mode, update_rho_options=self.update_rho_options,
+            update_rho_options=self.update_rho_options,
             compute_objective=self.compute_objective)
         return self
 
