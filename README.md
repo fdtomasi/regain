@@ -40,7 +40,7 @@ python setup.py develop
 A simple example for how to use LTGL.
 ```python
 import numpy as np
-from regain.covariance import LatentTimeGraphLasso
+from regain.covariance import LatentTimeGraphicalLasso
 from regain.datasets import make_dataset
 from regain.utils import error_norm_time
 
@@ -49,17 +49,17 @@ data = make_dataset(n_dim_lat=1, n_dim_obs=10)
 X = data.data
 theta = data.thetas
 
-mdl = LatentTimeGraphLasso(max_iter=50).fit(X)
+mdl = LatentTimeGraphicalLasso(max_iter=50).fit(X)
 print("Error: %.2f" % error_norm_time(theta, mdl.precision_))
 ```
-Note that the input of `LatentTimeGraphLasso` is a three-dimensional matrix with shape `(n_times, n_samples, n_dimensions)`.
-If you have a single time (`n_times = 1`), ensure a `X = X.reshape(1, *X.shape)` before using `LatentTimeGraphLasso`, or, alternatively, use `LatentGraphLasso`.
+Note that the input of `LatentTimeGraphicalLasso` is a three-dimensional matrix with shape `(n_times, n_samples, n_dimensions)`.
+If you have a single time (`n_times = 1`), ensure a `X = X.reshape(1, *X.shape)` before using `LatentTimeGraphicalLasso`, or, alternatively, use `LatentGraphicalLasso`.
 
 
 ## Citation
 
 `REGAIN` appeared in the following two publications.
-For the `LatentTimeGraphLasso` please use
+For the `LatentTimeGraphicalLasso` please use
 
 ```latex
 @inproceedings{Tomasi:2018:LVT:3219819.3220121,
@@ -81,7 +81,7 @@ For the `LatentTimeGraphLasso` please use
 } 
 ```
 
-and for the `TimeGraphLassoForwardBackward` plase use
+and for the `TimeGraphicalLassoForwardBackward` plase use
 
 ```latex
 @InProceedings{pmlr-v72-tomasi18a,
