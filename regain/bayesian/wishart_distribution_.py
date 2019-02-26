@@ -1,12 +1,13 @@
 from __future__ import division
 
 import numpy as np
-import statsmodels.sandbox.distributions.mv_normal as mvd
 from scipy import linalg, stats
 from scipy.special import multigammaln
 from sklearn.base import BaseEstimator
 from sklearn.datasets import make_sparse_spd_matrix
 from sklearn.utils.extmath import fast_logdet
+
+import statsmodels.sandbox.distributions.mv_normal as mvd
 
 
 class WishartDistribution(BaseEstimator):

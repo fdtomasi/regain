@@ -3,10 +3,12 @@ import warnings
 from functools import partial
 
 import numpy as np
+import scipy.sparse as sp
 from sklearn.utils.extmath import squared_norm
+from sklearn.utils.validation import check_array
 
 from regain.norm import l1_norm, node_penalty
-from regain.prox import (
+from regainpr.prox import (
     blockwise_soft_thresholding, prox_laplacian, prox_linf, prox_node_penalty,
     soft_thresholding)
 
@@ -58,3 +60,45 @@ def check_array_dimensions(
         return X.transpose(2, 0, 1)  # put time as first dimension
 
     return X
+
+
+def check_input_3d(
+        X, time_on_axis='first', suppress_warn_list=False, estimator=None):
+    """Old API. X is a 3d matrix."""
+    X = check_array_dimensions(
+        X, n_dimensions=3, time_on_axis=time_on_axis,
+        suppress_warn_list=suppress_warn_list)
+
+    is_list = isinstance(X, list)
+    # Covariance does not make sense for a single feature
+    X = np.array(
+        [
+            check_array(
+                x, ensure_min_features=2, ensure_min_samples=2,
+                estimator=estimator) for x in X
+        ])
+    if is_list:
+        n_times = len(X)
+        if np.unique([x.shape[1] for x in X]).size != 1:
+            raise ValueError(
+                "Input data cannot have different number "
+                "of variables.")
+        n_dimensions = X[0].shape[1]
+    else:
+        n_times = X.shape[0]
+        n_dimensions = X.shape[2]
+
+    n_samples = np.array([x.shape[0] for x in X])
+    return X, n_samples, n_dimensions, n_times
+
+
+def check_input(X, y=None, **kwargs):
+    """Validate data and labels."""
+    if sp.issparse(X):
+        raise TypeError("sparse matrices not supported.")
+
+    if y is None:
+        # needs X.ndim == 3 or X is list
+        return check_input_3d(X, **kwargs)
+    else:
+        raise ValueError("y cannot be not None with this class.")
