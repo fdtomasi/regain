@@ -4,6 +4,7 @@ from functools import partial
 import numpy as np
 from scipy import linalg, stats
 from sklearn.utils.extmath import fast_logdet
+from sklearn.covariance import empirical_covariance, log_likelihood
 
 from regain.bayesian.stats import (
     log_likelihood_normal, lognormal_logpdf, lognormal_pdf, lognstat)
@@ -211,8 +212,7 @@ def sample_hyper_kernel(
     qztauzast = lognormal_pdf(initial_theta, mu=mu, sigma=sigma)
 
     acceptance_proba = min(
-        1,
-        np.exp(logpzast - logpztau) * (qztauzast / qzastztau))
+        1, np.exp(logpzast - logpztau) * (qztauzast / qzastztau))
 
     # Now we decide whether to accept zast or use the previous value
     accept = np.random.uniform() < acceptance_proba
@@ -247,11 +247,14 @@ def logpunorm(inverse_width, t, u, kern, mean_prior, var_prior):
     k_inverse = linalg.pinvh(K)
 
     v, p, n = u.shape
-    F = np.tensordot(u, u, axes=([1, 0], [1, 0]))
+    # F = np.tensordot(u, u, axes=([1, 0], [1, 0]))
+    # logpugl = v * p * fast_logdet(k_inverse) - np.sum(F * k_inverse)
+    # logpugl -= v * p * n * np.log(2 * np.pi)
+    # logpugl /= 2.
 
-    logpugl = v * p * fast_logdet(K) + np.sum(F * k_inverse)
-    logpugl += u.size * np.log(2 * np.pi)
-    logpugl *= -0.5
+    # creates a (vp * n) matrix, then compute centered empirical covariance
+    ustack = np.vstack(u)
+    logpugl = v * p * log_likelihood(empirical_covariance(ustack), k_inverse)
 
     mu_prior, sigma_prior = lognstat(mean_prior, var_prior)
     logp_prior = lognormal_logpdf(

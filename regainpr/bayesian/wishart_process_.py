@@ -20,7 +20,7 @@ def fit(
         lp, var_prop, mu_prior, var_prior, var_Lprop, mu_Lprior, var_Lprior,
         kern, p, nu=None, t=None, n_iter=500, verbose=False, likelihood=None):
     """Sample the parameters of kernel and lower Cholesky.
- 
+
     Parameters
     ----------
     lp, var_prop, mu_prior, var_prior : sampling kernel hyperparameters
