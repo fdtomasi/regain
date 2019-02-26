@@ -32,15 +32,15 @@ def logl(emp_cov, precision):
 
 
 def objective(emp_cov, x, z, alpha):
-    """Graph lasso objective."""
+    """Graphical lasso objective."""
     return -logl(emp_cov, x) + alpha * l1_od_norm(z)
 
 
-def graph_lasso(
+def graphical_lasso(
         emp_cov, alpha=0.01, rho=1, over_relax=1, max_iter=100, verbose=False,
         tol=1e-4, rtol=1e-4, return_history=False, return_n_iter=True,
         update_rho_options=None, compute_objective=True, mode='admm'):
-    """Graph lasso solver via ADMM.
+    """Graphical lasso solver via ADMM.
 
     Solves the following problem via ADMM:
         minimize  trace(S*X) - log det X + alpha ||X||_{od,1}
@@ -148,7 +148,7 @@ def graph_lasso(
     return return_list
 
 
-class GraphLasso(GraphLasso):
+class GraphicalLasso(GraphLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Parameters
@@ -210,7 +210,7 @@ class GraphLasso(GraphLasso):
             self, alpha=0.01, rho=1., over_relax=1., max_iter=100, mode='admm',
             tol=1e-4, rtol=1e-4, verbose=False, assume_centered=False,
             update_rho_options=None, compute_objective=True):
-        super(GraphLasso, self).__init__(
+        super(GraphicalLasso, self).__init__(
             alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
             assume_centered=assume_centered, mode=mode)
         self.rho = rho
@@ -220,7 +220,7 @@ class GraphLasso(GraphLasso):
         self.compute_objective = compute_objective
 
     def _fit(self, emp_cov):
-        """Fit the GraphLasso model to X.
+        """Fit the GraphicalLasso model to X.
 
         Parameters
         ----------
@@ -228,7 +228,7 @@ class GraphLasso(GraphLasso):
             Empirical covariance of data.
 
         """
-        self.precision_, self.covariance_, self.n_iter_ = graph_lasso(
+        self.precision_, self.covariance_, self.n_iter_ = graphical_lasso(
             emp_cov, alpha=self.alpha, tol=self.tol, rtol=self.rtol,
             max_iter=self.max_iter, over_relax=self.over_relax, rho=self.rho,
             verbose=self.verbose, return_n_iter=True, return_history=False,
@@ -237,7 +237,7 @@ class GraphLasso(GraphLasso):
         return self
 
     def fit(self, X, y=None):
-        """Fit the GraphLasso model to X.
+        """Fit the GraphicalLasso model to X.
 
         Parameters
         ----------

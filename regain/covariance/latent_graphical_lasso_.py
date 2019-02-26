@@ -7,7 +7,7 @@ import numpy as np
 from scipy import linalg
 from six.moves import range
 
-from regain.covariance.graph_lasso_ import GraphLasso, logl
+from regain.covariance.graphical_lasso_ import GraphicalLasso, logl
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
@@ -22,7 +22,7 @@ def objective(emp_cov, R, K, L, alpha, tau):
     return obj
 
 
-def latent_graph_lasso(
+def latent_graphical_lasso(
         emp_cov, alpha=1., tau=1., rho=1., max_iter=100,
         verbose=False, tol=1e-4, rtol=1e-2, return_history=False,
         return_n_iter=True, mode=None,
@@ -139,7 +139,7 @@ def latent_graph_lasso(
     return return_list
 
 
-class LatentGraphLasso(GraphLasso):
+class LatentGraphicalLasso(GraphicalLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Parameters
@@ -207,7 +207,7 @@ class LatentGraphLasso(GraphLasso):
     def __init__(self, alpha=0.01, tau=1., rho=1., tol=1e-4, rtol=1e-4,
                  max_iter=100, verbose=False, assume_centered=False,
                  mode='admm', update_rho_options=None, compute_objective=True):
-        super(LatentGraphLasso, self).__init__(
+        super(LatentGraphicalLasso, self).__init__(
             alpha=alpha, rho=rho,
             tol=tol, rtol=rtol, max_iter=max_iter, verbose=verbose,
             assume_centered=assume_centered, mode=mode,
@@ -228,7 +228,7 @@ class LatentGraphLasso(GraphLasso):
         return self.precision_ - self.latent_
 
     def _fit(self, emp_cov):
-        """Fit the LatentGraphLasso model to X.
+        """Fit the LatentGraphicalLasso model to X.
 
         Parameters
         ----------
@@ -237,7 +237,7 @@ class LatentGraphLasso(GraphLasso):
 
         """
         self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
-            latent_graph_lasso(
+            latent_graphical_lasso(
                 emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
                 mode=self.mode, tol=self.tol, rtol=self.rtol,
                 max_iter=self.max_iter, verbose=self.verbose,

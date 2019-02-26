@@ -8,7 +8,7 @@ from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_array
 
 from regain.norm import l1_norm, node_penalty
-from regainpr.prox import (
+from regain.prox import (
     blockwise_soft_thresholding, prox_laplacian, prox_linf, prox_node_penalty,
     soft_thresholding)
 

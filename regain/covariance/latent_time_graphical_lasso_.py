@@ -9,8 +9,8 @@ from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.utils.extmath import squared_norm
 
-from regain.covariance.time_graph_lasso_ import TimeGraphLasso
-from regain.covariance.time_graph_lasso_ import objective as obj_tgl
+from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso
+from regain.covariance.time_graphical_lasso_ import objective as obj_tgl
 from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence
@@ -32,7 +32,7 @@ def objective(
     return obj
 
 
-def latent_time_graph_lasso(
+def latent_time_graphical_lasso(
         emp_cov, alpha=0.01, tau=1., rho=1., beta=1., eta=1., max_iter=100,
         verbose=False, psi='laplacian', phi='laplacian', mode='admm', tol=1e-4,
         rtol=1e-4, assume_centered=False, n_samples=None, return_history=False,
@@ -240,7 +240,7 @@ def latent_time_graph_lasso(
     return return_list
 
 
-class LatentTimeGraphLasso(TimeGraphLasso):
+class LatentTimeGraphicalLasso(TimeGraphicalLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Parameters
@@ -331,7 +331,7 @@ class LatentTimeGraphLasso(TimeGraphLasso):
             phi='laplacian', max_iter=100, verbose=False,
             assume_centered=False, update_rho_options=None,
             compute_objective=True):
-        super(LatentTimeGraphLasso, self).__init__(
+        super(LatentTimeGraphicalLasso, self).__init__(
             alpha=alpha, beta=beta, mode=mode, rho=rho, tol=tol, rtol=rtol,
             psi=psi, max_iter=max_iter, verbose=verbose,
             time_on_axis=time_on_axis, assume_centered=assume_centered,
@@ -363,7 +363,7 @@ class LatentTimeGraphLasso(TimeGraphLasso):
 
         """
         self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
-            latent_time_graph_lasso(
+            latent_time_graphical_lasso(
                 emp_cov, n_samples=n_samples,
                 alpha=self.alpha, tau=self.tau, rho=self.rho,
                 beta=self.beta, eta=self.eta, mode=self.mode,

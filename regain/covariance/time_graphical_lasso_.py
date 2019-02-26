@@ -13,13 +13,12 @@ from six.moves import map, range, zip
 from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
 
-from regain.covariance.graph_lasso_ import GraphLasso, logl
+from regain.covariance.graphical_lasso_ import GraphicalLasso, logl
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence, error_norm_time
-from regain.validation import check_norm_prox
-from regainpr.validation import check_input
+from regain.validation import check_input, check_norm_prox
 
 
 def loss(S, K, n_samples=None):
@@ -47,7 +46,7 @@ def objective(n_samples, S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
     return obj
 
 
-def time_graph_lasso(
+def time_graphical_lasso(
         emp_cov, alpha=0.01, rho=1, beta=1, max_iter=100, n_samples=None,
         verbose=False, psi='laplacian', tol=1e-4, rtol=1e-4,
         return_history=False, return_n_iter=True, mode='admm',
@@ -235,7 +234,7 @@ def time_graph_lasso(
     return return_list
 
 
-class TimeGraphLasso(GraphLasso):
+class TimeGraphicalLasso(GraphicalLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Parameters
@@ -312,7 +311,7 @@ class TimeGraphLasso(GraphLasso):
             return_history=False, update_rho_options=None,
             compute_objective=True, stop_at=None, stop_when=1e-4,
             suppress_warn_list=False):
-        super(TimeGraphLasso, self).__init__(
+        super(TimeGraphicalLasso, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered, mode=mode,
             update_rho_options=update_rho_options,
@@ -337,7 +336,7 @@ class TimeGraphLasso(GraphLasso):
         return self.get_precision()
 
     def _fit(self, emp_cov, n_samples):
-        """Fit the TimeGraphLasso model to X.
+        """Fit the TimeGraphicalLasso model to X.
 
         Parameters
         ----------
@@ -345,7 +344,7 @@ class TimeGraphLasso(GraphLasso):
             Empirical covariance of data.
 
         """
-        out = time_graph_lasso(
+        out = time_graphical_lasso(
             emp_cov, alpha=self.alpha, rho=self.rho, beta=self.beta,
             mode=self.mode, n_samples=n_samples, tol=self.tol, rtol=self.rtol,
             psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
@@ -360,7 +359,7 @@ class TimeGraphLasso(GraphLasso):
         return self
 
     def fit(self, X, y=None):
-        """Fit the TimeGraphLasso model to X.
+        """Fit the TimeGraphicalLasso model to X.
 
         Parameters
         ----------
