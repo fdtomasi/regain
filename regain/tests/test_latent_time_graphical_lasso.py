@@ -1,19 +1,19 @@
-"""Test LatentTimeGraphLasso."""
+"""Test LatentTimeGraphicalLasso."""
 import numpy as np
 import warnings
 
 from numpy.testing import assert_array_equal
 
-from regain.covariance.latent_time_graph_lasso_ import LatentTimeGraphLasso
+from regain.covariance.latent_time_graphical_lasso_ import LatentTimeGraphicalLasso
 
 
 def test_ltgl_zero():
-    """Check that LatentTimeGraphLasso can handle zero data."""
+    """Check that LatentTimeGraphicalLasso can handle zero data."""
     a = np.zeros((3, 3, 3))
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        mdl = LatentTimeGraphLasso(
+        mdl = LatentTimeGraphicalLasso(
             time_on_axis='last', max_iter=1, assume_centered=True).fit(a)
 
     for p in mdl.precision_:
@@ -27,12 +27,12 @@ def test_ltgl_zero():
 
 
 def test_ltgl_prox_l1():
-    """Check that LatentTimeGraphLasso can handle zero data."""
+    """Check that LatentTimeGraphicalLasso can handle zero data."""
     a = np.zeros((3, 3, 3))
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        mdl = LatentTimeGraphLasso(
+        mdl = LatentTimeGraphicalLasso(
             time_on_axis='first', psi='l2', phi='node', max_iter=1,
             assume_centered=True).fit(a)
 

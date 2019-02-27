@@ -38,7 +38,7 @@ def objective(n_samples, S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
         obj += sum(l1_od_norm(a * z) for a, z in zip(alpha, Z_0))
     else:
         obj += alpha * sum(map(l1_od_norm, Z_0))
-    
+
     if isinstance(beta, np.ndarray):
         obj += sum(b[0][0] * m for b, m in zip(beta, map(psi, Z_2 - Z_1)))
     else:
@@ -51,15 +51,15 @@ def time_graphical_lasso(
         verbose=False, psi='laplacian', tol=1e-4, rtol=1e-4,
         return_history=False, return_n_iter=True, mode='admm',
         update_rho_options=None, compute_objective=True, stop_at=None,
-        stop_when=1e-4):
+        stop_when=1e-4, init='empirical'):
     """Time-varying graphical lasso solver.
 
     Solves the following problem via ADMM:
-        minimize  trace(S*X) - log det X + lambda*||X||_1
+        min sum_{i=1}^T -n_i log_likelihood(S_i, K_i) + alpha*||K_i||_{od,1}
             + beta sum_{i=2}^T Psi(K_i - K_{i-1})
 
-    where S is the empirical covariance of the data
-    matrix D (training observations by features).
+    where S_i = (1/n_i) X_i^T \times X_i is the empirical covariance of data
+    matrix X (training observations by features).
 
     Parameters
     ----------
@@ -71,17 +71,31 @@ def time_graphical_lasso(
         Augmented Lagrangian parameter.
     max_iter : int, optional
         Maximum number of iterations.
+    n_samples : ndarray
+        Number of samples available for each time point.
     tol : float, optional
         Absolute tolerance for convergence.
     rtol : float, optional
         Relative tolerance for convergence.
     return_history : bool, optional
         Return the history of computed values.
+    return_n_iter : bool, optional
+        Return the number of iteration before convergence.
+    verbose : bool, default False
+        Print info at each iteration.
+    update_rho_options : dict, optional
+        Arguments for the rho update.
+        See regain.update_rules.update_rho function for more information.
+    compute_objective : bool, default True
+        Choose to compute the objective value.
+    init : ('empirical', 'zero')
+        Choose how to initialize the precision matrix, with the inverse
+        empirical covariance or zero matrix.
 
     Returns
     -------
-    X : numpy.array, 2-dimensional
-        Solution to the problem.
+    K : numpy.array, 3-dimensional (T x d x d)
+        Solution to the problem for each time t=1...T .
     history : list
         If return_history, then also a structure that contains the
         objective value, the primal and dual residual norms, and tolerances
@@ -90,15 +104,17 @@ def time_graphical_lasso(
     """
     psi, prox_psi, psi_node_penalty = check_norm_prox(psi)
 
-    n_times, _, n_features = emp_cov.shape
-    covariance_ = emp_cov.copy()
-    covariance_ *= 0.95
-    K = np.empty_like(emp_cov)
-    for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
-        c.flat[::n_features + 1] = e.flat[::n_features + 1]
-        K[i] = linalg.pinvh(c)
+    if init == 'empirical':
+        n_times, _, n_features = emp_cov.shape
+        covariance_ = emp_cov.copy()
+        covariance_ *= 0.95
+        K = np.empty_like(emp_cov)
+        for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
+            c.flat[::n_features + 1] = e.flat[::n_features + 1]
+            K[i] = linalg.pinvh(c)
+    else:
+        K = np.zeros_like(emp_cov)
 
-    # K = np.zeros_like(emp_cov)
     Z_0 = K.copy()  # np.zeros_like(emp_cov)
     Z_1 = K.copy()[:-1]  # np.zeros_like(emp_cov)[:-1]
     Z_2 = K.copy()[1:]  # np.zeros_like(emp_cov)[1:]
@@ -297,7 +313,7 @@ class TimeGraphicalLasso(GraphicalLasso):
         Estimated covariance matrix
 
     precision_ : array-like, shape (n_times, n_features, n_features)
-        Estimated pseudo inverse matrix.
+        Estimated precision matrix.
 
     n_iter_ : int
         Number of iterations run.

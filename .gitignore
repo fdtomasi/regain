@@ -103,4 +103,4 @@ ENV/
 *~
 .magicindex.json
 
-\.vscode/settings\.json
+\.vscode/

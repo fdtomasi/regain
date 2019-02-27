@@ -7,8 +7,8 @@ import numpy as np
 from scipy import linalg
 from six.moves import range
 
-from regain.covariance.graphical_lasso_ import GraphicalLasso, logl
-from regain.norm import l1_od_norm
+from regain.covariance.graphical_lasso_ import GraphicalLasso
+from regain.covariance.graphical_lasso_ import objective as obj_gl
 from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence
@@ -16,24 +16,22 @@ from regain.utils import convergence
 
 def objective(emp_cov, R, K, L, alpha, tau):
     """Objective function for latent graphical lasso."""
-    obj = - logl(emp_cov, R)
-    obj += alpha * l1_od_norm(K)
+    obj = obj_gl(emp_cov, R, K, alpha=alpha)
     obj += tau * np.linalg.norm(L, ord='nuc')
     return obj
 
 
 def latent_graphical_lasso(
-        emp_cov, alpha=1., tau=1., rho=1., max_iter=100,
-        verbose=False, tol=1e-4, rtol=1e-2, return_history=False,
-        return_n_iter=True, mode=None,
-        update_rho_options=None, compute_objective=True):
-    r"""Latent variable graphical lasso solver.
+        emp_cov, alpha=1., tau=1., rho=1., max_iter=100, verbose=False,
+        tol=1e-4, rtol=1e-2, return_history=False, return_n_iter=True,
+        update_rho_options=None, compute_objective=True, init='empirical'):
+    r"""Latent variable graphical lasso solver via ADMM.
 
-    Solves the following problem via ADMM:
+    Solves the following problem:
         min - log_likelihood(S, K-L) + alpha ||K||_{od,1} + tau ||L_i||_*
 
-    where S is the empirical covariance of the data
-    matrix D (training observations by features).
+    where S = (1/n) X^T \times X is the empirical covariance of the data
+    matrix X (training observations by features).
 
     Parameters
     ----------
@@ -55,6 +53,14 @@ def latent_graphical_lasso(
         Return the number of iteration before convergence.
     verbose : bool, default False
         Print info at each iteration.
+    update_rho_options : dict, optional
+        Arguments for the rho update.
+        See regain.update_rules.update_rho function for more information.
+    compute_objective : bool, default True
+        Choose to compute the objective value.
+    init : ('empirical', 'zero')
+        Choose how to initialize the precision matrix, with the inverse
+        empirical covariance or zero matrix.
 
     Returns
     -------
@@ -70,13 +76,16 @@ def latent_graphical_lasso(
         for the primal and dual residual norms at each iteration.
 
     """
-    # _, n_features = emp_cov.shape
-    # covariance_ = emp_cov.copy()
-    # covariance_ *= 0.95
-    # covariance_.flat[::n_features + 1] = emp_cov.flat[::n_features + 1]
-    # K = linalg.pinvh(covariance_)
+    _, n_features = emp_cov.shape
 
-    K = np.zeros_like(emp_cov)
+    if init == 'empirical':
+        covariance_ = emp_cov.copy()
+        covariance_ *= 0.95
+        covariance_.flat[::n_features + 1] = emp_cov.flat[::n_features + 1]
+        K = linalg.pinvh(covariance_)
+    else:
+        K = np.zeros_like(emp_cov)
+
     L = np.zeros_like(emp_cov)
     U = np.zeros_like(emp_cov)
     R_old = np.zeros_like(emp_cov)
@@ -106,24 +115,24 @@ def latent_graphical_lasso(
         rnorm = np.linalg.norm(R - K + L)
         snorm = rho * np.linalg.norm(R - R_old)
         check = convergence(
-            obj=obj, rnorm=rnorm, snorm=snorm,
-            e_pri=np.sqrt(R.size) * tol + rtol * max(
-                np.linalg.norm(R), np.linalg.norm(K - L)),
-            e_dual=np.sqrt(R.size) * tol + rtol * rho * np.linalg.norm(U)
-        )
+            obj=obj, rnorm=rnorm, snorm=snorm, e_pri=np.sqrt(R.size) * tol +
+            rtol * max(np.linalg.norm(R), np.linalg.norm(K - L)),
+            e_dual=np.sqrt(R.size) * tol + rtol * rho * np.linalg.norm(U))
         R_old = R.copy()
 
         if verbose:
-            print("obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                  "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
+            print(
+                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
+                "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
         if check.obj == np.inf:
             break
-        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_,
-                             **(update_rho_options or {}))
+        rho_new = update_rho(
+            rho, rnorm, snorm, iteration=iteration_,
+            **(update_rho_options or {}))
         # scaled dual variables should be also rescaled
         U *= rho / rho_new
         rho = rho_new
@@ -204,13 +213,13 @@ class LatentGraphicalLasso(GraphicalLasso):
 
     """
 
-    def __init__(self, alpha=0.01, tau=1., rho=1., tol=1e-4, rtol=1e-4,
-                 max_iter=100, verbose=False, assume_centered=False,
-                 mode='admm', update_rho_options=None, compute_objective=True):
+    def __init__(
+            self, alpha=0.01, tau=1., rho=1., tol=1e-4, rtol=1e-4,
+            max_iter=100, verbose=False, assume_centered=False, mode='admm',
+            update_rho_options=None, compute_objective=True):
         super(LatentGraphicalLasso, self).__init__(
-            alpha=alpha, rho=rho,
-            tol=tol, rtol=rtol, max_iter=max_iter, verbose=verbose,
-            assume_centered=assume_centered, mode=mode,
+            alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
+            verbose=verbose, assume_centered=assume_centered, mode=mode,
             update_rho_options=update_rho_options,
             compute_objective=compute_objective)
         self.tau = tau
@@ -239,7 +248,7 @@ class LatentGraphicalLasso(GraphicalLasso):
         self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
             latent_graphical_lasso(
                 emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
-                mode=self.mode, tol=self.tol, rtol=self.rtol,
+                tol=self.tol, rtol=self.rtol,
                 max_iter=self.max_iter, verbose=self.verbose,
                 return_n_iter=True, return_history=False,
                 update_rho_options=self.update_rho_options,

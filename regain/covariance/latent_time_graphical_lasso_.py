@@ -23,7 +23,11 @@ def objective(
     """Objective function for latent variable time-varying graphical lasso."""
     # obj = sum(- n * logl(s, r) for s, r, n in zip(S, R, n_samples))
     obj = obj_tgl(n_samples, S, R, Z_0, Z_1, Z_2, alpha, beta, psi)
-    obj += tau * sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
+
+    if isinstance(tau, np.ndarray):
+        obj += sum(np.linalg.norm(t * w, ord='nuc') for t, w in zip(tau, W_0))
+    else:
+        obj += tau * sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
 
     if isinstance(eta, np.ndarray):
         obj += sum(b[0][0] * m for b, m in zip(eta, map(phi, W_2 - W_1)))
@@ -34,19 +38,20 @@ def objective(
 
 def latent_time_graphical_lasso(
         emp_cov, alpha=0.01, tau=1., rho=1., beta=1., eta=1., max_iter=100,
-        verbose=False, psi='laplacian', phi='laplacian', mode='admm', tol=1e-4,
-        rtol=1e-4, assume_centered=False, n_samples=None, return_history=False,
-        return_n_iter=True, update_rho_options=None, compute_objective=True):
-    r"""Time-varying latent variable graphical lasso solver.
+        n_samples=None, verbose=False, psi='laplacian', phi='laplacian',
+        mode='admm', tol=1e-4, rtol=1e-4, return_history=False,
+        return_n_iter=True, update_rho_options=None, compute_objective=True,
+        init='empirical'):
+    r"""Latent variable time-varying graphical lasso solver.
 
     Solves the following problem via ADMM:
-        min sum_{i=1}^T -n_i log_likelihood(K_i-L_i) + alpha ||K_i||_{od,1}
-            + tau ||L_i||_*
-            + beta sum_{i=2}^T Psi(K_i - K_{i-1})
-            + eta sum_{i=2}^T Phi(L_i - L_{i-1})
+      min sum_{i=1}^T -n_i log_likelihood(S_i, K_i-L_i) + alpha ||K_i||_{od,1}
+          + tau ||L_i||_*
+          + beta sum_{i=2}^T Psi(K_i - K_{i-1})
+          + eta sum_{i=2}^T Phi(L_i - L_{i-1})
 
-    where S is the empirical covariance of the data
-    matrix D (training observations by features).
+    where S_i = (1/n_i) X_i^T \times X_i is the empirical covariance of data
+    matrix X (training observations by features).
 
     Parameters
     ----------
@@ -58,12 +63,26 @@ def latent_time_graphical_lasso(
         Augmented Lagrangian parameter.
     max_iter : int, optional
         Maximum number of iterations.
+    n_samples : ndarray
+        Number of samples available for each time point.
     tol : float, optional
         Absolute tolerance for convergence.
     rtol : float, optional
         Relative tolerance for convergence.
     return_history : bool, optional
         Return the history of computed values.
+    return_n_iter : bool, optional
+        Return the number of iteration before convergence.
+    verbose : bool, default False
+        Print info at each iteration.
+    update_rho_options : dict, optional
+        Arguments for the rho update.
+        See regain.update_rules.update_rho function for more information.
+    compute_objective : bool, default True
+        Choose to compute the objective value.
+    init : ('empirical', 'zero')
+        Choose how to initialize the precision matrix, with the inverse
+        empirical covariance or zero matrix.
 
     Returns
     -------
@@ -78,7 +97,17 @@ def latent_time_graphical_lasso(
     psi, prox_psi, psi_node_penalty = check_norm_prox(psi)
     phi, prox_phi, phi_node_penalty = check_norm_prox(phi)
 
-    Z_0 = np.zeros_like(emp_cov)
+    if init == 'empirical':
+        n_times, _, n_features = emp_cov.shape
+        covariance_ = emp_cov.copy()
+        covariance_ *= 0.95
+        Z_0 = np.empty_like(emp_cov)
+        for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
+            c.flat[::n_features + 1] = e.flat[::n_features + 1]
+            Z_0[i] = linalg.pinvh(c)
+    else:
+        Z_0 = np.zeros_like(emp_cov)
+
     Z_1 = np.zeros_like(Z_0)[:-1]
     Z_2 = np.zeros_like(Z_0)[1:]
     W_0 = np.zeros_like(Z_0)
@@ -314,11 +343,8 @@ class LatentTimeGraphicalLasso(TimeGraphicalLasso):
     covariance_ : array-like, shape (n_times, n_features, n_features)
         Estimated covariance matrix
 
-    precision_ : array-like, shape (n_times, n_features, n_features)
-        Estimated pseudo inverse matrix.
-
-    latent_ : array-like, shape (n_times, n_features, n_features)
-        Estimated latent variable matrix.
+    precision_, latent_ : array-like, shape (n_times, n_features, n_features)
+        Estimated precision and latent variables matrix.
 
     n_iter_ : int
         Number of iterations run.
@@ -354,7 +380,7 @@ class LatentTimeGraphicalLasso(TimeGraphicalLasso):
         return self.precision_ - self.latent_
 
     def _fit(self, emp_cov, n_samples):
-        """Fit the LatentTimeGraphLasso model to X.
+        """Fit the LatentTimeGraphicalLasso model to X.
 
         Parameters
         ----------
