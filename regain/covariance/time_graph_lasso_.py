@@ -14,12 +14,14 @@ from six.moves import map, range, zip
 from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_array
+from sklearn.utils import check_X_y
 
 from regain.covariance.graph_lasso_ import GraphLasso, logl
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
-from regain.utils import convergence, error_norm_time
+from regain.utils import convergence, error_norm_time, \
+                            positive_definite, ensure_posdef
 from regain.validation import check_array_dimensions, check_norm_prox
 
 
@@ -34,7 +36,7 @@ def loss(S, K, n_samples=None):
 def objective(n_samples, S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
     """Objective function for time-varying graphical lasso."""
     obj = loss(S, K, n_samples=n_samples)
-    obj += alpha * sum(map(l1_od_norm, Z_0))
+    obj += sum(map(l1_od_norm,  alpha *Z_0))
     obj += beta * sum(map(psi, Z_2 - Z_1))
     return obj
 
@@ -44,7 +46,7 @@ def time_graph_lasso(
         verbose=False, psi='laplacian', tol=1e-4, rtol=1e-4,
         return_history=False, return_n_iter=True, mode='admm',
         update_rho_options=None, compute_objective=True,
-        stop_at=None, stop_when=1e-4):
+        stop_at=None, stop_when=1e-4, warm_start=None):
     """Time-varying graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -86,11 +88,13 @@ def time_graph_lasso(
     n_times, _, n_features = emp_cov.shape
     covariance_ = emp_cov.copy()
     covariance_ *= 0.95
-    K = np.empty_like(emp_cov)
-    for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
-        c.flat[::n_features + 1] = e.flat[::n_features + 1]
-        K[i] = linalg.pinvh(c)
-
+    if warm_start is None:
+        K = np.empty_like(emp_cov)
+        for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
+            c.flat[::n_features + 1] = e.flat[::n_features + 1]
+            K[i] = linalg.pinvh(c)
+    else:
+        K = warm_start
     # K = np.zeros_like(emp_cov)
     Z_0 = K.copy() # np.zeros_like(emp_cov)
     Z_1 = K.copy()[:-1] # np.zeros_like(emp_cov)[:-1]
@@ -169,6 +173,10 @@ def time_graph_lasso(
         obj = objective(
             n_samples, emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi) \
             if compute_objective else np.nan
+
+        if np.isinf(obj):
+            covariance_ = np.array([linalg.pinvh(x) for x in Z_0_old])
+            return Z_0_old, covariance_
 
         check = convergence(
             obj=obj, rnorm=rnorm, snorm=snorm,
@@ -333,59 +341,49 @@ class TimeGraphLasso(GraphLasso):
                 update_rho_options=self.update_rho_options,
                 compute_objective=self.compute_objective,
                 stop_at=self.stop_at, stop_when=self.stop_when)
-        if self.return_history:
+        if len(out) == 2:
+            self.precision_, self.covariance_ = out
+        elif self.return_history:
             self.precision_, self.covariance_, self.history_, self.n_iter_ = out
         else:
             self.precision_, self.covariance_, self.n_iter_ = out
         return self
 
-    def fit(self, X, y=None):
+    def fit(self, X, y):
         """Fit the TimeGraphLasso model to X.
 
         Parameters
         ----------
-        X : ndarray, shape (n_time, n_samples, n_features), or
-                (n_samples, n_features, n_time)
-            Data from which to compute the covariance estimate.
-            If shape is (n_samples, n_features, n_time), then set
-            `time_on_axis = 'last'`.
-        y : (ignored)
+        X : ndarray, shape = (n_samples * n_times, n_dimensions)
+            Data matrix.
+        y : ndarray, shape = (n_times,)
+            Indicate the temporal belonging of each sample.
 
         """
         if sp.issparse(X):
             raise TypeError("sparse matrices not supported.")
 
-        X = check_array_dimensions(
-            X, n_dimensions=3, time_on_axis=self.time_on_axis,
-            suppress_warn_list=self.suppress_warn_list)
+        X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64,
+                         order="C", ensure_min_features=2, estimator=self)
 
-        is_list = isinstance(X, list)
-        # Covariance does not make sense for a single feature
-        X = np.array([check_array(x, ensure_min_features=2,
-                      ensure_min_samples=2, estimator=self) for x in X])
-        if is_list:
-            n_times = len(X)
-            if np.unique([x.shape[1] for x in X]).size != 1:
-                raise ValueError("Input data cannot have different number "
-                                 "of variables.")
-            n_dimensions = X[0].shape[1]
-        else:
-            n_times = X.shape[0]
-            n_dimensions = X.shape[2]
+        n_dimensions = X.shape[1]
+        self.classes_, n_samples = np.unique(y, return_counts=True)
+        n_times = self.classes_.size
 
-        n_samples = np.array([x.shape[0] for x in X])
-
+        # n_samples = np.array([x.shape[0] for x in X])
         if self.assume_centered:
-            self.location_ = np.zeros((n_times, 1, n_dimensions))
+            self.location_ = np.zeros((n_times, n_dimensions))
         else:
-            mean = np.array([x.mean(0) for x in X]) if is_list else X.mean(1)
-            self.location_ = mean.reshape(n_times, 1, n_dimensions)
-        emp_cov = np.array([empirical_covariance(
-            x, assume_centered=self.assume_centered) for x in X])
+            self.location_ = np.array(
+                [X[y == cl].mean(0) for cl in self.classes_])
+
+        emp_cov = np.array([empirical_covariance(X[y == cl],
+                            assume_centered=self.assume_centered)
+                            for cl in self.classes_])
 
         return self._fit(emp_cov, n_samples)
 
-    def score(self, X_test, y=None):
+    def score(self, X, y):
         """Computes the log-likelihood of a Gaussian data set with
         `self.covariance_` as an estimator of its covariance matrix.
 
@@ -406,24 +404,26 @@ class TimeGraphLasso(GraphLasso):
             estimator of its covariance matrix.
 
         """
-        if sp.issparse(X_test):
+        if sp.issparse(X):
             raise TypeError("sparse matrices not supported.")
 
-        X_test = check_array_dimensions(
-            X_test, n_dimensions=3, time_on_axis=self.time_on_axis)
-
-        # Covariance does not make sense for a single feature
-        X_test = np.array([
-            check_array(x, ensure_min_features=2,
-                        ensure_min_samples=2, estimator=self) for x in X_test])
+        X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64,
+                         order="C", ensure_min_features=2, estimator=self)
 
         # compute empirical covariance of the test set
-        test_cov = np.array([empirical_covariance(
-            x, assume_centered=True) for x in X_test - self.location_])
+        emp_cov = np.array([empirical_covariance(
+                                X[y == cl] - self.location_[i],
+                                assume_centered=True)
+                            for i, cl in enumerate(self.classes_)])
 
-        n_samples = np.array([x.shape[0] for x in X_test])
+        n_samples = np.array([X[y == cl].shape[0] for cl in self.classes_])
+        precision = self.get_observed_precision()
+        if not positive_definite(precision):
+            ensure_posdef(precision)
+
+        precision = [precision[i, :, :] for i in range(precision.shape[0])]
         res = sum(n * log_likelihood(S, K) for S, K, n in zip(
-            test_cov, self.get_observed_precision(), n_samples))
+            emp_cov, precision, n_samples))
 
         # ALLA  MATLAB1
         # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]

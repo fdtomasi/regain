@@ -33,7 +33,7 @@ def logl(emp_cov, precision):
 
 def objective(emp_cov, x, z, alpha):
     """Graph lasso objective."""
-    return -logl(emp_cov, x) + alpha * l1_od_norm(z)
+    return -logl(emp_cov, x) + l1_od_norm(alpha * z)
 
 
 def graph_lasso(
@@ -125,7 +125,7 @@ def graph_lasso(
         if verbose:
             print(
                 "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                "eps_pri: %.4f, eps_dual: %.4f" % check)
+                "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:

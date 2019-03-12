@@ -6,14 +6,16 @@ from functools import partial
 
 import numpy as np
 from scipy import linalg
+import scipy.sparse as sp
 from six.moves import map, range, zip
+from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
-
+from sklearn.utils import check_X_y
 from regain.covariance.time_graph_lasso_ import TimeGraphLasso, logl
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
-from regain.utils import convergence
+from regain.utils import convergence, ensure_posdef, positive_definite
 from regain.validation import check_norm_prox
 
 
@@ -352,15 +354,37 @@ class LatentTimeGraphLasso(TimeGraphLasso):
         """
         return self.precision_ - self.latent_
 
-    def _fit(self, emp_cov, n_samples):
-        """Fit the LatentTimeGraphLasso model to X.
+    def fit(self, X, y):
+        """Fit the TimeGraphLasso model to X.
 
         Parameters
         ----------
-        emp_cov : ndarray, shape (n_features, n_features)
-            Empirical covariance of data.
+        X : ndarray, shape = (n_samples * n_times, n_dimensions)
+            Data matrix.
+        y : ndarray, shape = (n_times,)
+            Indicate the temporal belonging of each sample.
 
         """
+        if sp.issparse(X):
+            raise TypeError("sparse matrices not supported.")
+
+        X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64,
+                         order="C", ensure_min_features=2, estimator=self)
+
+        n_dimensions = X.shape[1]
+        self.classes_, n_samples = np.unique(y, return_counts=True)
+        n_times = self.classes_.size
+
+        # n_samples = np.array([x.shape[0] for x in X])
+        if self.assume_centered:
+            self.location_ = np.zeros((n_times, n_dimensions))
+        else:
+            self.location_ = np.array(
+                [X[y == cl].mean(0) for cl in self.classes_])
+
+        emp_cov = np.array([empirical_covariance(X[y == cl],
+                            assume_centered=self.assume_centered)
+                            for cl in self.classes_])
         self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
             latent_time_graph_lasso(
                 emp_cov, n_samples=n_samples,
@@ -372,3 +396,51 @@ class LatentTimeGraphLasso(TimeGraphLasso):
                 update_rho_options=self.update_rho_options,
                 compute_objective=self.compute_objective)
         return self
+
+    def score(self, X, y):
+        """Computes the log-likelihood of a Gaussian data set with
+        `self.covariance_` as an estimator of its covariance matrix.
+
+        Parameters
+        ----------
+        X_test : array-like, shape = [n_samples, n_features]
+            Test data of which we compute the likelihood, where n_samples is
+            the number of samples and n_features is the number of features.
+            X_test is assumed to be drawn from the same distribution than
+            the data used in fit (including centering).
+
+        y : not used, present for API consistence purpose.
+
+        Returns
+        -------
+        res : float
+            The likelihood of the data set with `self.covariance_` as an
+            estimator of its covariance matrix.
+
+        """
+        if sp.issparse(X):
+            raise TypeError("sparse matrices not supported.")
+
+        X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64,
+                         order="C", ensure_min_features=2, estimator=self)
+
+        # compute empirical covariance of the test set
+        emp_cov = np.array([empirical_covariance(
+                                X[y == cl] - self.location_[i],
+                                assume_centered=True)
+                            for i, cl in enumerate(self.classes_)])
+
+        n_samples = np.array([X[y == cl].shape[0] for cl in self.classes_])
+        precision = self.get_observed_precision()
+        if not positive_definite(precision):
+            ensure_posdef(precision)
+
+        precision = [precision[i, :, :] for i in range(precision.shape[0])]
+        res = sum(n * log_likelihood(S, K) for S, K, n in zip(
+            emp_cov, precision, n_samples))
+
+        # ALLA  MATLAB1
+        # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
+        # scores_ranks = np.square(ranks-np.sqrt(L.shape[1]))
+
+        return res  # - np.sum(scores_ranks)

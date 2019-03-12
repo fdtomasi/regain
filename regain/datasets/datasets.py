@@ -8,6 +8,7 @@ import numpy as np
 from scipy import signal
 from scipy.spatial.distance import squareform
 from sklearn.datasets.base import Bunch
+from scipy.linalg import pinv
 from sklearn.utils import deprecated
 
 from regain.utils import is_pos_def, is_pos_semidef, positive_definite
@@ -70,7 +71,7 @@ def make_dataset(n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10,
         yuan=generate_dataset_yuan,
         l1l2=generate_dataset_l1l2,
         norm=make_l2l2_norm, l1l1=generate_dataset_l1l1,
-
+        rbf=make_RBF,
         # the previous are deprecated
         sin=make_sin,
         fixed_sparsity=make_fixed_sparsity, sincos=make_sin_cos,
@@ -190,7 +191,8 @@ def update_theta_l1(theta_init, no, n_dim_obs):
         rows = np.random.randint(0, n_dim_obs, no)
         cols = np.random.randint(0, n_dim_obs, no)
     for r, c in zip(rows, cols):
-        theta[r, c] = np.random.choice([0.12, 0, 0]) if theta[r, c] == 0 else .06  # np.random.rand(1) * .35
+        theta[r, c] = (np.random.choice([0.12, 0, 0]) if theta[r, c] == 0
+                       else .06)
         theta[c, r] = theta[r, c]
     assert(is_pos_def(theta))
     return theta
@@ -565,3 +567,56 @@ def make_ma_xue_zou_rand_k(
     N = 5 * po
     print("Note that, with this method, the n_samples should be %d" % N)
     return [K_O] * T, [K_O_tilde] * T, [L] * T
+
+
+def make_RBF(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
+    from regain.bayesian.gaussian_process_ import sample as samplegp
+    from scipy.spatial.distance import squareform
+    from sklearn.gaussian_process import kernels
+
+    length_scale = kwargs.get('length_scale', 1.0)
+    length_scale_bounds = kwargs.get('length_scale_bounds', (1e-05, 100000.0))
+    epsilon = kwargs.get('epsilon', 0.8)
+    sparse = kwargs.get('sparse', True)
+    temporal_kernel = kernels.RBF(
+        length_scale=length_scale, length_scale_bounds=length_scale_bounds)(
+            np.arange(T)[:, None])
+
+    n = n_dim_obs + n_dim_lat
+    u = samplegp(temporal_kernel, p=n * (n - 1) // 2)[0]
+    K = []
+    for i, uu in enumerate(u.T):
+        theta = squareform(uu)
+        if sparse:
+            theta_obs = theta[n_dim_lat:, n_dim_lat:]
+            theta_lat = theta[:n_dim_lat, :n_dim_lat]
+            theta_OH = theta[n_dim_lat:, :n_dim_lat]
+
+            # sparsify
+            theta_obs[np.abs(theta_obs) < epsilon] = 0
+            theta_lat[np.abs(theta_lat) < epsilon/3] = 0
+            theta_OH[np.abs(theta_OH) < epsilon/3] = 0
+            theta[n_dim_lat:, n_dim_lat:] = theta_obs
+            theta[:n_dim_lat, :n_dim_lat] = theta_lat
+            theta[n_dim_lat:, :n_dim_lat] = theta_OH
+            theta[:n_dim_lat, n_dim_lat:] = theta_OH.T
+        if i == 0:
+            inter_links = theta[n_dim_lat:, :n_dim_lat]
+        theta[n_dim_lat:, :n_dim_lat] = inter_links
+        theta[:n_dim_lat, n_dim_lat:] = inter_links.T
+        theta += np.diag(np.sum(np.abs(theta), axis=1) + 0.01)
+        K.append(theta)
+
+        assert (is_pos_def(theta))
+
+    thetas = np.array(K)
+
+    theta_obs = []
+    ells = []
+    for t in thetas:
+        L = theta[n_dim_lat:, :n_dim_lat].dot(
+            pinv(t[:n_dim_lat, :n_dim_lat])).dot(
+            theta[:n_dim_lat, n_dim_lat:])
+        theta_obs.append(t[n_dim_lat:, n_dim_lat:] - L)
+        ells.append(L)
+    return thetas, theta_obs, ells
