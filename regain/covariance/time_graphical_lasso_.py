@@ -12,24 +12,14 @@ from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
-<<<<<<< HEAD:regain/covariance/time_graph_lasso_.py
-from sklearn.utils.validation import check_array
-from sklearn.utils import check_X_y
-=======
->>>>>>> master:regain/covariance/time_graphical_lasso_.py
+
 
 from regain.covariance.graphical_lasso_ import GraphicalLasso, logl
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
-<<<<<<< HEAD:regain/covariance/time_graph_lasso_.py
-from regain.utils import convergence, error_norm_time, \
-                            positive_definite, ensure_posdef
-from regain.validation import check_array_dimensions, check_norm_prox
-=======
 from regain.utils import convergence, error_norm_time
 from regain.validation import check_input, check_norm_prox
->>>>>>> master:regain/covariance/time_graphical_lasso_.py
 
 
 def loss(S, K, n_samples=None):
@@ -44,10 +34,6 @@ def loss(S, K, n_samples=None):
 def objective(n_samples, S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
     """Objective function for time-varying graphical lasso."""
     obj = loss(S, K, n_samples=n_samples)
-<<<<<<< HEAD:regain/covariance/time_graph_lasso_.py
-    obj += sum(map(l1_od_norm,  alpha *Z_0))
-    obj += beta * sum(map(psi, Z_2 - Z_1))
-=======
 
     if isinstance(alpha, np.ndarray):
         obj += sum(l1_od_norm(a * z) for a, z in zip(alpha, Z_0))
@@ -58,7 +44,7 @@ def objective(n_samples, S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
         obj += sum(b[0][0] * m for b, m in zip(beta, map(psi, Z_2 - Z_1)))
     else:
         obj += beta * sum(map(psi, Z_2 - Z_1))
->>>>>>> master:regain/covariance/time_graphical_lasso_.py
+
     return obj
 
 
@@ -66,13 +52,7 @@ def time_graphical_lasso(
         emp_cov, alpha=0.01, rho=1, beta=1, max_iter=100, n_samples=None,
         verbose=False, psi='laplacian', tol=1e-4, rtol=1e-4,
         return_history=False, return_n_iter=True, mode='admm',
-<<<<<<< HEAD:regain/covariance/time_graph_lasso_.py
-        update_rho_options=None, compute_objective=True,
-        stop_at=None, stop_when=1e-4, warm_start=None):
-=======
-        update_rho_options=None, compute_objective=True, stop_at=None,
-        stop_when=1e-4, init='empirical'):
->>>>>>> master:regain/covariance/time_graphical_lasso_.py
+        init='empirical'):
     """Time-varying graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -109,9 +89,9 @@ def time_graphical_lasso(
         See regain.update_rules.update_rho function for more information.
     compute_objective : bool, default True
         Choose to compute the objective value.
-    init : ('empirical', 'zero')
+    init : ('empirical', 'zero', np.darray)
         Choose how to initialize the precision matrix, with the inverse
-        empirical covariance or zero matrix.
+        empirical covariance, zero matrix or precomputed.
 
     Returns
     -------
@@ -125,38 +105,22 @@ def time_graphical_lasso(
     """
     psi, prox_psi, psi_node_penalty = check_norm_prox(psi)
 
-<<<<<<< HEAD:regain/covariance/time_graph_lasso_.py
-    n_times, _, n_features = emp_cov.shape
-    covariance_ = emp_cov.copy()
-    covariance_ *= 0.95
-    if warm_start is None:
-=======
     if init == 'empirical':
         n_times, _, n_features = emp_cov.shape
         covariance_ = emp_cov.copy()
         covariance_ *= 0.95
->>>>>>> master:regain/covariance/time_graphical_lasso_.py
         K = np.empty_like(emp_cov)
         for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
             c.flat[::n_features + 1] = e.flat[::n_features + 1]
             K[i] = linalg.pinvh(c)
-    else:
-<<<<<<< HEAD:regain/covariance/time_graph_lasso_.py
-        K = warm_start
-    # K = np.zeros_like(emp_cov)
-    Z_0 = K.copy() # np.zeros_like(emp_cov)
-    Z_1 = K.copy()[:-1] # np.zeros_like(emp_cov)[:-1]
-    Z_2 = K.copy()[1:] # np.zeros_like(emp_cov)[1:]
-=======
+    elif init == 'zero':
         K = np.zeros_like(emp_cov)
+    else:  # TODO controllo che sia un array
+        K = check_array(init)
 
     Z_0 = K.copy()  # np.zeros_like(emp_cov)
     Z_1 = K.copy()[:-1]  # np.zeros_like(emp_cov)[:-1]
     Z_2 = K.copy()[1:]  # np.zeros_like(emp_cov)[1:]
->>>>>>> master:regain/covariance/time_graphical_lasso_.py
-    # Z_0 = K.copy()
-    # Z_1 = K.copy()[:-1]
-    # Z_2 = K.copy()[1:]
 
     U_0 = np.zeros_like(Z_0)
     U_1 = np.zeros_like(Z_1)
@@ -400,20 +364,7 @@ class TimeGraphicalLasso(GraphicalLasso):
             Empirical covariance of data.
 
         """
-<<<<<<< HEAD:regain/covariance/time_graph_lasso_.py
-        out = time_graph_lasso(
-                emp_cov, alpha=self.alpha, rho=self.rho,
-                beta=self.beta, mode=self.mode, n_samples=n_samples,
-                tol=self.tol, rtol=self.rtol, psi=self.psi,
-                max_iter=self.max_iter, verbose=self.verbose,
-                return_n_iter=True, return_history=self.return_history,
-                update_rho_options=self.update_rho_options,
-                compute_objective=self.compute_objective,
-                stop_at=self.stop_at, stop_when=self.stop_when)
-        if len(out) == 2:
-            self.precision_, self.covariance_ = out
-        elif self.return_history:
-=======
+
         out = time_graphical_lasso(
             emp_cov, alpha=self.alpha, rho=self.rho, beta=self.beta,
             mode=self.mode, n_samples=n_samples, tol=self.tol, rtol=self.rtol,
@@ -423,19 +374,14 @@ class TimeGraphicalLasso(GraphicalLasso):
             compute_objective=self.compute_objective, stop_at=self.stop_at,
             stop_when=self.stop_when)
         if self.return_history:
->>>>>>> master:regain/covariance/time_graphical_lasso_.py
             self.precision_, self.covariance_, self.history_, self.n_iter_ = out
         else:
             self.precision_, self.covariance_, self.n_iter_ = out
         return self
 
-<<<<<<< HEAD:regain/covariance/time_graph_lasso_.py
-    def fit(self, X, y):
-        """Fit the TimeGraphLasso model to X.
-=======
+
     def fit(self, X, y=None):
         """Fit the TimeGraphicalLasso model to X.
->>>>>>> master:regain/covariance/time_graphical_lasso_.py
 
         Parameters
         ----------
@@ -445,35 +391,15 @@ class TimeGraphicalLasso(GraphicalLasso):
             Indicate the temporal belonging of each sample.
 
         """
-<<<<<<< HEAD:regain/covariance/time_graph_lasso_.py
-        if sp.issparse(X):
-            raise TypeError("sparse matrices not supported.")
-
-        X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64,
-                         order="C", ensure_min_features=2, estimator=self)
-
-        n_dimensions = X.shape[1]
-        self.classes_, n_samples = np.unique(y, return_counts=True)
-        n_times = self.classes_.size
-=======
         is_list = isinstance(X, list)
         X, n_samples, n_dimensions, n_times = check_input(
             X, y=None, time_on_axis=self.time_on_axis,
             suppress_warn_list=self.suppress_warn_list, estimator=self)
->>>>>>> master:regain/covariance/time_graphical_lasso_.py
 
         # n_samples = np.array([x.shape[0] for x in X])
         if self.assume_centered:
             self.location_ = np.zeros((n_times, n_dimensions))
         else:
-<<<<<<< HEAD:regain/covariance/time_graph_lasso_.py
-            self.location_ = np.array(
-                [X[y == cl].mean(0) for cl in self.classes_])
-
-        emp_cov = np.array([empirical_covariance(X[y == cl],
-                            assume_centered=self.assume_centered)
-                            for cl in self.classes_])
-=======
             mean = np.array([x.mean(0) for x in X]) if is_list else X.mean(1)
             self.location_ = mean.reshape(n_times, 1, n_dimensions)
         emp_cov = np.array(
@@ -481,7 +407,6 @@ class TimeGraphicalLasso(GraphicalLasso):
                 empirical_covariance(x, assume_centered=self.assume_centered)
                 for x in X
             ])
->>>>>>> master:regain/covariance/time_graphical_lasso_.py
 
         return self._fit(emp_cov, n_samples)
 
@@ -506,28 +431,6 @@ class TimeGraphicalLasso(GraphicalLasso):
             estimator of its covariance matrix.
 
         """
-<<<<<<< HEAD:regain/covariance/time_graph_lasso_.py
-        if sp.issparse(X):
-            raise TypeError("sparse matrices not supported.")
-
-        X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64,
-                         order="C", ensure_min_features=2, estimator=self)
-
-        # compute empirical covariance of the test set
-        emp_cov = np.array([empirical_covariance(
-                                X[y == cl] - self.location_[i],
-                                assume_centered=True)
-                            for i, cl in enumerate(self.classes_)])
-
-        n_samples = np.array([X[y == cl].shape[0] for cl in self.classes_])
-        precision = self.get_observed_precision()
-        if not positive_definite(precision):
-            ensure_posdef(precision)
-
-        precision = [precision[i, :, :] for i in range(precision.shape[0])]
-        res = sum(n * log_likelihood(S, K) for S, K, n in zip(
-            emp_cov, precision, n_samples))
-=======
         X_test, n_samples, _, _ = check_input(
             X_test, y=None, time_on_axis=self.time_on_axis,
             suppress_warn_list=self.suppress_warn_list, estimator=self)
@@ -542,11 +445,6 @@ class TimeGraphicalLasso(GraphicalLasso):
         logp = sum(
             n * log_likelihood(S, K) for S, K, n in zip(
                 test_cov, self.get_observed_precision(), n_samples))
->>>>>>> master:regain/covariance/time_graphical_lasso_.py
-
-        # ALLA  MATLAB1
-        # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
-        # scores_ranks = np.square(ranks-np.sqrt(L.shape[1]))
 
         return logp  # - np.sum(scores_ranks)
 

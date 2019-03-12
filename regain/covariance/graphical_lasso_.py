@@ -33,13 +33,7 @@ def logl(emp_cov, precision):
 
 
 def objective(emp_cov, x, z, alpha):
-<<<<<<< HEAD:regain/covariance/graph_lasso_.py
-    """Graph lasso objective."""
     return -logl(emp_cov, x) + l1_od_norm(alpha * z)
-=======
-    """Graphical lasso objective."""
-    return -logl(emp_cov, x) + alpha * l1_od_norm(z)
->>>>>>> master:regain/covariance/graphical_lasso_.py
 
 
 def graphical_lasso(

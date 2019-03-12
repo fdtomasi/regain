@@ -212,14 +212,9 @@ def update_theta_l1(theta_init, no, n_dim_obs):
         rows = np.random.randint(0, n_dim_obs, no)
         cols = np.random.randint(0, n_dim_obs, no)
     for r, c in zip(rows, cols):
-<<<<<<< HEAD:regain/datasets/datasets.py
-        theta[r, c] = (np.random.choice([0.12, 0, 0]) if theta[r, c] == 0
-                       else .06)
-=======
         theta[r, c] = np.random.choice([
             0.12, 0, 0
         ]) if theta[r, c] == 0 else .06  # np.random.rand(1) * .35
->>>>>>> master:regain/datasets.py
         theta[c, r] = theta[r, c]
     assert (is_pos_def(theta))
     return theta

@@ -10,15 +10,10 @@ import scipy.sparse as sp
 from six.moves import map, range, zip
 from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
-<<<<<<< HEAD:regain/covariance/latent_time_graph_lasso_.py
 from sklearn.utils import check_X_y
-from regain.covariance.time_graph_lasso_ import TimeGraphLasso, logl
-from regain.norm import l1_od_norm
-=======
 
 from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso
 from regain.covariance.time_graphical_lasso_ import objective as obj_tgl
->>>>>>> master:regain/covariance/latent_time_graphical_lasso_.py
 from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence, ensure_posdef, positive_definite
@@ -387,13 +382,8 @@ class LatentTimeGraphicalLasso(TimeGraphicalLasso):
         """
         return self.precision_ - self.latent_
 
-<<<<<<< HEAD:regain/covariance/latent_time_graph_lasso_.py
     def fit(self, X, y):
-        """Fit the TimeGraphLasso model to X.
-=======
-    def _fit(self, emp_cov, n_samples):
         """Fit the LatentTimeGraphicalLasso model to X.
->>>>>>> master:regain/covariance/latent_time_graphical_lasso_.py
 
         Parameters
         ----------
