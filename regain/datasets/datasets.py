@@ -71,14 +71,8 @@ def make_dataset(
         fixedl1=make_l1,
         yuan=generate_dataset_yuan,
         l1l2=generate_dataset_l1l2,
-<<<<<<< HEAD:regain/datasets/datasets.py
-        norm=make_l2l2_norm, l1l1=generate_dataset_l1l1,
-        rbf=make_RBF,
-=======
         norm=make_l2l2_norm,
         l1l1=generate_dataset_l1l1,
-
->>>>>>> master:regain/datasets.py
         # the previous are deprecated
         sin=make_sin,
         fixed_sparsity=make_fixed_sparsity,
