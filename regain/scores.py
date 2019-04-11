@@ -26,7 +26,7 @@ def EBIC_m(emp_cov, precision, n=100, epsilon=0.5):
     of_nonzero = np.sum(precision != 0) - precision.shape[0]
     p = precision.shape[0]
     penalty = np.log(n)/n*of_nonzero + \
-        4 * epsilon * np.log(p(p-1)/2)/n * of_nonzero
+        4 * epsilon * np.log(p*(p-1)/2)/n * of_nonzero
     return likelihood - penalty
 
 
