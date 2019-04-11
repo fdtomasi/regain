@@ -110,7 +110,8 @@ def group_lasso(A, b, lamda=1.0, groups=None, rho=1.0, alpha=1.0, max_iter=1000,
         hist.append(history)
         if history[1] < history[3] and history[2] < history[4]:
             break
-
+    print(len(z))
+    print(z.shape)
     return z, history if return_history else z
 
 
