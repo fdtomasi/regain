@@ -10,9 +10,12 @@ from regain.prox import soft_thresholding
 
 
 def objective(X, theta, n, r, selector, alpha):
-    XXT = X[:, r].T.dot(X[:, selector]).dot(theta)
-    TXXT = theta.T.dot(X[:, selector].T).dot(X[:, selector]).dot(theta)
-    return -(1/n)*XXT + (1/(2*n)) * TXXT + alpha * np.linalg.norm(theta, 1)
+    objective = 0
+    for i in range(X.shape[0]):
+        XXT = X[i, r] * X[i, selector].dot(theta)
+        XT = X[i, selector].dot(theta)
+        objective += XXT - XT
+    return - (1/n) * objective + alpha*np.linalg.norm(theta, 1)
 
 
 def fit_each_variable(X, ix, alpha=1e-2, gamma=1e-3, tol=1e-3,
@@ -24,9 +27,13 @@ def fit_each_variable(X, ix, alpha=1e-2, gamma=1e-3, tol=1e-3,
     selector = [i for i in range(d) if i != ix]
 
     def gradient(X, theta, r, selector, n):
-        XX = X[:, r].T.dot(X[:, selector])
-        XXT = X[:, selector].T.dot(X[:, selector]).dot(theta)
-        return - (1/n) * XX + (1/n) * XXT
+        sum_ = 0
+        for i in range(X.shape[0]):
+            XT = X[i, selector].dot(theta)
+            EXT = np.exp(XT)
+            E_XT = np.exp(-XT)
+            sum_ += X[i, selector]*((EXT - E_XT)/(EXT + E_XT) - X[i, r])
+        return (1/n)*sum_
 
     thetas = [theta]
     checks = []
@@ -47,7 +54,7 @@ def fit_each_variable(X, ix, alpha=1e-2, gamma=1e-3, tol=1e-3,
             print('Iter: %d, objective: %.4f, iter_norm %.4f' %
                   (check[0], check[1], check[2]))
 
-        if check[-2] < tol:
+        if np.abs(check[2]) < tol:
             break
 
     return_list = [thetas[-1]]
@@ -60,16 +67,19 @@ def fit_each_variable(X, ix, alpha=1e-2, gamma=1e-3, tol=1e-3,
     return return_list
 
 
-class Gaussian_GLM_GM(GLM_GM):
+class Ising_GLM_GM(GLM_GM):
 
     def __init__(self, alpha=0.01, tol=1e-4, rtol=1e-4, max_iter=100,
                  verbose=False, return_history=True, return_n_iter=False,
                  compute_objective=True):
-        super(Gaussian_GLM_GM, self).__init__(
+        super(Ising_GLM_GM, self).__init__(
             alpha, tol, rtol, max_iter, verbose, return_history, return_n_iter,
             compute_objective)
 
-    def fit(self, X, y=None, gamma=1e-3):
+    def get_precision(self):
+        return self.precision_
+
+    def fit(self, X, y=None, gamma=0.1):
         """
         X : ndarray, shape = (n_samples * n_times, n_dimensions)
             Data matrix.
@@ -81,7 +91,8 @@ class Gaussian_GLM_GM(GLM_GM):
         thetas_pred = []
         historys = []
         for ix in range(X.shape[1]):
-            res = fit_each_variable(X, ix, self.alpha)
+            # TODO: livello di verbosita'
+            res = fit_each_variable(X, ix, self.alpha, gamma=gamma, verbose=0)
             thetas_pred.append(res[0])
             historys.append(res[1:])
         self.precision_ = build_adjacency_matrix(thetas_pred)

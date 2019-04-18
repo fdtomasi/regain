@@ -3,6 +3,7 @@ import numpy as np
 
 from abc import ABC, abstractmethod
 
+from sklearn.base import BaseEstimator
 from regain.utils import namedtuple_with_defaults
 
 convergence = namedtuple_with_defaults(
@@ -17,7 +18,7 @@ def build_adjacency_matrix(neighbours):
     return (out+out.T)/2
 
 
-class GLM_GM(ABC):
+class GLM_GM(ABC, BaseEstimator):
 
     def __init__(self, alpha=0.01, tol=1e-4, rtol=1e-4, max_iter=100,
                  verbose=False, return_history=True, return_n_iter=False,

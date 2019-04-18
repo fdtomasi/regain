@@ -20,7 +20,7 @@ def fit_each_variable(X, ix, alpha=1e-2, gamma=1e-3, tol=1e-3,
                       return_history=True, compute_objective=True,
                       return_n_iter=False, adjust_gamma=False):
     n, d = X.shape
-    theta = np.zeros(d-1)
+    theta = np.zeros(d-1)+1e-15
     selector = [i for i in range(d) if i != ix]
 
     def gradient(X, theta, r, selector, n):
@@ -68,6 +68,9 @@ class Gaussian_GLM_GM(GLM_GM):
         super(Gaussian_GLM_GM, self).__init__(
             alpha, tol, rtol, max_iter, verbose, return_history, return_n_iter,
             compute_objective)
+
+    def get_precision(self):
+        return self.precision_
 
     def fit(self, X, y=None, gamma=1e-3):
         """
