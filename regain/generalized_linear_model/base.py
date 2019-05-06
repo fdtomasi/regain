@@ -10,12 +10,24 @@ convergence = namedtuple_with_defaults(
     'convergence', 'iter obj iter_norm iter_r_norm')
 
 
-def build_adjacency_matrix(neighbours):
+def build_adjacency_matrix(neighbours, how='union'):
     out = np.eye(len(neighbours))
-    for i, arr in enumerate(neighbours):
-        where = [j for j in range(len(neighbours)) if j != i]
-        out[i, where] = arr
-    return (out+out.T)/2
+    if how.lower() == 'union':
+        for i, arr in enumerate(neighbours):
+            where = [j for j in range(len(neighbours)) if j != i]
+            out[i, where] = arr
+            out = (out+out.T)/2
+    elif how.lower() == 'intersection':
+        for i, arr in enumerate(neighbours):
+            where = [j for j in range(len(neighbours)) if j != i]
+            out[i, where] = arr
+        binarized = (out.copy() != 0).astype(int)
+        binarized = (binarized + binarized.T)/2
+        binarized[np.where(binarized < 1)] = 0
+        out = (out+out.T)/2
+        out[np.where(binarized == 0)] = 0
+        assert np.all(out == out.T)
+    return out
 
 
 class GLM_GM(ABC, BaseEstimator):

@@ -127,7 +127,7 @@ def make_ell(n_dim_obs=100, n_dim_lat=10):
 
     K_HO /= np.sum(K_HO, axis=1)[:, None] / 2.
     L = K_HO.T.dot(K_HO)
-    print("{}%".format(np.nonzero(L)[0].size / L.size))
+    #print("{}%".format(np.nonzero(L)[0].size / L.size))
     assert (is_pos_semidef(L))
     assert np.linalg.matrix_rank(L) == n_dim_lat
     # from sklearn.datasets import make_low_rank_matrix

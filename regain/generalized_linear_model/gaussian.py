@@ -62,13 +62,14 @@ def fit_each_variable(X, ix, alpha=1e-2, gamma=1e-3, tol=1e-3,
 
 class Gaussian_GLM_GM(GLM_GM):
 
-    def __init__(self, alpha=0.01, tol=1e-4, rtol=1e-4, max_iter=100,
+    def __init__(self, alpha=0.01, tol=1e-4, rtol=1e-4, reconstruction='union',
+                 max_iter=100,
                  verbose=False, return_history=True, return_n_iter=False,
                  compute_objective=True):
         super(Gaussian_GLM_GM, self).__init__(
             alpha, tol, rtol, max_iter, verbose, return_history, return_n_iter,
             compute_objective)
-
+        self.reconstruction = reconstruction
     def get_precision(self):
         return self.precision_
 
@@ -87,6 +88,6 @@ class Gaussian_GLM_GM(GLM_GM):
             res = fit_each_variable(X, ix, self.alpha)
             thetas_pred.append(res[0])
             historys.append(res[1:])
-        self.precision_ = build_adjacency_matrix(thetas_pred)
+        self.precision_ = build_adjacency_matrix(thetas_pred, how=self.reconstruction)
         self.history = historys
         return self
