@@ -294,7 +294,7 @@ def kernel_latent_time_graphical_lasso(
     return return_list
 
 
-class KernelLatentTimeGraphicalLasso_(LatentTimeGraphLasso):
+class KernelLatentTimeGraphicalLasso_(LatentTimeGraphicalLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Parameters
@@ -388,7 +388,7 @@ class KernelLatentTimeGraphicalLasso_(LatentTimeGraphLasso):
         self.kernel_phi = kernel_phi
 
     def _fit(self, emp_cov, n_samples):
-        """Fit the LatentTimeGraphLasso model to X.
+        """Fit the LatentTimeGraphicalLasso model to X.
 
         Parameters
         ----------
@@ -411,7 +411,7 @@ class KernelLatentTimeGraphicalLasso_(LatentTimeGraphLasso):
 
 
 class KernelLatentTimeGraphicalLasso(KernelTimeGraphicalLasso):
-    """As KernelLatentTimeGraphLasso, but X is 2d and y specifies time.
+    """As KernelLatentTimeGraphicalLasso, but X is 2d and y specifies time.
 
     Parameters
     ----------

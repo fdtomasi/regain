@@ -242,7 +242,7 @@ def kernel_time_graphical_lasso(
     return return_list
 
 
-class KernelTimeGraphLasso_(TimeGraphLasso):
+class KernelTimeGraphicalLasso_(TimeGraphicalLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Parameters
@@ -317,7 +317,7 @@ class KernelTimeGraphLasso_(TimeGraphLasso):
             return_history=False, update_rho_options=None,
             compute_objective=True, stop_at=None, stop_when=1e-4,
             suppress_warn_list=False):
-        super(KernelTimeGraphLasso_, self).__init__(
+        super(KernelTimeGraphicalLasso_, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered, mode=mode,
             update_rho_options=update_rho_options,
@@ -328,7 +328,7 @@ class KernelTimeGraphLasso_(TimeGraphLasso):
         self.kernel = kernel
 
     def _fit(self, emp_cov, n_samples):
-        """Fit the TimeGraphLasso model to X.
+        """Fit the TimeGraphicalLasso model to X.
 
         Parameters
         ----------
@@ -351,8 +351,8 @@ class KernelTimeGraphLasso_(TimeGraphLasso):
         return self
 
 
-class KernelTimeGraphicalLasso(TimeGraphLasso):
-    """As KernelTimeGraphLasso, but X is 2d and y specifies time.
+class KernelTimeGraphicalLasso(TimeGraphicalLasso):
+    """As KernelTimeGraphicalLasso, but X is 2d and y specifies time.
 
     Parameters
     ----------
@@ -466,7 +466,7 @@ class KernelTimeGraphicalLasso(TimeGraphLasso):
         return self
 
     def fit(self, X, y):
-        """Fit the KernelTimeGraphLasso model to X.
+        """Fit the KernelTimeGraphicalLasso model to X.
 
         Parameters
         ----------

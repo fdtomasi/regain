@@ -221,7 +221,7 @@ def latent_time_matrix_decomposition(
     return return_list
 
 
-class LatentTimeMatrixDecomposition(LatentTimeGraphLasso):
+class LatentTimeMatrixDecomposition(LatentTimeGraphicalLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Parameters
