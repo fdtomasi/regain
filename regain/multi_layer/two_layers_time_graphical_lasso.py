@@ -7,9 +7,8 @@ from functools import partial
 from sklearn.utils import check_random_state
 from sklearn.covariance import empirical_covariance
 from sklearn.utils import check_X_y
-from regain.covariance.time_graph_lasso_ import TimeGraphLasso \
-                                        as TimeGraphicalLasso
-from regain.covariance.time_graph_lasso_ import time_graph_lasso, loss
+from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso
+from regain.covariance.time_graphical_lasso_ import time_graphical_lasso, loss
 from regain.multi_layer.two_layers_graphical_lasso import \
                                         TwoLayersGraphicalLasso
 from regain.scores import log_likelihood_t, BIC_t, EBIC_t, EBIC_m_t
@@ -85,7 +84,7 @@ def two_layers_time_graphical_lasso(
         Ss = np.array(Ss_)
 
         # maximization step
-        res = time_graph_lasso(
+        res = time_graphical_lasso(
                 Ss, alpha=regularizer, rho=rho, beta=beta, max_iter=max_iter,
                 n_samples=n_samples,
                 verbose=int(max(verbose-1, 0)), psi=psi, tol=1e-3, rtol=rtol,

@@ -13,8 +13,8 @@ from sklearn.model_selection import check_cv
 from sklearn.utils import Parallel, delayed
 from sklearn.exceptions import ConvergenceWarning
 
-from regain.covariance import GraphLasso as GraphicalLasso
-from regain.covariance.graph_lasso_ import graph_lasso
+from regain.covariance import  GraphicalLasso
+from regain.covariance.graphical_lasso_ import graphical_lasso
 from regain.scores import log_likelihood, BIC, EBIC, EBIC_m
 from regain.utils import convergence
 
@@ -176,7 +176,7 @@ def two_layers_graphical_lasso(emp_cov, M, lambda_, mu_, eta_=0, rho=1,
         penalized_nll = _penalized_nll(K, S, regularizer)
 
         # maximization step
-        K, _ = graph_lasso(S, alpha=regularizer, rho=rho, return_n_iter=False,
+        K, _ = graphical_lasso(S, alpha=regularizer, rho=rho, return_n_iter=False,
                            max_iter=max_iter_graph_lasso,
                            verbose=int(max(verbose-1, 0)))
 
