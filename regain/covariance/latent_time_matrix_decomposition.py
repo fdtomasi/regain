@@ -10,7 +10,7 @@ from six.moves import map, range, zip
 from sklearn.utils import check_array
 from sklearn.utils.extmath import squared_norm
 
-from regain.covariance.latent_time_graph_lasso_ import LatentTimeGraphLasso
+from regain.covariance.latent_time_graphical_lasso_ import LatentTimeGraphicalLasso
 from regain.norm import l1_od_norm
 from regain.prox import prox_trace_indicator
 from regain.prox import soft_thresholding_sign as soft_thresholding

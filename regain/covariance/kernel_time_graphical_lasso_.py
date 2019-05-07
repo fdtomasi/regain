@@ -14,7 +14,7 @@ from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_X_y
 
-from regain.covariance.time_graph_lasso_ import TimeGraphLasso, loss
+from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso, loss
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho

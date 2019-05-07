@@ -13,7 +13,7 @@ from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.utils.extmath import squared_norm
 
-from regain.covariance.latent_time_graph_lasso_ import LatentTimeGraphLasso
+from regain.covariance.latent_time_graphical_lasso_ import LatentTimeGraphicalLasso
 from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence
