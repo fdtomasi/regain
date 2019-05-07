@@ -10,9 +10,9 @@ from setuptools import setup, find_packages
 # import numpy as np
 
 # Package Version
-from regain import __version__ as version
+from regainpr import __version__ as version
 setup(
-    name='regain',
+    name='regainpr',
     version=version,
 
     description=('REGAIN (Regularised Graph Inference)'),
@@ -22,8 +22,8 @@ setup(
     author_email='federico.tomasi@dibris.unige.it',
     maintainer='Federico Tomasi',
     maintainer_email='federico.tomasi@dibris.unige.it',
-    url='https://github.com/fdtomasi/regain',
-    download_url='https://github.com/fdtomasi/regain/archive/'
+    url='https://github.com/fdtomasi/regain-private',
+    download_url='https://github.com/fdtomasi/regain-private/archive/'
                  'v%s.tar.gz' % version,
     keywords=['graph inference', 'latent variables'],
     classifiers=[

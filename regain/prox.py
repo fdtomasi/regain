@@ -63,8 +63,14 @@ def blockwise_soft_thresholding(a, lamda):
     """Proximal operator for l2 norm."""
     if a.ndim > 2:
         out = np.empty_like(a, dtype=float)
+        if not isinstance(lamda, collections.Iterable):
+            lamda = np.repeat(lamda, a.shape[0])
+        else:
+            lamda = lamda.ravel()
+            assert lamda.shape[0] == a.shape[0]
+
         for t in range(a.shape[0]):
-            out[t] = _blockwise_soft_thresholding_2d(a[t], lamda)
+            out[t] = _blockwise_soft_thresholding_2d(a[t], lamda[t])
     else:
         out = _blockwise_soft_thresholding_2d(a, lamda)
     return out
@@ -75,15 +81,25 @@ def blockwise_soft_thresholding_symmetric(a, lamda):
     col_norms = np.linalg.norm(a, axis=1)
     ones_vect = np.ones(a.shape[1])
 
-    if a.ndim == 2:
-        return np.dot(
+    if a.ndim > 2:
+        out = np.empty_like(a, dtype=float)
+        if not isinstance(lamda, collections.Iterable):
+            lamda = np.repeat(lamda, a.shape[0])
+        else:
+            lamda = lamda.ravel()
+            assert lamda.shape[0] == a.shape[0]
+
+        out = np.empty_like(a, dtype=float)
+        for t, (x, c_norm) in enumerate(zip(a, col_norms)):
+            out[t] = np.dot(
+                x,
+                np.diag((ones_vect - lamda[t] / c_norm) * (c_norm > lamda[t])))
+
+    else:
+        out = np.dot(
             a, np.diag((ones_vect - lamda / col_norms) * (col_norms > lamda)))
 
-    output = np.empty_like(a, dtype=float)
-    for i, (x, c_norm) in enumerate(zip(a, col_norms)):
-        output[i] = np.dot(
-            x, np.diag((ones_vect - lamda / c_norm) * (c_norm > lamda)))
-    return output
+    return out
 
 
 # %% Perform prox operator:   min_x (1/2t)||x-w||^2 subject to |x|<=radius

@@ -7,7 +7,6 @@ def plot_graph_with_latent_variables(
         adjacency_matrix, n_observed, title="", n_latents=0, labels=None,
         ax=None, node_size=100, font_size=5):
     """Plot graph with latent variables."""
-    import networkx as nx
     # plt.figure(figsize=(15,10))
     if ax is None:
         f, ax = plt.subplots(1, 1)

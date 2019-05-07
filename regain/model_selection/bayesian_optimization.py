@@ -1,4 +1,9 @@
-"""docstring."""
+"""Deprecated.
+
+This module to port GPyOpt in a `sklearn-usable` way has been deprecated
+in favor of scikit-optimize, which natively offer a Bayesian replacement
+for the GridSearchCV.
+"""
 import numpy as np
 from functools import partial
 from sklearn.base import is_classifier, clone
@@ -6,6 +11,7 @@ from sklearn.metrics.scorer import _check_multimetric_scoring
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection._split import check_cv
 from sklearn.model_selection._search import BaseSearchCV
+from sklearn.utils import deprecated
 
 import GPyOpt
 from GPyOpt.core.task.objective import SingleObjective
@@ -15,6 +21,7 @@ from GPyOpt.util.arguments_manager import ArgumentsManager
 from GPyOpt.optimization.acquisition_optimizer import AcquisitionOptimizer
 
 
+@deprecated()
 class BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
     """Wrapper for BayesianOptimization object from GPyOpt package.
 
@@ -22,16 +29,16 @@ class BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
     For more information, see GPyOpt package.
     """
 
-    def __init__(self, estimator, domain=None, constraints=None,
-                 cost_withGradients=None, model_type='GP', X=None, Y=None,
-                 initial_design_numdata=5, initial_design_type='random',
-                 acquisition_type='EI', normalize_Y=True, exact_feval=False,
-                 acquisition_optimizer_type='lbfgs', model_update_interval=1,
-                 evaluator_type='sequential', batch_size=1, num_cores=1,
-                 verbosity_model=False, verbosity=False, de_duplication=False,
-                 max_iter=50, refit=True, cv=None, scoring=None, n_jobs=1,
-                 verbose=False,
-                 **kwargs):
+    def __init__(
+            self, estimator, domain=None, constraints=None,
+            cost_withGradients=None, model_type='GP', X=None, Y=None,
+            initial_design_numdata=5, initial_design_type='random',
+            acquisition_type='EI', normalize_Y=True, exact_feval=False,
+            acquisition_optimizer_type='lbfgs', model_update_interval=1,
+            evaluator_type='sequential', batch_size=1, num_cores=1,
+            verbosity_model=False, verbosity=False, de_duplication=False,
+            max_iter=50, refit=True, cv=None, scoring=None, n_jobs=1,
+            verbose=False, **kwargs):
         """Initialise the estimator."""
         # super(BayesianOptimization, self).__init__(
         #     f=f, domain=domain, constraints=constraints,
@@ -84,8 +91,8 @@ class BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
         self.exact_feval = exact_feval
         self.normalize_Y = normalize_Y
 
-        if 'model' in self.kwargs and isinstance(
-                kwargs['model'], GPyOpt.models.base.BOModel):
+        if 'model' in self.kwargs and isinstance(kwargs['model'],
+                                                 GPyOpt.models.base.BOModel):
             self.model = kwargs['model']
             self.model_type = 'User defined model used.'
             if self.verbose:
@@ -171,16 +178,16 @@ class BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
         self.run_optimization(max_iter=self.max_iter, verbosity=self.verbosity)
 
         self.best_index_ = self.Y.argmin()
-        self.best_params_ = dict(zip(self.param_names,
-                                     10 ** self.X[self.best_index_]))
+        self.best_params_ = dict(
+            zip(self.param_names, 10**self.X[self.best_index_]))
         self.best_score_ = self.Y[self.Y.argmin()]
 
         # Store the only scorer not as a dict for single metric evaluation
         self.scorer_ = scorers if self.multimetric_ else scorers['score']
 
         if self.refit:
-            self.best_estimator_ = clone(self.estimator).set_params(
-                **self.best_params_)
+            self.best_estimator_ = clone(
+                self.estimator).set_params(**self.best_params_)
             if y is not None:
                 self.best_estimator_.fit(X, y, **fit_params)
             else:
@@ -199,7 +206,10 @@ class BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
 
 
 def _fit_score(x, score_function, mdl=None, param_names=None):
-    x = 10 ** np.atleast_2d(x)
-    return - np.array([np.mean(score_function(mdl.set_params(
-        **dict(zip(param_names, pars)))))
-                       for pars in x])[:, None]
+    x = 10**np.atleast_2d(x)
+    return -np.array(
+        [
+            np.mean(
+                score_function(mdl.set_params(**dict(zip(param_names, pars)))))
+            for pars in x
+        ])[:, None]
