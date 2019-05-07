@@ -44,7 +44,7 @@ def graphical_lasso(
     r"""Graphical lasso solver via ADMM.
 
     Solves the following problem:
-        minimize  trace(S*X) - log det X + alpha ||X||_{od,1}
+        minimize  trace(S*K) - log det K + alpha ||K||_{od,1}
 
     where S = (1/n) X^T \times X is the empirical covariance of the data
     matrix X (training observations by features).
