@@ -19,7 +19,7 @@ from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence
-from regainpr.validation import check_norm_prox
+from regain.validation import check_norm_prox
 
 
 def objective(n_samples, S, K, Z_0, Z_M, alpha, kernel, psi):

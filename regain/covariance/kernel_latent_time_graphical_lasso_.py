@@ -19,9 +19,9 @@ from regain.update_rules import update_rho
 from regain.utils import convergence
 from regain.validation import check_norm_prox
 
-from regainpr.covariance.kernel_time_graphical_lasso_ import \
+from regain.covariance.kernel_time_graphical_lasso_ import \
     objective as obj_ktgl
-from regainpr.covariance.kernel_time_graphical_lasso_ import \
+from regain.covariance.kernel_time_graphical_lasso_ import \
     KernelTimeGraphicalLasso
 
 

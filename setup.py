@@ -2,7 +2,7 @@
 """regain setup script.
 
 Author: Federico Tomasi
-Copyright (c) 2017, Federico Tomasi.
+Copyright (c) 2017-2019, Federico Tomasi.
 Licensed under the BSD 3-Clause License (see LICENSE.txt).
 """
 
@@ -10,20 +10,20 @@ from setuptools import setup, find_packages
 # import numpy as np
 
 # Package Version
-from regainpr import __version__ as version
+from regain import __version__ as version
 setup(
-    name='regainpr',
+    name='regain',
     version=version,
 
     description=('REGAIN (Regularised Graph Inference)'),
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
     author='Federico Tomasi',
-    author_email='federico.tomasi@dibris.unige.it',
+    author_email='fdtomasi@gmail.com',
     maintainer='Federico Tomasi',
-    maintainer_email='federico.tomasi@dibris.unige.it',
-    url='https://github.com/fdtomasi/regain-private',
-    download_url='https://github.com/fdtomasi/regain-private/archive/'
+    maintainer_email='fdtomasi@gmail.com',
+    url='https://github.com/fdtomasi/regain',
+    download_url='https://github.com/fdtomasi/regain/archive/'
                  'v%s.tar.gz' % version,
     keywords=['graph inference', 'latent variables'],
     classifiers=[
@@ -48,7 +48,4 @@ setup(
               'scipy (>=0.16.1,>=1.0)',
               'sklearn (>=0.17)',
               'six'],
-    # scripts=['scripts/ici_run.py', 'scripts/ici_analysis.py'],
-    # ext_modules=[ssk_module],
-    # include_dirs=[np.get_include()]
 )
