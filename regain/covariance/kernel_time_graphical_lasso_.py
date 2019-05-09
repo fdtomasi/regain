@@ -35,12 +35,29 @@ def objective(n_samples, S, K, Z_0, Z_M, alpha, kernel, psi):
     return obj
 
 
+def init_precision(emp_cov, mode='empirical'):
+    if mode == 'empirical':
+        n_times, _, n_features = emp_cov.shape
+        covariance_ = emp_cov.copy()
+        covariance_ *= 0.95
+        K = np.empty_like(emp_cov)
+        for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
+            c.flat[::n_features + 1] = e.flat[::n_features + 1]
+            K[i] = linalg.pinvh(c)
+    elif mode == 'zeros':
+        K = np.zeros_like(emp_cov)
+    else:
+        K = mode.copy()  # warm start case
+
+    return K
+
+
 def kernel_time_graphical_lasso(
         emp_cov, alpha=0.01, rho=1, kernel=None, max_iter=100, n_samples=None,
         verbose=False, psi='laplacian', tol=1e-4, rtol=1e-4,
         return_history=False, return_n_iter=True, mode='admm',
         update_rho_options=None, compute_objective=True, stop_at=None,
-        stop_when=1e-4):
+        stop_when=1e-4, init="empirical"):
     """Time-varying graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -83,14 +100,7 @@ def kernel_time_graphical_lasso(
     if kernel is None:
         kernel = np.eye(n_times)
 
-    covariance_ = emp_cov.copy()
-    covariance_ *= 0.95
-    K = np.empty_like(emp_cov)
-    for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
-        c.flat[::n_features + 1] = e.flat[::n_features + 1]
-        K[i] = linalg.pinvh(c)
-
-    # K = np.zeros_like(emp_cov)
+    K = init_precision(emp_cov, mode=init)
     Z_0 = K.copy()  # np.zeros_like(emp_cov)
     U_0 = np.zeros_like(Z_0)
     Z_0_old = np.zeros_like(Z_0)
@@ -351,6 +361,24 @@ class KernelTimeGraphicalLasso_(TimeGraphicalLasso):
         return self
 
 
+def objective_kernel(theta, K, psi, kernel, times):
+    psi, _, _ = check_norm_prox(psi)
+    try:
+        # this works if it is a ExpSineSquared or RBF kernel
+        kernel = kernel(length_scale=theta)(times)
+    except TypeError:
+        # maybe it's a ConstantKernel
+        kernel = kernel(constant_value=theta)(times)
+
+    obj = 0
+    for m in range(1, K.shape[0]):
+        # all possible markovians jumps
+        obj += np.sum(
+            np.array(list(map(psi, K[m:] - K[:-m]))) * np.diag(kernel, m))
+
+    return obj
+
+
 class KernelTimeGraphicalLasso(TimeGraphicalLasso):
     """As KernelTimeGraphicalLasso, but X is 2d and y specifies time.
 
@@ -423,7 +451,8 @@ class KernelTimeGraphicalLasso(TimeGraphicalLasso):
             self, alpha=0.01, kernel=None, rho=1., tol=1e-4, rtol=1e-4,
             psi='laplacian', max_iter=100, verbose=False,
             assume_centered=False, return_history=False,
-            update_rho_options=None, compute_objective=True, ker_param=1):
+            update_rho_options=None, compute_objective=True, ker_param=1,
+            max_iter_ext=100, init='empirical'):
         super(KernelTimeGraphicalLasso, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered,
@@ -432,36 +461,88 @@ class KernelTimeGraphicalLasso(TimeGraphicalLasso):
             psi=psi)
         self.kernel = kernel
         self.ker_param = ker_param
+        self.max_iter_ext = max_iter_ext
+        self.init = init  # TODO: add to superclass
 
     def _fit(self, emp_cov, n_samples):
-        if callable(self.kernel):
-            try:
-                # this works if it is a ExpSineSquared or RBF kernel
-                kernel = self.kernel(length_scale=self.ker_param)(
-                    self.classes_[:, None])
-            except TypeError:
-                # maybe it's a ConstantKernel
-                kernel = self.kernel(constant_value=self.ker_param)(
-                    self.classes_[:, None])
-        else:
-            kernel = self.kernel
-            if kernel.shape[0] != self.classes_.size:
-                raise ValueError(
-                    "Kernel size does not match classes of samples, "
-                    "got {} classes and kernel has shape {}".format(
-                        self.classes_.size, kernel.shape[0]))
+        if self.ker_param == "auto":
+            from scipy.optimize import minimize_scalar
 
-        out = kernel_time_graphical_lasso(
-            emp_cov, alpha=self.alpha, rho=self.rho, kernel=kernel,
-            n_samples=n_samples, tol=self.tol, rtol=self.rtol, psi=self.psi,
-            max_iter=self.max_iter, verbose=self.verbose, return_n_iter=True,
-            return_history=self.return_history,
-            update_rho_options=self.update_rho_options,
-            compute_objective=self.compute_objective)
-        if self.return_history:
-            self.precision_, self.covariance_, self.history_, self.n_iter_ = out
+            if not callable(self.kernel):
+                raise ValueError(
+                    "kernel should be a function if ker_param=='auto'")
+            # discover best kernel parameter via EM
+            # initialise precision matrices, as warm start
+            self.precision_ = init_precision(emp_cov, mode=self.init)
+            theta_old = 0
+            for i in range(self.max_iter_ext):
+                # E step - discover best kernel parameter
+                theta = minimize_scalar(
+                    objective_kernel, args=(
+                        self.precision_, self.psi, self.kernel,
+                        self.classes_[:, None]), bounds=(0, emp_cov.shape[0]),
+                    method='bounded').x
+
+                if i > 0 and abs(theta_old - theta) < 1e-5:
+                    break
+                else:
+                    print("Find new theta: %f" % theta)
+
+                # M step
+                try:
+                    # this works if it is a ExpSineSquared or RBF kernel
+                    kernel = self.kernel(length_scale=theta)(
+                        self.classes_[:, None])
+                except TypeError:
+                    # maybe it's a ConstantKernel
+                    kernel = self.kernel(constant_value=theta)(
+                        self.classes_[:, None])
+
+                out = kernel_time_graphical_lasso(
+                    emp_cov, alpha=self.alpha, rho=self.rho, kernel=kernel,
+                    n_samples=n_samples, tol=self.tol, rtol=self.rtol,
+                    psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
+                    return_n_iter=True, return_history=self.return_history,
+                    update_rho_options=self.update_rho_options,
+                    compute_objective=self.compute_objective,
+                    init=self.precision_)
+                if self.return_history:
+                    self.precision_, self.covariance_, self.history_, self.n_iter_ = out
+                else:
+                    self.precision_, self.covariance_, self.n_iter_ = out
+                theta_old = theta
+            else:
+                print("warning: theta not converged")
+
         else:
-            self.precision_, self.covariance_, self.n_iter_ = out
+            if callable(self.kernel):
+                try:
+                    # this works if it is a ExpSineSquared or RBF kernel
+                    kernel = self.kernel(length_scale=self.ker_param)(
+                        self.classes_[:, None])
+                except TypeError:
+                    # maybe it's a ConstantKernel
+                    kernel = self.kernel(constant_value=self.ker_param)(
+                        self.classes_[:, None])
+            else:
+                kernel = self.kernel
+                if kernel.shape[0] != self.classes_.size:
+                    raise ValueError(
+                        "Kernel size does not match classes of samples, "
+                        "got {} classes and kernel has shape {}".format(
+                            self.classes_.size, kernel.shape[0]))
+
+            out = kernel_time_graphical_lasso(
+                emp_cov, alpha=self.alpha, rho=self.rho, kernel=kernel,
+                n_samples=n_samples, tol=self.tol, rtol=self.rtol,
+                psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
+                return_n_iter=True, return_history=self.return_history,
+                update_rho_options=self.update_rho_options,
+                compute_objective=self.compute_objective, init=self.init)
+            if self.return_history:
+                self.precision_, self.covariance_, self.history_, self.n_iter_ = out
+            else:
+                self.precision_, self.covariance_, self.n_iter_ = out
 
         return self
 
@@ -536,7 +617,7 @@ class KernelTimeGraphicalLasso(TimeGraphicalLasso):
             ])
 
         res = sum(
-            X[y == cl].shape[0] * log_likelihood(S, K) for S, K, n in zip(
+            X[y == cl].shape[0] * log_likelihood(S, K) for S, K, cl in zip(
                 test_cov, self.get_observed_precision(), self.classes_))
 
         return -99999999 if res == -np.inf else res

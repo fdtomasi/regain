@@ -8,25 +8,13 @@ import pandas as pd
 from sklearn.gaussian_process import kernels
 from sklearn.model_selection import KFold, StratifiedKFold
 
-from regain.bayesian import stats
-from regain.covariance import latent_time_graph_lasso_, time_graph_lasso_
-from regainpr import datasets, utils
-from regainpr.bayesian import wishart_process_
-from regainpr.covariance import (
+from regain.covariance import latent_time_graphical_lasso_, time_graphical_lasso_
+from regain import datasets, utils
+from regain.bayesian import wishart_process_
+from regain.covariance import (
     kernel_latent_time_graphical_lasso_, kernel_time_graphical_lasso_)
 from skopt.searchcv import BayesSearchCV
 
-reload(time_graph_lasso_)
-reload(latent_time_graph_lasso_)
-
-reload(wishart_process_)
-reload(stats)
-
-reload(kernel_time_graphical_lasso_)
-reload(kernel_latent_time_graphical_lasso_)
-
-reload(datasets)
-reload(utils)
 
 def use_bscv(mdl, search_spaces, data, y=None):
     # n_iter = 100 if isinstance(
@@ -72,7 +60,7 @@ def base_results(mdl, X, y, K, K_obs, ells, search_spaces=None, **params):
 
 
 def tgl_results(data_grid, K, K_obs, ells, search_spaces=None, **params):
-    mdl = time_graph_lasso_.TimeGraphLasso(
+    mdl = time_graphical_lasso_.TimeGraphicalLasso(
         time_on_axis='last', assume_centered=0, verbose=0, rtol=1e-5, tol=1e-5,
         max_iter=1000, rho=1. / np.sqrt(data_grid.shape[0]))
 
@@ -81,7 +69,7 @@ def tgl_results(data_grid, K, K_obs, ells, search_spaces=None, **params):
 
 
 def ltgl_results(data_grid, K, K_obs, ells, search_spaces=None, **params):
-    mdl = latent_time_graph_lasso_.LatentTimeGraphLasso(
+    mdl = latent_time_graphical_lasso_.LatentTimeGraphicalLasso(
         time_on_axis='last', assume_centered=0, verbose=0, rtol=1e-5, tol=1e-5,
         max_iter=1000, rho=1. / np.sqrt(data_grid.shape[0]),
         update_rho_options=dict(mu=5))
