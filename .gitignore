@@ -104,3 +104,5 @@ ENV/
 .magicindex.json
 
 \.vscode/
+
+notebooks/\.DS_Store
