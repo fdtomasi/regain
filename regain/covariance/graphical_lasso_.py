@@ -37,6 +37,19 @@ def objective(emp_cov, x, z, alpha):
     return -logl(emp_cov, x) + alpha * l1_od_norm(z)
 
 
+def init_precision(emp_cov, mode='empirical'):
+    if mode == 'empirical':
+        _, n_features = emp_cov.shape
+        covariance_ = emp_cov.copy()
+        covariance_ *= 0.95
+        covariance_.flat[::n_features + 1] = emp_cov.flat[::n_features + 1]
+        K = linalg.pinvh(covariance_)
+    else:
+        K = np.zeros_like(emp_cov)
+
+    return K
+
+
 def graphical_lasso(
         emp_cov, alpha=0.01, rho=1, over_relax=1, max_iter=100, verbose=False,
         tol=1e-4, rtol=1e-4, return_history=False, return_n_iter=True,
@@ -76,9 +89,9 @@ def graphical_lasso(
         See regain.update_rules.update_rho function for more information.
     compute_objective : bool, default True
         Choose to compute the objective value.
-    init : ('empirical', 'zero')
-        Choose how to initialize the precision matrix, with the inverse
-        empirical covariance or zero matrix.
+    init : {'empirical', 'zeros', ndarray}, default 'empirical'
+        How to initialise the inverse covariance matrix. Default is take
+        the empirical covariance and inverting it.
 
     Returns
     -------
@@ -96,14 +109,7 @@ def graphical_lasso(
     """
     _, n_features = emp_cov.shape
 
-    if init == 'empirical':
-        covariance_ = emp_cov.copy()
-        covariance_ *= 0.95
-        covariance_.flat[::n_features + 1] = emp_cov.flat[::n_features + 1]
-        Z = linalg.pinvh(covariance_)
-    else:
-        Z = np.zeros_like(emp_cov)
-
+    Z = init_precision(emp_cov, mode=init)
     U = np.zeros_like(emp_cov)
     Z_old = np.zeros_like(Z)
 
@@ -219,7 +225,7 @@ class GraphicalLasso(GraphLasso):
     def __init__(
             self, alpha=0.01, rho=1., over_relax=1., max_iter=100, mode='admm',
             tol=1e-4, rtol=1e-4, verbose=False, assume_centered=False,
-            update_rho_options=None, compute_objective=True):
+            update_rho_options=None, compute_objective=True, init='empirical'):
         super(GraphicalLasso, self).__init__(
             alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
             assume_centered=assume_centered, mode=mode)
@@ -228,6 +234,7 @@ class GraphicalLasso(GraphLasso):
         self.over_relax = over_relax
         self.update_rho_options = update_rho_options
         self.compute_objective = compute_objective
+        self.init = init
 
     def _fit(self, emp_cov):
         """Fit the GraphicalLasso model to X.
@@ -243,7 +250,7 @@ class GraphicalLasso(GraphLasso):
             max_iter=self.max_iter, over_relax=self.over_relax, rho=self.rho,
             verbose=self.verbose, return_n_iter=True, return_history=False,
             update_rho_options=self.update_rho_options,
-            compute_objective=self.compute_objective)
+            compute_objective=self.compute_objective, init=self.init)
         return self
 
     def fit(self, X, y=None):

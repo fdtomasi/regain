@@ -10,11 +10,10 @@ import warnings
 import numpy as np
 from scipy import linalg
 from six.moves import map, range, zip
-from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
-from sklearn.utils.validation import check_X_y
 
-from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso, loss
+from regain.covariance.time_graphical_lasso_ import (TimeGraphicalLasso,
+                                                     init_precision, loss)
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
@@ -33,23 +32,6 @@ def objective(n_samples, S, K, Z_0, Z_M, alpha, kernel, psi):
         obj += np.sum(np.array(list(map(psi, Z_R - Z_L))) * np.diag(kernel, m))
 
     return obj
-
-
-def init_precision(emp_cov, mode='empirical'):
-    if mode == 'empirical':
-        n_times, _, n_features = emp_cov.shape
-        covariance_ = emp_cov.copy()
-        covariance_ *= 0.95
-        K = np.empty_like(emp_cov)
-        for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
-            c.flat[::n_features + 1] = e.flat[::n_features + 1]
-            K[i] = linalg.pinvh(c)
-    elif mode == 'zeros':
-        K = np.zeros_like(emp_cov)
-    else:
-        K = mode.copy()  # warm start case
-
-    return K
 
 
 def kernel_time_graphical_lasso(
@@ -83,6 +65,9 @@ def kernel_time_graphical_lasso(
         Relative tolerance for convergence.
     return_history : bool, optional
         Return the history of computed values.
+    init : {'empirical', 'zeros', ndarray}, default 'empirical'
+        How to initialise the inverse covariance matrix. Default is take
+        the empirical covariance and inverting it.
 
     Returns
     -------
@@ -252,115 +237,6 @@ def kernel_time_graphical_lasso(
     return return_list
 
 
-class KernelTimeGraphicalLasso_(TimeGraphicalLasso):
-    """Sparse inverse covariance estimation with an l1-penalized estimator.
-
-    Parameters
-    ----------
-    alpha : positive float, default 0.01
-        Regularization parameter for precision matrix. The higher alpha,
-        the more regularization, the sparser the inverse covariance.
-
-    kernel : ndarray, default None
-        Normalised temporal kernel (1 on the diagonal),
-        with dimensions equal to the dimensionality of the data set.
-        If None, it is interpreted as an identity matrix, where there is no
-        constraint on the temporal behaviour of the precision matrices.
-
-    psi : {'laplacian', 'l1', 'l2', 'linf', 'node'}, default 'laplacian'
-        Type of norm to enforce for consecutive precision matrices in time.
-
-    rho : positive float, default 1
-        Augmented Lagrangian parameter.
-
-    tol : positive float, default 1e-4
-        Absolute tolerance to declare convergence.
-
-    rtol : positive float, default 1e-4
-        Relative tolerance to declare convergence.
-
-    max_iter : integer, default 100
-        The maximum number of iterations.
-
-    verbose : boolean, default False
-        If verbose is True, the objective function, rnorm and snorm are
-        printed at each iteration.
-
-    assume_centered : boolean, default False
-        If True, data are not centered before computation.
-        Useful when working with data whose mean is almost, but not exactly
-        zero.
-        If False, data are centered before computation.
-
-    time_on_axis : {'first', 'last'}, default 'first'
-        If data have time as the last dimension, set this to 'last'.
-        Useful to use scikit-learn functions as train_test_split.
-
-    update_rho_options : dict, default None
-        Options for the update of rho. See `update_rho` function for details.
-
-    compute_objective : boolean, default True
-        Choose if compute the objective function during iterations
-        (only useful if `verbose=True`).
-
-    mode : {'admm'}, default 'admm'
-        Minimisation algorithm. At the moment, only 'admm' is available,
-        so this is ignored.
-
-    Attributes
-    ----------
-    covariance_ : array-like, shape (n_times, n_features, n_features)
-        Estimated covariance matrix
-
-    precision_ : array-like, shape (n_times, n_features, n_features)
-        Estimated pseudo inverse matrix.
-
-    n_iter_ : int
-        Number of iterations run.
-
-    """
-
-    def __init__(
-            self, alpha=0.01, kernel=None, mode='admm', rho=1.,
-            time_on_axis='first', tol=1e-4, rtol=1e-4, psi='laplacian',
-            max_iter=100, verbose=False, assume_centered=False,
-            return_history=False, update_rho_options=None,
-            compute_objective=True, stop_at=None, stop_when=1e-4,
-            suppress_warn_list=False):
-        super(KernelTimeGraphicalLasso_, self).__init__(
-            alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
-            verbose=verbose, assume_centered=assume_centered, mode=mode,
-            update_rho_options=update_rho_options,
-            compute_objective=compute_objective,
-            suppress_warn_list=suppress_warn_list, stop_at=stop_at,
-            stop_when=stop_when, return_history=return_history,
-            time_on_axis=time_on_axis, psi=psi)
-        self.kernel = kernel
-
-    def _fit(self, emp_cov, n_samples):
-        """Fit the TimeGraphicalLasso model to X.
-
-        Parameters
-        ----------
-        emp_cov : ndarray, shape (n_time, n_features, n_features)
-            Empirical covariance of data.
-
-        """
-        out = kernel_time_graphical_lasso(
-            emp_cov, alpha=self.alpha, rho=self.rho, kernel=self.kernel,
-            mode=self.mode, n_samples=n_samples, tol=self.tol, rtol=self.rtol,
-            psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
-            return_n_iter=True, return_history=self.return_history,
-            update_rho_options=self.update_rho_options,
-            compute_objective=self.compute_objective, stop_at=self.stop_at,
-            stop_when=self.stop_when)
-        if self.return_history:
-            self.precision_, self.covariance_, self.history_, self.n_iter_ = out
-        else:
-            self.precision_, self.covariance_, self.n_iter_ = out
-        return self
-
-
 def objective_kernel(theta, K, psi, kernel, times):
     psi, _, _ = check_norm_prox(psi)
     try:
@@ -419,10 +295,6 @@ class KernelTimeGraphicalLasso(TimeGraphicalLasso):
         zero.
         If False, data are centered before computation.
 
-    time_on_axis : {'first', 'last'}, default 'first'
-        If data have time as the last dimension, set this to 'last'.
-        Useful to use scikit-learn functions as train_test_split.
-
     update_rho_options : dict, default None
         Options for the update of rho. See `update_rho` function for details.
 
@@ -430,9 +302,9 @@ class KernelTimeGraphicalLasso(TimeGraphicalLasso):
         Choose if compute the objective function during iterations
         (only useful if `verbose=True`).
 
-    mode : {'admm'}, default 'admm'
-        Minimisation algorithm. At the moment, only 'admm' is available,
-        so this is ignored.
+    init : {'empirical', 'zeros', ndarray}, default 'empirical'
+        How to initialise the inverse covariance matrix. Default is take
+        the empirical covariance and inverting it.
 
     Attributes
     ----------
@@ -458,11 +330,10 @@ class KernelTimeGraphicalLasso(TimeGraphicalLasso):
             verbose=verbose, assume_centered=assume_centered,
             update_rho_options=update_rho_options,
             compute_objective=compute_objective, return_history=return_history,
-            psi=psi)
+            psi=psi, init=init)
         self.kernel = kernel
         self.ker_param = ker_param
         self.max_iter_ext = max_iter_ext
-        self.init = init  # TODO: add to superclass
 
     def _fit(self, emp_cov, n_samples):
         if self.ker_param == "auto":
@@ -545,79 +416,3 @@ class KernelTimeGraphicalLasso(TimeGraphicalLasso):
                 self.precision_, self.covariance_, self.n_iter_ = out
 
         return self
-
-    # def fit(self, X, y):
-    #     """Fit the KernelTimeGraphicalLasso model to X.
-
-    #     Parameters
-    #     ----------
-    #     X : ndarray, shape = (n_samples * n_times, n_dimensions)
-    #         Data matrix.
-    #     y : ndarray, shape = (n_times,)
-    #         Indicate the temporal belonging of each sample.
-    #     """
-    #     # Covariance does not make sense for a single feature
-    #     X, y = check_X_y(
-    #         X, y, accept_sparse=False, dtype=np.float64, order="C",
-    #         ensure_min_features=2, estimator=self)
-
-    #     n_dimensions = X.shape[1]
-    #     self.classes_, n_samples = np.unique(y, return_counts=True)
-    #     n_times = self.classes_.size
-
-    #     # n_samples = np.array([x.shape[0] for x in X])
-    #     if self.assume_centered:
-    #         self.location_ = np.zeros((n_times, n_dimensions))
-    #     else:
-    #         self.location_ = np.array(
-    #             [X[y == cl].mean(0) for cl in self.classes_])
-
-    #     emp_cov = np.array(
-    #         [
-    #             empirical_covariance(
-    #                 X[y == cl], assume_centered=self.assume_centered)
-    #             for cl in self.classes_
-    #         ])
-
-    #     return self._fit(emp_cov, n_samples)
-
-    # def score(self, X, y):
-    #     """Computes the log-likelihood of a Gaussian data set with
-    #     `self.covariance_` as an estimator of its covariance matrix.
-
-    #     Parameters
-    #     ----------
-    #     X : array-like, shape = (n_samples, n_features)
-    #         Test data of which we compute the likelihood, where n_samples is
-    #         the number of samples and n_features is the number of features.
-    #         X is assumed to be drawn from the same distribution than
-    #         the data used in fit (including centering).
-
-    #     y :  array-like, shape = (n_samples,)
-    #         Class of samples.
-
-    #     Returns
-    #     -------
-    #     res : float
-    #         The likelihood of the data set with `self.covariance_` as an
-    #         estimator of its covariance matrix.
-
-    #     """
-    #     # Covariance does not make sense for a single feature
-    #     X, y = check_X_y(
-    #         X, y, accept_sparse=False, dtype=np.float64, order="C",
-    #         ensure_min_features=2, estimator=self)
-
-    #     # compute empirical covariance of the test set
-    #     test_cov = np.array(
-    #         [
-    #             empirical_covariance(
-    #                 X[y == cl] - self.location_[i], assume_centered=True)
-    #             for i, cl in enumerate(self.classes_)
-    #         ])
-
-    #     res = sum(
-    #         X[y == cl].shape[0] * log_likelihood(S, K) for S, K, cl in zip(
-    #             test_cov, self.get_observed_precision(), self.classes_))
-
-    #     return -99999999 if res == -np.inf else res

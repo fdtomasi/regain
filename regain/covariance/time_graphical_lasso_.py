@@ -47,6 +47,23 @@ def objective(n_samples, S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
     return obj
 
 
+def init_precision(emp_cov, mode='empirical'):
+    if mode == 'empirical':
+        n_times, _, n_features = emp_cov.shape
+        covariance_ = emp_cov.copy()
+        covariance_ *= 0.95
+        K = np.empty_like(emp_cov)
+        for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
+            c.flat[::n_features + 1] = e.flat[::n_features + 1]
+            K[i] = linalg.pinvh(c)
+    elif mode == 'zeros':
+        K = np.zeros_like(emp_cov)
+    else:
+        K = mode.copy()  # warm start case
+
+    return K
+
+
 def time_graphical_lasso(
         emp_cov, alpha=0.01, rho=1, beta=1, max_iter=100, n_samples=None,
         verbose=False, psi='laplacian', tol=1e-4, rtol=1e-4,
@@ -89,9 +106,9 @@ def time_graphical_lasso(
         See regain.update_rules.update_rho function for more information.
     compute_objective : bool, default True
         Choose to compute the objective value.
-    init : ('empirical', 'zero')
-        Choose how to initialize the precision matrix, with the inverse
-        empirical covariance or zero matrix.
+    init : {'empirical', 'zeros', ndarray}, default 'empirical'
+        How to initialise the inverse covariance matrix. Default is take
+        the empirical covariance and inverting it.
 
     Returns
     -------
@@ -105,23 +122,10 @@ def time_graphical_lasso(
     """
     psi, prox_psi, psi_node_penalty = check_norm_prox(psi)
 
-    if init == 'empirical':
-        n_times, _, n_features = emp_cov.shape
-        covariance_ = emp_cov.copy()
-        covariance_ *= 0.95
-        K = np.empty_like(emp_cov)
-        for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
-            c.flat[::n_features + 1] = e.flat[::n_features + 1]
-            K[i] = linalg.pinvh(c)
-    else:
-        K = np.zeros_like(emp_cov)
-
+    K = init_precision(emp_cov, mode=init)
     Z_0 = K.copy()  # np.zeros_like(emp_cov)
     Z_1 = K.copy()[:-1]  # np.zeros_like(emp_cov)[:-1]
     Z_2 = K.copy()[1:]  # np.zeros_like(emp_cov)[1:]
-    # Z_0 = K.copy()
-    # Z_1 = K.copy()[:-1]
-    # Z_2 = K.copy()[1:]
 
     U_0 = np.zeros_like(Z_0)
     U_1 = np.zeros_like(Z_1)
@@ -304,9 +308,9 @@ class TimeGraphicalLasso(GraphicalLasso):
         Choose if compute the objective function during iterations
         (only useful if `verbose=True`).
 
-    mode : {'admm'}, default 'admm'
-        Minimisation algorithm. At the moment, only 'admm' is available,
-        so this is ignored.
+    init : {'empirical', 'zeros', ndarray}, default 'empirical'
+        How to initialise the inverse covariance matrix. Default is take
+        the empirical covariance and inverting it.
 
     Attributes
     ----------
@@ -327,12 +331,12 @@ class TimeGraphicalLasso(GraphicalLasso):
             max_iter=100, verbose=False, assume_centered=False,
             return_history=False, update_rho_options=None,
             compute_objective=True, stop_at=None, stop_when=1e-4,
-            suppress_warn_list=False):
+            suppress_warn_list=False, init='empirical'):
         super(TimeGraphicalLasso, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered, mode=mode,
             update_rho_options=update_rho_options,
-            compute_objective=compute_objective)
+            compute_objective=compute_objective, init=init)
         self.beta = beta
         self.psi = psi
         self.time_on_axis = time_on_axis
@@ -368,7 +372,7 @@ class TimeGraphicalLasso(GraphicalLasso):
             return_n_iter=True, return_history=self.return_history,
             update_rho_options=self.update_rho_options,
             compute_objective=self.compute_objective, stop_at=self.stop_at,
-            stop_when=self.stop_when)
+            stop_when=self.stop_when, init=self.init)
         if self.return_history:
             self.precision_, self.covariance_, self.history_, self.n_iter_ = out
         else:
@@ -407,7 +411,7 @@ class TimeGraphicalLasso(GraphicalLasso):
     #     return self._fit(emp_cov, n_samples)
 
     def fit(self, X, y):
-        """Fit the KernelTimeGraphicalLasso model to X.
+        """Fit the TimeGraphicalLasso model to X.
 
         Parameters
         ----------

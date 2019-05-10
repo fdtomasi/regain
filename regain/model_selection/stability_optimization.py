@@ -11,8 +11,9 @@ from sklearn.base import clone, is_classifier
 from sklearn.metrics.scorer import _check_multimetric_scoring
 from sklearn.model_selection import GridSearchCV, ParameterGrid, ShuffleSplit
 from sklearn.model_selection._split import check_cv
-from sklearn.model_selection._validation import (
-    _aggregate_score_dicts, _fit_and_score)
+from sklearn.model_selection._validation import (_aggregate_score_dicts,
+                                                 _fit_and_score)
+from sklearn.utils import deprecated
 from sklearn.utils._joblib import Parallel, delayed
 from sklearn.utils.fixes import MaskedArray
 from sklearn.utils.validation import indexable
@@ -22,29 +23,28 @@ def global_instability(estimators):
     precisions = [estimator.get_precision() for estimator in estimators]
 
     if precisions[0].ndim == 2:
-        triu_idx = np.triu_indices_from(precisions[0])
+        n_times = 1
+        triu_idx = np.triu_indices_from(precisions[0], 1)
         mean_connectivity = np.zeros_like(precisions[0])[triu_idx]
         for c in precisions:
             mean_connectivity += (c[triu_idx].copy() != 0).astype(int)
     else:
-        triu_idx = np.triu_indices_from(precisions[0][0])
+        # for tri dimensional matrices
+        n_times = precisions[0].shape[0]
+        triu_idx = np.triu_indices_from(precisions[0][0], 1)
         mean_connectivity = np.array(
             [
                 np.zeros_like(precisions[0][0])[triu_idx]
-                for i in range(precisions[0].shape[0])
+                for i in range(n_times)
             ])
-        print(mean_connectivity.shape)
-        print(precisions[0].shape)
         for c in precisions:
-            for i in range(precisions[0].shape[0]):
+            for i in range(n_times):
                 mean_connectivity[i] += (c[i][triu_idx].copy() !=
                                          0).astype(int)
-        # for tri dimensional matrices
 
     mean_connectivity /= len(estimators)
-
     xi_matrix = 2 * mean_connectivity * (1 - mean_connectivity)
-    return np.sum(xi_matrix) / binom(precisions[0].shape[1], 2)
+    return np.sum(xi_matrix) / (binom(precisions[0].shape[1], 2) * n_times)
 
 
 class GraphicalModelStabilitySelection(GridSearchCV):
@@ -61,7 +61,8 @@ class GraphicalModelStabilitySelection(GridSearchCV):
         self.n_repetitions = n_repetitions
         self.sampling_size = sampling_size
 
-    def fit2(self, X, y=None):
+    @deprecated
+    def fit__(self, X, y=None):
         n, p = X.shape
         # check params
         if self.n_repetitions < 10:

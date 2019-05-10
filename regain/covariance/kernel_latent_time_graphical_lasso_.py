@@ -13,16 +13,14 @@ from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.utils.extmath import squared_norm
 
-from regain.covariance.latent_time_graphical_lasso_ import LatentTimeGraphicalLasso
+from regain.covariance.kernel_time_graphical_lasso_ import (KernelTimeGraphicalLasso,
+                                                            init_precision)
+from regain.covariance.kernel_time_graphical_lasso_ import \
+    objective as obj_ktgl
 from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence
 from regain.validation import check_norm_prox
-
-from regain.covariance.kernel_time_graphical_lasso_ import \
-    objective as obj_ktgl
-from regain.covariance.kernel_time_graphical_lasso_ import \
-    KernelTimeGraphicalLasso
 
 
 def objective(
@@ -46,7 +44,7 @@ def kernel_latent_time_graphical_lasso(
         max_iter=100, verbose=False, psi='laplacian', phi='laplacian',
         mode='admm', tol=1e-4, rtol=1e-4, assume_centered=False,
         n_samples=None, return_history=False, return_n_iter=True,
-        update_rho_options=None, compute_objective=True):
+        update_rho_options=None, compute_objective=True, init="empirical"):
     r"""Time-varying latent variable graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -94,7 +92,7 @@ def kernel_latent_time_graphical_lasso(
     if kernel_phi is None:
         kernel_phi = np.eye(n_times)
 
-    Z_0 = np.zeros_like(emp_cov)
+    Z_0 = init_precision(emp_cov, mode=init)
     W_0 = np.zeros_like(Z_0)
     X_0 = np.zeros_like(Z_0)
     R_old = np.zeros_like(Z_0)
@@ -217,8 +215,9 @@ def kernel_latent_time_graphical_lasso(
         # diagnostics, reporting, termination checks
         rnorm = np.sqrt(
             squared_norm(R - Z_0 + W_0) + sum(
-                squared_norm(Z_0[:-m] - Z_M[m][0]) + squared_norm(
-                    Z_0[m:] - Z_M[m][1]) + squared_norm(W_0[:-m] - W_M[m][0]) +
+                squared_norm(Z_0[:-m] - Z_M[m][0]) +
+                squared_norm(Z_0[m:] - Z_M[m][1]) +
+                squared_norm(W_0[:-m] - W_M[m][0]) +
                 squared_norm(W_0[m:] - W_M[m][1]) for m in range(1, n_times)))
 
         snorm = rho * np.sqrt(
@@ -294,7 +293,7 @@ def kernel_latent_time_graphical_lasso(
     return return_list
 
 
-class KernelLatentTimeGraphicalLasso_(LatentTimeGraphicalLasso):
+class KernelLatentTimeGraphicalLasso(KernelTimeGraphicalLasso):
     """Sparse inverse covariance estimation with an l1-penalized estimator.
 
     Parameters
@@ -307,17 +306,15 @@ class KernelLatentTimeGraphicalLasso_(LatentTimeGraphicalLasso):
         Regularization parameter for latent variables matrix. The higher tau,
         the more regularization, the lower rank of the latent matrix.
 
-    psi : {'laplacian', 'l1', 'l2', 'linf', 'node'}, default 'laplacian'
-        Type of norm to enforce for consecutive precision matrices in time.
-
-    phi : {'laplacian', 'l1', 'l2', 'linf', 'node'}, default 'laplacian'
-        Type of norm to enforce for consecutive latent matrices in time.
-
     kernel_{psi,phi} : ndarray, default None
         Normalised temporal kernel (1 on the diagonal),
         with dimensions equal to the dimensionality of the data set.
         If None, it is interpreted as an identity matrix, where there is no
         constraint on the temporal behaviour of {precision,latent} matrices.
+
+    {psi,phi} : {'laplacian', 'l1', 'l2', 'linf', 'node'}, default 'laplacian'
+        Type of norm to enforce for consecutive {precision,latent} matrices
+        in time.
 
     rho : positive float, default 1
         Augmented Lagrangian parameter.
@@ -341,10 +338,6 @@ class KernelLatentTimeGraphicalLasso_(LatentTimeGraphicalLasso):
         zero.
         If False, data are centered before computation.
 
-    time_on_axis : {'first', 'last'}, default 'first'
-        If data have time as the last dimension, set this to 'last'.
-        Useful to use scikit-learn functions as train_test_split.
-
     update_rho_options : dict, default None
         Options for the update of rho. See `update_rho` function for details.
 
@@ -352,9 +345,9 @@ class KernelLatentTimeGraphicalLasso_(LatentTimeGraphicalLasso):
         Choose if compute the objective function during iterations
         (only useful if `verbose=True`).
 
-    mode : {'admm'}, default 'admm'
-        Minimisation algorithm. At the moment, only 'admm' is available,
-        so this is ignored.
+    init : {'empirical', 'zeros', ndarray}, default 'empirical'
+        How to initialise the inverse covariance matrix. Default is take
+        the empirical covariance and inverting it.
 
     Attributes
     ----------
@@ -373,123 +366,17 @@ class KernelLatentTimeGraphicalLasso_(LatentTimeGraphicalLasso):
     """
 
     def __init__(
-            self, alpha=0.01, tau=1., kernel_psi=None, kernel_phi=None,
-            mode='admm', rho=1., time_on_axis='first', tol=1e-4, rtol=1e-4,
-            psi='laplacian', phi='laplacian', max_iter=100, verbose=False,
-            assume_centered=False, update_rho_options=None,
-            compute_objective=True):
-        super(KernelLatentTimeGraphicalLasso_, self).__init__(
-            alpha=alpha, tau=tau, mode=mode, rho=rho, tol=tol, rtol=rtol,
-            psi=psi, phi=phi, max_iter=max_iter, verbose=verbose,
-            time_on_axis=time_on_axis, assume_centered=assume_centered,
-            update_rho_options=update_rho_options,
-            compute_objective=compute_objective)
-        self.kernel_psi = kernel_psi
-        self.kernel_phi = kernel_phi
-
-    def _fit(self, emp_cov, n_samples):
-        """Fit the LatentTimeGraphicalLasso model to X.
-
-        Parameters
-        ----------
-        emp_cov : ndarray, shape (n_features, n_features)
-            Empirical covariance of data.
-
-        """
-        self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
-            kernel_latent_time_graphical_lasso(
-                emp_cov, n_samples=n_samples,
-                alpha=self.alpha, tau=self.tau, rho=self.rho,
-                kernel_phi=self.kernel_phi, kernel_psi=self.kernel_psi,
-                mode=self.mode, tol=self.tol, rtol=self.rtol,
-                psi=self.psi, phi=self.phi,
-                max_iter=self.max_iter, verbose=self.verbose,
-                return_n_iter=True, return_history=False,
-                update_rho_options=self.update_rho_options,
-                compute_objective=self.compute_objective)
-        return self
-
-
-class KernelLatentTimeGraphicalLasso(KernelTimeGraphicalLasso):
-    """As KernelLatentTimeGraphicalLasso, but X is 2d and y specifies time.
-
-    Parameters
-    ----------
-    alpha : positive float, default 0.01
-        Regularization parameter for precision matrix. The higher alpha,
-        the more regularization, the sparser the inverse covariance.
-
-    kernel : ndarray, default None
-        Normalised temporal kernel (1 on the diagonal),
-        with dimensions equal to the dimensionality of the data set.
-        If None, it is interpreted as an identity matrix, where there is no
-        constraint on the temporal behaviour of the precision matrices.
-
-    psi : {'laplacian', 'l1', 'l2', 'linf', 'node'}, default 'laplacian'
-        Type of norm to enforce for consecutive precision matrices in time.
-
-    rho : positive float, default 1
-        Augmented Lagrangian parameter.
-
-    tol : positive float, default 1e-4
-        Absolute tolerance to declare convergence.
-
-    rtol : positive float, default 1e-4
-        Relative tolerance to declare convergence.
-
-    max_iter : integer, default 100
-        The maximum number of iterations.
-
-    verbose : boolean, default False
-        If verbose is True, the objective function, rnorm and snorm are
-        printed at each iteration.
-
-    assume_centered : boolean, default False
-        If True, data are not centered before computation.
-        Useful when working with data whose mean is almost, but not exactly
-        zero.
-        If False, data are centered before computation.
-
-    time_on_axis : {'first', 'last'}, default 'first'
-        If data have time as the last dimension, set this to 'last'.
-        Useful to use scikit-learn functions as train_test_split.
-
-    update_rho_options : dict, default None
-        Options for the update of rho. See `update_rho` function for details.
-
-    compute_objective : boolean, default True
-        Choose if compute the objective function during iterations
-        (only useful if `verbose=True`).
-
-    mode : {'admm'}, default 'admm'
-        Minimisation algorithm. At the moment, only 'admm' is available,
-        so this is ignored.
-
-    Attributes
-    ----------
-    covariance_ : array-like, shape (n_times, n_features, n_features)
-        Estimated covariance matrix
-
-    precision_ : array-like, shape (n_times, n_features, n_features)
-        Estimated pseudo inverse matrix.
-
-    n_iter_ : int
-        Number of iterations run.
-
-    """
-
-    def __init__(
             self, alpha=0.01, tau=1., kernel_psi=None, kernel_phi=None, rho=1.,
             tol=1e-4, rtol=1e-4, psi='laplacian', phi='laplacian',
             max_iter=100, verbose=False, assume_centered=False,
             return_history=False, update_rho_options=None,
-            compute_objective=True, ker_psi_param=1, ker_phi_param=1):
+            compute_objective=True, ker_psi_param=1, ker_phi_param=1, init='empirical'):
         super(KernelLatentTimeGraphicalLasso, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered,
             update_rho_options=update_rho_options,
             compute_objective=compute_objective, return_history=return_history,
-            psi=psi)
+            psi=psi, init=init)
         self.kernel_psi = kernel_psi
         self.kernel_phi = kernel_phi
         self.tau = tau
@@ -510,6 +397,7 @@ class KernelLatentTimeGraphicalLasso(KernelTimeGraphicalLasso):
         return self.precision_ - self.latent_
 
     def _fit(self, emp_cov, n_samples):
+        # TODO auto discover parameter
         if callable(self.kernel_phi):
             try:
                 # this works if it is a ExpSineSquared or RBF kernel
@@ -551,7 +439,7 @@ class KernelLatentTimeGraphicalLasso(KernelTimeGraphicalLasso):
             verbose=self.verbose, return_n_iter=True,
             return_history=self.return_history,
             update_rho_options=self.update_rho_options,
-            compute_objective=self.compute_objective)
+            compute_objective=self.compute_objective, init=self.init)
         if self.return_history:
             self.precision_, self.latent_, self.covariance_, self.history_, \
                 self.n_iter_ = out

@@ -113,7 +113,6 @@ def kltgl_results(data_list, K, K_obs, ells, search_spaces=None, **params):
 
 def wp_results(data_list, K, **params):
     n_iter = 1000
-    print("asd6")
     mdl = wishart_process_.WishartProcess(verbose=True, n_iter=n_iter, **params)
 
     X = np.vstack(data_list)
