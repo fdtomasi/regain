@@ -11,8 +11,8 @@ from sklearn.base import clone, is_classifier
 from sklearn.metrics.scorer import _check_multimetric_scoring
 from sklearn.model_selection import GridSearchCV, ParameterGrid, ShuffleSplit
 from sklearn.model_selection._split import check_cv
-from sklearn.model_selection._validation import (_aggregate_score_dicts,
-                                                 _fit_and_score)
+from sklearn.model_selection._validation import (
+    _aggregate_score_dicts, _fit_and_score)
 from sklearn.utils._joblib import Parallel, delayed
 from sklearn.utils.fixes import MaskedArray
 from sklearn.utils.validation import indexable
@@ -21,10 +21,26 @@ from sklearn.utils.validation import indexable
 def global_instability(estimators):
     precisions = [estimator.get_precision() for estimator in estimators]
 
-    triu_idx = np.triu_indices_from(precisions[0])
-    mean_connectivity = np.zeros_like(precisions[0])[triu_idx]
-    for c in precisions:
-        mean_connectivity += (c[triu_idx].copy() != 0).astype(int)
+    if precisions[0].ndim == 2:
+        triu_idx = np.triu_indices_from(precisions[0])
+        mean_connectivity = np.zeros_like(precisions[0])[triu_idx]
+        for c in precisions:
+            mean_connectivity += (c[triu_idx].copy() != 0).astype(int)
+    else:
+        triu_idx = np.triu_indices_from(precisions[0][0])
+        mean_connectivity = np.array(
+            [
+                np.zeros_like(precisions[0][0])[triu_idx]
+                for i in range(precisions[0].shape[0])
+            ])
+        print(mean_connectivity.shape)
+        print(precisions[0].shape)
+        for c in precisions:
+            for i in range(precisions[0].shape[0]):
+                mean_connectivity[i] += (c[i][triu_idx].copy() !=
+                                         0).astype(int)
+        # for tri dimensional matrices
+
     mean_connectivity /= len(estimators)
 
     xi_matrix = 2 * mean_connectivity * (1 - mean_connectivity)

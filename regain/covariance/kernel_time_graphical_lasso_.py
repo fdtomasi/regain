@@ -546,78 +546,78 @@ class KernelTimeGraphicalLasso(TimeGraphicalLasso):
 
         return self
 
-    def fit(self, X, y):
-        """Fit the KernelTimeGraphicalLasso model to X.
+    # def fit(self, X, y):
+    #     """Fit the KernelTimeGraphicalLasso model to X.
 
-        Parameters
-        ----------
-        X : ndarray, shape = (n_samples * n_times, n_dimensions)
-            Data matrix.
-        y : ndarray, shape = (n_times,)
-            Indicate the temporal belonging of each sample.
-        """
-        # Covariance does not make sense for a single feature
-        X, y = check_X_y(
-            X, y, accept_sparse=False, dtype=np.float64, order="C",
-            ensure_min_features=2, estimator=self)
+    #     Parameters
+    #     ----------
+    #     X : ndarray, shape = (n_samples * n_times, n_dimensions)
+    #         Data matrix.
+    #     y : ndarray, shape = (n_times,)
+    #         Indicate the temporal belonging of each sample.
+    #     """
+    #     # Covariance does not make sense for a single feature
+    #     X, y = check_X_y(
+    #         X, y, accept_sparse=False, dtype=np.float64, order="C",
+    #         ensure_min_features=2, estimator=self)
 
-        n_dimensions = X.shape[1]
-        self.classes_, n_samples = np.unique(y, return_counts=True)
-        n_times = self.classes_.size
+    #     n_dimensions = X.shape[1]
+    #     self.classes_, n_samples = np.unique(y, return_counts=True)
+    #     n_times = self.classes_.size
 
-        # n_samples = np.array([x.shape[0] for x in X])
-        if self.assume_centered:
-            self.location_ = np.zeros((n_times, n_dimensions))
-        else:
-            self.location_ = np.array(
-                [X[y == cl].mean(0) for cl in self.classes_])
+    #     # n_samples = np.array([x.shape[0] for x in X])
+    #     if self.assume_centered:
+    #         self.location_ = np.zeros((n_times, n_dimensions))
+    #     else:
+    #         self.location_ = np.array(
+    #             [X[y == cl].mean(0) for cl in self.classes_])
 
-        emp_cov = np.array(
-            [
-                empirical_covariance(
-                    X[y == cl], assume_centered=self.assume_centered)
-                for cl in self.classes_
-            ])
+    #     emp_cov = np.array(
+    #         [
+    #             empirical_covariance(
+    #                 X[y == cl], assume_centered=self.assume_centered)
+    #             for cl in self.classes_
+    #         ])
 
-        return self._fit(emp_cov, n_samples)
+    #     return self._fit(emp_cov, n_samples)
 
-    def score(self, X, y):
-        """Computes the log-likelihood of a Gaussian data set with
-        `self.covariance_` as an estimator of its covariance matrix.
+    # def score(self, X, y):
+    #     """Computes the log-likelihood of a Gaussian data set with
+    #     `self.covariance_` as an estimator of its covariance matrix.
 
-        Parameters
-        ----------
-        X : array-like, shape = (n_samples, n_features)
-            Test data of which we compute the likelihood, where n_samples is
-            the number of samples and n_features is the number of features.
-            X is assumed to be drawn from the same distribution than
-            the data used in fit (including centering).
+    #     Parameters
+    #     ----------
+    #     X : array-like, shape = (n_samples, n_features)
+    #         Test data of which we compute the likelihood, where n_samples is
+    #         the number of samples and n_features is the number of features.
+    #         X is assumed to be drawn from the same distribution than
+    #         the data used in fit (including centering).
 
-        y :  array-like, shape = (n_samples,)
-            Class of samples.
+    #     y :  array-like, shape = (n_samples,)
+    #         Class of samples.
 
-        Returns
-        -------
-        res : float
-            The likelihood of the data set with `self.covariance_` as an
-            estimator of its covariance matrix.
+    #     Returns
+    #     -------
+    #     res : float
+    #         The likelihood of the data set with `self.covariance_` as an
+    #         estimator of its covariance matrix.
 
-        """
-        # Covariance does not make sense for a single feature
-        X, y = check_X_y(
-            X, y, accept_sparse=False, dtype=np.float64, order="C",
-            ensure_min_features=2, estimator=self)
+    #     """
+    #     # Covariance does not make sense for a single feature
+    #     X, y = check_X_y(
+    #         X, y, accept_sparse=False, dtype=np.float64, order="C",
+    #         ensure_min_features=2, estimator=self)
 
-        # compute empirical covariance of the test set
-        test_cov = np.array(
-            [
-                empirical_covariance(
-                    X[y == cl] - self.location_[i], assume_centered=True)
-                for i, cl in enumerate(self.classes_)
-            ])
+    #     # compute empirical covariance of the test set
+    #     test_cov = np.array(
+    #         [
+    #             empirical_covariance(
+    #                 X[y == cl] - self.location_[i], assume_centered=True)
+    #             for i, cl in enumerate(self.classes_)
+    #         ])
 
-        res = sum(
-            X[y == cl].shape[0] * log_likelihood(S, K) for S, K, cl in zip(
-                test_cov, self.get_observed_precision(), self.classes_))
+    #     res = sum(
+    #         X[y == cl].shape[0] * log_likelihood(S, K) for S, K, cl in zip(
+    #             test_cov, self.get_observed_precision(), self.classes_))
 
-        return -99999999 if res == -np.inf else res
+    #     return -99999999 if res == -np.inf else res

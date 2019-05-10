@@ -12,6 +12,7 @@ from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
+from sklearn.utils.validation import check_X_y
 
 from regain.covariance.graphical_lasso_ import GraphicalLasso, logl
 from regain.norm import l1_od_norm
@@ -374,78 +375,154 @@ class TimeGraphicalLasso(GraphicalLasso):
             self.precision_, self.covariance_, self.n_iter_ = out
         return self
 
-    def fit(self, X, y=None):
-        """Fit the TimeGraphicalLasso model to X.
+    # def fit(self, X, y=None):
+    #     """Fit the TimeGraphicalLasso model to X.
+
+    #     Parameters
+    #     ----------
+    #     X : ndarray, shape (n_time, n_samples, n_features), or
+    #             (n_samples, n_features, n_time)
+    #         Data from which to compute the covariance estimate.
+    #         If shape is (n_samples, n_features, n_time), then set
+    #         `time_on_axis = 'last'`.
+    #     y : (ignored)
+
+    #     """
+    #     is_list = isinstance(X, list)
+    #     X, n_samples, n_dimensions, n_times = check_input(
+    #         X, y=None, time_on_axis=self.time_on_axis,
+    #         suppress_warn_list=self.suppress_warn_list, estimator=self)
+
+    #     if self.assume_centered:
+    #         self.location_ = np.zeros((n_times, 1, n_dimensions))
+    #     else:
+    #         mean = np.array([x.mean(0) for x in X]) if is_list else X.mean(1)
+    #         self.location_ = mean.reshape(n_times, 1, n_dimensions)
+    #     emp_cov = np.array(
+    #         [
+    #             empirical_covariance(x, assume_centered=self.assume_centered)
+    #             for x in X
+    #         ])
+
+    #     return self._fit(emp_cov, n_samples)
+
+    def fit(self, X, y):
+        """Fit the KernelTimeGraphicalLasso model to X.
 
         Parameters
         ----------
-        X : ndarray, shape (n_time, n_samples, n_features), or
-                (n_samples, n_features, n_time)
-            Data from which to compute the covariance estimate.
-            If shape is (n_samples, n_features, n_time), then set
-            `time_on_axis = 'last'`.
-        y : (ignored)
-
+        X : ndarray, shape = (n_samples * n_times, n_dimensions)
+            Data matrix.
+        y : ndarray, shape = (n_times,)
+            Indicate the temporal belonging of each sample.
         """
-        is_list = isinstance(X, list)
-        X, n_samples, n_dimensions, n_times = check_input(
-            X, y=None, time_on_axis=self.time_on_axis,
-            suppress_warn_list=self.suppress_warn_list, estimator=self)
+        # Covariance does not make sense for a single feature
+        X, y = check_X_y(
+            X, y, accept_sparse=False, dtype=np.float64, order="C",
+            ensure_min_features=2, estimator=self)
 
+        n_dimensions = X.shape[1]
+        self.classes_, n_samples = np.unique(y, return_counts=True)
+        n_times = self.classes_.size
+
+        # n_samples = np.array([x.shape[0] for x in X])
         if self.assume_centered:
-            self.location_ = np.zeros((n_times, 1, n_dimensions))
+            self.location_ = np.zeros((n_times, n_dimensions))
         else:
-            mean = np.array([x.mean(0) for x in X]) if is_list else X.mean(1)
-            self.location_ = mean.reshape(n_times, 1, n_dimensions)
+            self.location_ = np.array(
+                [X[y == cl].mean(0) for cl in self.classes_])
+
         emp_cov = np.array(
             [
-                empirical_covariance(x, assume_centered=self.assume_centered)
-                for x in X
+                empirical_covariance(
+                    X[y == cl], assume_centered=self.assume_centered)
+                for cl in self.classes_
             ])
 
         return self._fit(emp_cov, n_samples)
 
-    def score(self, X_test, y=None):
+    # def score(self, X_test, y=None):
+    #     """Computes the log-likelihood of a Gaussian data set with
+    #     `self.covariance_` as an estimator of its covariance matrix.
+
+    #     Parameters
+    #     ----------
+    #     X_test : array-like, shape = [n_samples, n_features]
+    #         Test data of which we compute the likelihood, where n_samples is
+    #         the number of samples and n_features is the number of features.
+    #         X_test is assumed to be drawn from the same distribution than
+    #         the data used in fit (including centering).
+
+    #     y : not used, present for API consistence purpose.
+
+    #     Returns
+    #     -------
+    #     logp : float
+    #         The likelihood of the data set with `self.covariance_` as an
+    #         estimator of its covariance matrix.
+
+    #     """
+    #     X_test, n_samples, _, _ = check_input(
+    #         X_test, y=None, time_on_axis=self.time_on_axis,
+    #         suppress_warn_list=self.suppress_warn_list, estimator=self)
+
+    #     # compute empirical covariance of the test set
+    #     test_cov = np.array(
+    #         [
+    #             empirical_covariance(x, assume_centered=True)
+    #             for x in X_test - self.location_
+    #         ])
+
+    #     logp = sum(
+    #         n * log_likelihood(S, K) for S, K, n in zip(
+    #             test_cov, self.get_observed_precision(), n_samples))
+
+    #     # ALLA  MATLAB1
+    #     # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
+    #     # scores_ranks = np.square(ranks-np.sqrt(L.shape[1]))
+
+    #     return logp  # - np.sum(scores_ranks)
+
+    def score(self, X, y):
         """Computes the log-likelihood of a Gaussian data set with
         `self.covariance_` as an estimator of its covariance matrix.
 
         Parameters
         ----------
-        X_test : array-like, shape = [n_samples, n_features]
+        X : array-like, shape = (n_samples, n_features)
             Test data of which we compute the likelihood, where n_samples is
             the number of samples and n_features is the number of features.
-            X_test is assumed to be drawn from the same distribution than
+            X is assumed to be drawn from the same distribution than
             the data used in fit (including centering).
 
-        y : not used, present for API consistence purpose.
+        y :  array-like, shape = (n_samples,)
+            Class of samples.
 
         Returns
         -------
-        logp : float
+        res : float
             The likelihood of the data set with `self.covariance_` as an
             estimator of its covariance matrix.
 
         """
-        X_test, n_samples, _, _ = check_input(
-            X_test, y=None, time_on_axis=self.time_on_axis,
-            suppress_warn_list=self.suppress_warn_list, estimator=self)
+        # Covariance does not make sense for a single feature
+        X, y = check_X_y(
+            X, y, accept_sparse=False, dtype=np.float64, order="C",
+            ensure_min_features=2, estimator=self)
 
         # compute empirical covariance of the test set
         test_cov = np.array(
             [
-                empirical_covariance(x, assume_centered=True)
-                for x in X_test - self.location_
+                empirical_covariance(
+                    X[y == cl] - self.location_[i], assume_centered=True)
+                for i, cl in enumerate(self.classes_)
             ])
 
-        logp = sum(
-            n * log_likelihood(S, K) for S, K, n in zip(
-                test_cov, self.get_observed_precision(), n_samples))
+        res = sum(
+            X[y == cl].shape[0] * log_likelihood(S, K) for S, K, cl in zip(
+                test_cov, self.get_observed_precision(), self.classes_))
 
-        # ALLA  MATLAB1
-        # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
-        # scores_ranks = np.square(ranks-np.sqrt(L.shape[1]))
-
-        return logp  # - np.sum(scores_ranks)
+        return -99999999 if res == -np.inf else res
 
     def error_norm(
             self, comp_cov, norm='frobenius', scaling=True, squared=True):

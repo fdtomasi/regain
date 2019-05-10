@@ -110,10 +110,14 @@ def make_dataset(
                 np.zeros(n_dim_obs), sigma, size=n_samples) for sigma in sigmas
         ])
 
+    X = np.vstack(data)
+    y = np.array([np.ones(x.shape[0]) * i
+                  for i, x in enumerate(data)]).flatten().astype(int)
+
     if time_on_axis == "last":
         data = data.transpose(1, 2, 0)
     return Bunch(
-        data=data, thetas=np.array(thetas),
+        data=data, thetas=np.array(thetas), X=X, y=y,
         thetas_observed=np.array(thetas_obs), ells=np.array(ells))
 
 
@@ -466,8 +470,8 @@ def make_exp_sine_squared(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
     epsilon = kwargs.get('epsilon', 0.5)
     sparse = kwargs.get('sparse', True)
     temporal_kernel = kernels.ExpSineSquared(
-        periodicity=periodicity, length_scale=length_scale)(
-            np.arange(T)[:, None])
+        periodicity=periodicity,
+        length_scale=length_scale)(np.arange(T)[:, None])
 
     u = samplegp(temporal_kernel, p=n_dim_obs * (n_dim_obs - 1) // 2)[0]
     K, K_obs = [], []
