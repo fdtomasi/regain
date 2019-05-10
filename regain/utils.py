@@ -189,6 +189,19 @@ def compose(*functions):
     return functools.reduce(compose2, functions, lambda x: x)
 
 
+def convert_data_to_2d(data):
+    """Utility to help move to the new API.
+    
+    Data are 3 dimensional with the first dimension representing classes or
+    time. The first dimension is compressed, and the belongin of the samples
+    to the class is encoded in y.
+    """
+    X = np.vstack(data)
+    y = np.array([np.ones(x.shape[0]) * i
+                  for i, x in enumerate(data)]).flatten().astype(int)
+    return X, y
+
+
 def error_rank(ells_true, ells_pred):
     """Compute the mean absolute error in rank between two matrices.
 
