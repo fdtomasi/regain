@@ -4,7 +4,6 @@ import numpy as np
 from scipy.linalg import pinvh
 from functools import partial
 
-from sklearn.utils import check_random_state
 from sklearn.covariance import empirical_covariance
 from sklearn.utils import check_X_y
 from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso
@@ -28,7 +27,8 @@ def objective(K, S, n_samples, alpha, beta, psi):
 
 
 def two_layers_time_graphical_lasso(
-        emp_cov, h=2, alpha=0.01, M=None, mu=0, eta=0, beta=1., psi="laplacian",
+        emp_cov, h=2, alpha=0.01, M=None, mu=0, eta=0, beta=1.,
+        psi="laplacian",
         n_samples=None, assume_centered=False, tol=1e-3, rtol=1e-3,
         max_iter=200, verbose=0, rho=1., compute_objective=False,
         return_history=False, return_n_iter=False):
@@ -89,7 +89,7 @@ def two_layers_time_graphical_lasso(
                 n_samples=n_samples,
                 verbose=int(max(verbose-1, 0)), psi=psi, tol=1e-3, rtol=rtol,
                 return_history=return_history,  return_n_iter=return_n_iter,
-                compute_objective=compute_objective, warm_start=Ks)
+                init=Ks)
         Ks = res[0]
         penalized_nll_old = penalized_nll
         penalized_nll = objective(Ks, Ss, n_samples, regularizer, beta,

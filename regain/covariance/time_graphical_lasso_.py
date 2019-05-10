@@ -12,7 +12,7 @@ from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
-
+from sklearn.utils import check_array
 
 from regain.covariance.graphical_lasso_ import GraphicalLasso, logl
 from regain.norm import l1_od_norm
@@ -52,6 +52,7 @@ def time_graphical_lasso(
         emp_cov, alpha=0.01, rho=1, beta=1, max_iter=100, n_samples=None,
         verbose=False, psi='laplacian', tol=1e-4, rtol=1e-4,
         return_history=False, return_n_iter=True, mode='admm',
+        compute_objective=True, stop_at=None, update_rho_options=None,
         init='empirical'):
     """Time-varying graphical lasso solver.
 
@@ -116,7 +117,7 @@ def time_graphical_lasso(
     elif init == 'zero':
         K = np.zeros_like(emp_cov)
     else:  # TODO controllo che sia un array
-        K = check_array(init)
+        K = init
 
     Z_0 = K.copy()  # np.zeros_like(emp_cov)
     Z_1 = K.copy()[:-1]  # np.zeros_like(emp_cov)[:-1]
