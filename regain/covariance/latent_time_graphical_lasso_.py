@@ -9,8 +9,8 @@ from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.utils.extmath import squared_norm
 
-from regain.covariance.time_graphical_lasso_ import (TimeGraphicalLasso,
-                                                     init_precision)
+from regain.covariance.time_graphical_lasso_ import (
+    TimeGraphicalLasso, init_precision)
 from regain.covariance.time_graphical_lasso_ import objective as obj_tgl
 from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
@@ -344,14 +344,13 @@ class LatentTimeGraphicalLasso(TimeGraphicalLasso):
 
     def __init__(
             self, alpha=0.01, tau=1., beta=1., eta=1., mode='admm', rho=1.,
-            time_on_axis='first', tol=1e-4, rtol=1e-4, psi='laplacian',
-            phi='laplacian', max_iter=100, verbose=False,
-            assume_centered=False, update_rho_options=None,
-            compute_objective=True, init='empirical'):
+            tol=1e-4, rtol=1e-4, psi='laplacian', phi='laplacian',
+            max_iter=100, verbose=False, assume_centered=False,
+            update_rho_options=None, compute_objective=True, init='empirical'):
         super(LatentTimeGraphicalLasso, self).__init__(
             alpha=alpha, beta=beta, mode=mode, rho=rho, tol=tol, rtol=rtol,
             psi=psi, max_iter=max_iter, verbose=verbose,
-            time_on_axis=time_on_axis, assume_centered=assume_centered,
+            assume_centered=assume_centered,
             update_rho_options=update_rho_options,
             compute_objective=compute_objective, init=init)
         self.tau = tau

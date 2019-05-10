@@ -19,7 +19,7 @@ from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence, error_norm_time
-from regain.validation import check_input, check_norm_prox
+from regain.validation import check_norm_prox
 
 
 def loss(S, K, n_samples=None):
@@ -327,7 +327,7 @@ class TimeGraphicalLasso(GraphicalLasso):
 
     def __init__(
             self, alpha=0.01, beta=1., mode='admm', rho=1.,
-            time_on_axis='first', tol=1e-4, rtol=1e-4, psi='laplacian',
+            tol=1e-4, rtol=1e-4, psi='laplacian',
             max_iter=100, verbose=False, assume_centered=False,
             return_history=False, update_rho_options=None,
             compute_objective=True, stop_at=None, stop_when=1e-4,
@@ -339,7 +339,6 @@ class TimeGraphicalLasso(GraphicalLasso):
             compute_objective=compute_objective, init=init)
         self.beta = beta
         self.psi = psi
-        self.time_on_axis = time_on_axis
         self.return_history = return_history
         self.stop_at = stop_at
         self.stop_when = stop_when
@@ -379,37 +378,6 @@ class TimeGraphicalLasso(GraphicalLasso):
             self.precision_, self.covariance_, self.n_iter_ = out
         return self
 
-    # def fit(self, X, y=None):
-    #     """Fit the TimeGraphicalLasso model to X.
-
-    #     Parameters
-    #     ----------
-    #     X : ndarray, shape (n_time, n_samples, n_features), or
-    #             (n_samples, n_features, n_time)
-    #         Data from which to compute the covariance estimate.
-    #         If shape is (n_samples, n_features, n_time), then set
-    #         `time_on_axis = 'last'`.
-    #     y : (ignored)
-
-    #     """
-    #     is_list = isinstance(X, list)
-    #     X, n_samples, n_dimensions, n_times = check_input(
-    #         X, y=None, time_on_axis=self.time_on_axis,
-    #         suppress_warn_list=self.suppress_warn_list, estimator=self)
-
-    #     if self.assume_centered:
-    #         self.location_ = np.zeros((n_times, 1, n_dimensions))
-    #     else:
-    #         mean = np.array([x.mean(0) for x in X]) if is_list else X.mean(1)
-    #         self.location_ = mean.reshape(n_times, 1, n_dimensions)
-    #     emp_cov = np.array(
-    #         [
-    #             empirical_covariance(x, assume_centered=self.assume_centered)
-    #             for x in X
-    #         ])
-
-    #     return self._fit(emp_cov, n_samples)
-
     def fit(self, X, y):
         """Fit the TimeGraphicalLasso model to X.
 
@@ -444,48 +412,6 @@ class TimeGraphicalLasso(GraphicalLasso):
             ])
 
         return self._fit(emp_cov, n_samples)
-
-    # def score(self, X_test, y=None):
-    #     """Computes the log-likelihood of a Gaussian data set with
-    #     `self.covariance_` as an estimator of its covariance matrix.
-
-    #     Parameters
-    #     ----------
-    #     X_test : array-like, shape = [n_samples, n_features]
-    #         Test data of which we compute the likelihood, where n_samples is
-    #         the number of samples and n_features is the number of features.
-    #         X_test is assumed to be drawn from the same distribution than
-    #         the data used in fit (including centering).
-
-    #     y : not used, present for API consistence purpose.
-
-    #     Returns
-    #     -------
-    #     logp : float
-    #         The likelihood of the data set with `self.covariance_` as an
-    #         estimator of its covariance matrix.
-
-    #     """
-    #     X_test, n_samples, _, _ = check_input(
-    #         X_test, y=None, time_on_axis=self.time_on_axis,
-    #         suppress_warn_list=self.suppress_warn_list, estimator=self)
-
-    #     # compute empirical covariance of the test set
-    #     test_cov = np.array(
-    #         [
-    #             empirical_covariance(x, assume_centered=True)
-    #             for x in X_test - self.location_
-    #         ])
-
-    #     logp = sum(
-    #         n * log_likelihood(S, K) for S, K, n in zip(
-    #             test_cov, self.get_observed_precision(), n_samples))
-
-    #     # ALLA  MATLAB1
-    #     # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
-    #     # scores_ranks = np.square(ranks-np.sqrt(L.shape[1]))
-
-    #     return logp  # - np.sum(scores_ranks)
 
     def score(self, X, y):
         """Computes the log-likelihood of a Gaussian data set with

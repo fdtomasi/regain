@@ -7,14 +7,14 @@ from functools import partial
 import numpy as np
 from scipy import linalg
 from six.moves import map, range, zip
-from sklearn.covariance import empirical_covariance
+from sklearn.covariance import empirical_covariance, log_likelihood
 
-from regain.covariance.graphical_lasso_ import logl
-from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso
+from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso, init_precision
 from regain.covariance.time_graphical_lasso_ import loss as loss_tgl
 from regain.norm import l1_od_norm, vector_p_norm
 from regain.prox import prox_FL
 from regain.utils import convergence, positive_definite
+from regain.validation import check_input
 
 
 def loss(S, K, n_samples=None, vareps=0):
@@ -193,7 +193,8 @@ def time_graph_lasso(
         tol=1e-4, delta=1e-4, gamma=1., lamda=1., eps=0.5, debug=False,
         return_history=False, return_n_iter=True, choose='gamma',
         lamda_criterion='b', time_norm=1, compute_objective=True,
-        return_n_linesearch=False, vareps=1e-5, stop_at=None, stop_when=1e-4):
+        return_n_linesearch=False, vareps=1e-5, stop_at=None, stop_when=1e-4,
+        init='empirical'):
     """Time-varying graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -237,13 +238,8 @@ def time_graph_lasso(
             "`choose` parameter must be one of %s." % available_choose)
 
     n_times, _, n_features = emp_cov.shape
-    covariance_ = emp_cov.copy()
-    covariance_ *= 0.95
 
-    K = np.empty_like(emp_cov)
-    for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
-        c.flat[::n_features + 1] = e.flat[::n_features + 1]
-        K[i] = linalg.pinvh(c)
+    K = init_precision(emp_cov, mode=init)
 
     # K = np.array([np.eye(s.shape[0]) for s in emp_cov])
     # Y = K.copy()
@@ -459,12 +455,11 @@ class TimeGraphicalLassoForwardBackward(TimeGraphicalLasso):
             compute_objective=True, eps=0.5, choose='gamma', lamda=1,
             delta=1e-4, gamma=1., lamda_criterion='b', time_norm=1,
             return_history=False, debug=False, return_n_linesearch=False,
-            vareps=1e-5, stop_at=None, stop_when=1e-4):
+            vareps=1e-5, stop_at=None, stop_when=1e-4, init='empirical'):
         super(TimeGraphicalLassoForwardBackward, self).__init__(
             alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
             assume_centered=assume_centered,
-            compute_objective=compute_objective, beta=beta,
-            time_on_axis=time_on_axis)
+            compute_objective=compute_objective, beta=beta, init=init)
         self.delta = delta
         self.gamma = gamma
         self.lamda_criterion = lamda_criterion
@@ -478,6 +473,7 @@ class TimeGraphicalLassoForwardBackward(TimeGraphicalLasso):
         self.vareps = vareps
         self.stop_at = stop_at
         self.stop_when = stop_when
+        self.time_on_axis = time_on_axis
 
     def _fit(self, emp_cov, n_samples):
         """Fit the TimeGraphLasso model to X.
@@ -501,7 +497,7 @@ class TimeGraphicalLassoForwardBackward(TimeGraphicalLasso):
             delta=self.delta, eps=self.eps, choose=self.choose,
             lamda=self.lamda, debug=self.debug,
             return_n_linesearch=self.return_n_linesearch, vareps=self.vareps,
-            stop_at=self.stop_at, stop_when=self.stop_when)
+            stop_at=self.stop_at, stop_when=self.stop_when, init=self.init)
 
         if self.return_history:
             if self.return_n_linesearch:
@@ -514,6 +510,79 @@ class TimeGraphicalLassoForwardBackward(TimeGraphicalLasso):
             else:
                 self.precision_, self.covariance_, self.n_iter_ = out
         return self
+
+    def fit(self, X, y=None):
+        """Fit the TimeGraphicalLasso model to X.
+
+        Parameters
+        ----------
+        X : ndarray, shape (n_time, n_samples, n_features), or
+                (n_samples, n_features, n_time)
+            Data from which to compute the covariance estimate.
+            If shape is (n_samples, n_features, n_time), then set
+            `time_on_axis = 'last'`.
+        y : (ignored)
+
+        """
+        is_list = isinstance(X, list)
+        X, n_samples, n_dimensions, n_times = check_input(
+            X, y=None, time_on_axis=self.time_on_axis,
+            suppress_warn_list=self.suppress_warn_list, estimator=self)
+
+        if self.assume_centered:
+            self.location_ = np.zeros((n_times, 1, n_dimensions))
+        else:
+            mean = np.array([x.mean(0) for x in X]) if is_list else X.mean(1)
+            self.location_ = mean.reshape(n_times, 1, n_dimensions)
+        emp_cov = np.array(
+            [
+                empirical_covariance(x, assume_centered=self.assume_centered)
+                for x in X
+            ])
+
+        return self._fit(emp_cov, n_samples)
+
+    def score(self, X_test, y=None):
+        """Computes the log-likelihood of a Gaussian data set with
+        `self.covariance_` as an estimator of its covariance matrix.
+
+        Parameters
+        ----------
+        X_test : array-like, shape = [n_samples, n_features]
+            Test data of which we compute the likelihood, where n_samples is
+            the number of samples and n_features is the number of features.
+            X_test is assumed to be drawn from the same distribution than
+            the data used in fit (including centering).
+
+        y : not used, present for API consistence purpose.
+
+        Returns
+        -------
+        logp : float
+            The likelihood of the data set with `self.covariance_` as an
+            estimator of its covariance matrix.
+
+        """
+        X_test, n_samples, _, _ = check_input(
+            X_test, y=None, time_on_axis=self.time_on_axis,
+            suppress_warn_list=self.suppress_warn_list, estimator=self)
+
+        # compute empirical covariance of the test set
+        test_cov = np.array(
+            [
+                empirical_covariance(x, assume_centered=True)
+                for x in X_test - self.location_
+            ])
+
+        logp = sum(
+            n * log_likelihood(S, K) for S, K, n in zip(
+                test_cov, self.get_observed_precision(), n_samples))
+
+        # ALLA  MATLAB1
+        # ranks = [np.linalg.matrix_rank(L) for L in self.latent_]
+        # scores_ranks = np.square(ranks-np.sqrt(L.shape[1]))
+
+        return logp  # - np.sum(scores_ranks)
 
     def alpha_max(self, X, is_covariance=False):
         """Compute the alpha_max for the problem at hand, based on sklearn."""
