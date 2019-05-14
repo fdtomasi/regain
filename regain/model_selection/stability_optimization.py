@@ -11,8 +11,8 @@ from sklearn.base import clone, is_classifier
 from sklearn.metrics.scorer import _check_multimetric_scoring
 from sklearn.model_selection import GridSearchCV, ParameterGrid, ShuffleSplit
 from sklearn.model_selection._split import check_cv
-from sklearn.model_selection._validation import (_aggregate_score_dicts,
-                                                 _fit_and_score)
+from sklearn.model_selection._validation import (
+    _aggregate_score_dicts, _fit_and_score)
 from sklearn.utils import deprecated
 from sklearn.utils._joblib import Parallel, delayed
 from sklearn.utils.fixes import MaskedArray
@@ -47,6 +47,22 @@ def global_instability(estimators):
     return np.sum(xi_matrix) / (binom(precisions[0].shape[1], 2) * n_times)
 
 
+def _check_param_order(param_grid):
+    """Ensure that the parameters are in descending order.
+    
+    This is required for stability to be correctly computed.
+    """
+    if hasattr(param_grid, 'items'):
+        param_grid = [param_grid]
+
+    pg = []
+    for p in param_grid:
+        for name, v in p.items():
+            pg.append((name, np.sort(v)[::-1]))
+
+    return dict(pg)
+
+
 class GraphicalModelStabilitySelection(GridSearchCV):
     def __init__(
             self, estimator, param_grid, scoring=None, n_jobs=None,
@@ -60,6 +76,7 @@ class GraphicalModelStabilitySelection(GridSearchCV):
             param_grid=param_grid)
         self.n_repetitions = n_repetitions
         self.sampling_size = sampling_size
+        _check_param_order(param_grid)
 
     @deprecated
     def fit__(self, X, y=None):
