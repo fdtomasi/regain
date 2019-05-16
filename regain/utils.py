@@ -19,6 +19,21 @@ from six.moves import cPickle as pkl
 from sklearn.metrics import average_precision_score
 
 
+def top_n_indexes(arr, n):
+    import bottleneck as bn
+    idx = bn.argpartition(arr, arr.size - n, axis=None)[-n:]
+    width = arr.shape[1]
+    return [divmod(i, width) for i in idx]
+
+
+def retain_top_n(arr, n):
+    """Discard low values in a matrix."""
+    mask_array = np.zeros_like(arr)
+    for idx in top_n_indexes(np.abs(arr), n):
+        mask_array[idx] = arr[idx]
+    return mask_array
+
+
 def namedtuple_with_defaults(typename, field_names, default_values=()):
     T = collections.namedtuple(typename, field_names)
     T.__new__.__defaults__ = (None, ) * len(T._fields)
