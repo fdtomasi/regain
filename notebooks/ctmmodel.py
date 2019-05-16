@@ -25,6 +25,7 @@ import numpy as np # for arrays, array broadcasting etc.
 # numpy.seterr(divide='ignore') # ignore 0*log(0) errors
 from numpy.linalg import inv, det
 from scipy.optimize import minimize, fmin_l_bfgs_b
+from sklearn.utils.extmath import fast_logdet
 
 from gensim import interfaces, utils
 from six.moves import xrange
@@ -50,9 +51,9 @@ class SufficientStats():
         self.numdocs = 0
         self.numtopics = numtopics
         self.numterms = numterms
-        self.beta_stats = numpy.zeros([numtopics, numterms])
-        self.mu_stats = numpy.zeros(numtopics)
-        self.sigma_stats = numpy.zeros([numtopics, numtopics])
+        self.beta_stats = np.zeros([numtopics, numterms])
+        self.mu_stats = np.zeros(numtopics)
+        self.sigma_stats = np.zeros([numtopics, numtopics])
 
     def update(self, lamda, nu2, phi, doc):
         """
@@ -69,7 +70,7 @@ class SufficientStats():
                 self.beta_stats[i, n] += c * phi[n, i]
 
         # update \sigma_stats
-        self.sigma_stats += numpy.diag(nu2) + numpy.dot(lamda, lamda.transpose())
+        self.sigma_stats += np.diag(nu2) + np.dot(lamda, lamda.transpose())
 
         self.numdocs += 1
 
@@ -132,20 +133,20 @@ class CtmModel(LdaModel):
 
         # initialize a model with zero-mean, diagonal covariance gaussian and
         # random topics seeded from the corpus
-        self.mu = numpy.zeros(self.num_topics)
-        self.sigma = numpy.diagflat([1.0] * self.num_topics)
+        self.mu = np.zeros(self.num_topics)
+        self.sigma = np.diagflat([1.0] * self.num_topics)
         self.sigma_inverse = inv(self.sigma)
-        self.beta = numpy.random.uniform(0, 1, (self.num_topics, self.num_terms))
+        self.beta = np.random.uniform(0, 1, (self.num_topics, self.num_terms))
 
         # variational parameters
-        self.lamda = numpy.zeros(self.num_topics)
-        self.nu2 = numpy.ones(self.num_topics)  # nu^2
-        self.phi = 1/float(self.num_topics) * numpy.ones([self.num_terms, self.num_topics])
+        self.lamda = np.zeros(self.num_topics)
+        self.nu2 = np.ones(self.num_topics)  # nu^2
+        self.phi = 1/float(self.num_topics) * np.ones([self.num_terms, self.num_topics])
         self.optimize_zeta()
 
         # in order to get the topics graph, we need to store the
         # optimized lamda for each document
-        self.observed_lamda = numpy.zeros([len(corpus)])
+        self.observed_lamda = np.zeros([len(corpus)])
 
         # if a training corpus was provided, start estimating the model right away
         if corpus is not None:
@@ -177,7 +178,7 @@ class CtmModel(LdaModel):
 
             # print "bound after M-step %f" %(new_bound)
 
-            if (new_bound - old_bound)/old_bound < self.em_convergence:
+            if (new_bound - old_bound) / old_bound < self.em_convergence:
                 break
 
     def do_estep(self, corpus):
@@ -204,12 +205,12 @@ class CtmModel(LdaModel):
         """
 
         for i in xrange(self.num_topics):
-            beta_norm = numpy.sum(sstats.beta_stats[i])
+            beta_norm = np.sum(sstats.beta_stats[i])
             self.beta[i] = sstats.beta_stats[i] / beta_norm
 
         self.mu = sstats.mu_stats / sstats.numdocs
 
-        self.sigma = sstats.sigma_stats + numpy.multiply(self.mu, self.mu.transpose())
+        self.sigma = sstats.sigma_stats + np.multiply(self.mu, self.mu.transpose())
         self.sigma_inverse = inv(self.sigma)
 
     def bound(self, doc, lamda=None, nu2=None):
@@ -270,20 +271,20 @@ class CtmModel(LdaModel):
 
         for iteration in xrange(self.em_max_iterations):
 
-            print ("bound before zeta opt %f" %(self.bound(doc)))
+            # print ("bound before zeta opt %f" %(self.bound(doc)))
             self.optimize_zeta()
 
-            print ("bound before lamda opt %f" %(self.bound(doc)))
+            # print ("bound before lamda opt %f" %(self.bound(doc)))
             self.optimize_lamda(doc)
 
             self.optimize_zeta()
 
-            print ("bound before nu2 opt %f" %(self.bound(doc)))
+            # print ("bound before nu2 opt %f" %(self.bound(doc)))
             self.optimize_nu2(doc)
 
             self.optimize_zeta()
 
-            print ("bound before phi opt %f" %(self.bound(doc)))
+            # print ("bound before phi opt %f" %(self.bound(doc)))
             self.optimize_phi(doc)
 
             bound, new_bound = new_bound, self.bound(doc)
@@ -294,20 +295,20 @@ class CtmModel(LdaModel):
                 break
             break
 
-        print ("bound after variational inference %f" %(bound))
+        # print ("bound after variational inference %f" %(bound))
 
         return bound
 
     def optimize_zeta(self):
-        # self.zeta = sum([numpy.exp(self.lamda[i] + 0.5 * self.nu2[i])
+        # self.zeta = sum([np.exp(self.lamda[i] + 0.5 * self.nu2[i])
         #     for i in xrange(self.num_topics)])
         self.zeta = np.exp(self.lamda + 0.5 * self.nu2).sum()
 
     def optimize_phi(self, doc):
         for n, _ in doc:
-#             phi_norm = sum([numpy.exp(self.lamda[i]) * self.beta[i, n]
+#             phi_norm = sum([np.exp(self.lamda[i]) * self.beta[i, n]
 #             for i in xrange(self.num_topics):
-#                 self.phi[n, i] = numpy.exp(self.lamda[i]) * self.beta[i, n] / phi_norm
+#                 self.phi[n, i] = np.exp(self.lamda[i]) * self.beta[i, n] / phi_norm
             self.phi[n] = np.exp(self.lamda) * self.beta[:, n] / np.exp(self.lamda * self.beta[:, n]).sum()
 
     def optimize_lamda(self, doc):
@@ -323,7 +324,7 @@ class CtmModel(LdaModel):
 
             return result
 
-        # We want to maximize f, but numpy only implements minimize, so we
+        # We want to maximize f, but np only implements minimize, so we
         # minimize -f
         res = minimize(lambda x: -f(x), self.lamda, method='BFGS', jac=lambda x: -df(x))
 
@@ -340,10 +341,10 @@ class CtmModel(LdaModel):
             Returns dL/dnu2
 
             """
-#             result = numpy.zeros(self.num_topics)
+#             result = np.zeros(self.num_topics)
 #             for i in xrange(self.num_topics):
 #                 result[i] = - 0.5 * self.sigma_inverse[i, i]
-#                 result[i] -= N/(2*self.zeta) * numpy.exp(self.lamda[i] + 0.5 * nu2[i])
+#                 result[i] -= N/(2*self.zeta) * np.exp(self.lamda[i] + 0.5 * nu2[i])
 #                 result[i] += 1/(2*nu2[i])  # TODO safe_division
             
             res = -0.5 * np.diag(self.sigma_inverse)
