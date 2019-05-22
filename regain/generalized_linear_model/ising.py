@@ -1,11 +1,19 @@
+import warnings
+
 import numpy as np
+from scipy import linalg
 
+from six.moves import map, range, zip
 
+from regain.update_rules import update_rho
+from regain.validation import check_norm_prox
 from sklearn.utils import check_array
 from sklearn.utils.extmath import squared_norm
 
-from regain.generalized_linear_model.base import GLM_GM, convergence, \
-                                                 build_adjacency_matrix
+from regain.generalized_linear_model.base import GLM_GM, convergence
+from regain.generalized_linear_model.base import build_adjacency_matrix, \
+                                                 TemporalModel
+from regain.covariance.time_graphical_lasso_ import init_precision
 from regain.prox import soft_thresholding, soft_thresholding_od
 from regain.norm import l1_od_norm
 from regain.utils import convergence as convergence_admm
@@ -71,7 +79,7 @@ def fit_each_variable(X, ix, alpha=1e-2, gamma=1e-3, tol=1e-3,
     return return_list
 
 
-def objective(X, theta, alpha):
+def loss(X, theta):
     n, d = X.shape
     objective = 0
     if not np.all(theta == theta.T):
@@ -82,8 +90,31 @@ def objective(X, theta, alpha):
             XXT = X[i, r] * X[i, selector].dot(theta[selector, r])
             XT = np.log(1 + np.exp(X[i, selector].dot(theta[selector, r])))
             objective += XXT - XT
+    return objective
+
+def objective(X, theta, alpha):
+    objective = loss(X, theta)
     return - (1/n) * objective + alpha*l1_od_norm(theta)
 
+
+def _gradient_ising(X, theta,  n, A=None, rho=1, T=0):
+    n, d = X.shape
+    theta_new = np.zeros_like(theta)
+    def gradient(X, thetas, r, selector, n, A=None, rho=1, T=0):
+        sum_ = 0
+        for i in range(X.shape[0]):
+            XT = X[i, selector].dot(theta[selector, r])
+            EXT = np.exp(XT)
+            E_XT = np.exp(-XT)
+            sum_ += X[i, selector]*((EXT - E_XT)/(EXT + E_XT) - X[i, r])
+        if A is not None:
+            sum_ += rho*(theta[r, selector] - A[r, selector])
+        return (1/n)*sum_
+    for ix in range(theta.shape[0]):
+        selector = [i for i in range(d) if i != ix]
+        theta_new[ix, selector] = gradient(
+                                    X, theta, ix, selector, n, A, rho, T)
+    return theta_new
 
 def _fit(X, alpha=1e-2, gamma=1e-3, tol=1e-3, max_iter=1000, verbose=0,
          return_history=True, compute_objective=True,
@@ -91,24 +122,13 @@ def _fit(X, alpha=1e-2, gamma=1e-3, tol=1e-3, max_iter=1000, verbose=0,
     n, d = X.shape
     theta = np.zeros((d, d))
 
-    def gradient(X, theta, r, selector, n):
-        sum_ = 0
-        for i in range(X.shape[0]):
-            XT = X[i, selector].dot(theta[selector, r])
-            EXT = np.exp(XT)
-            E_XT = np.exp(-XT)
-            sum_ += X[i, selector]*((EXT - E_XT)/(EXT + E_XT) - X[i, r])
-        return (1/n)*sum_
 
     thetas = [theta]
     theta_new = theta.copy()
     checks = []
     for iter_ in range(max_iter):
 
-        for ix in range(theta.shape[0]):
-            selector = [i for i in range(d) if i != ix]
-            theta_new[ix, selector] = theta[ix, selector] - gamma*gradient(
-                                        X, theta, ix, selector, n)
+        theta_new = _gradient_ising(X, theta,  n)
         theta = (theta_new + theta_new.T)/2
         theta = soft_thresholding_od(theta, alpha*gamma)
         thetas.append(theta)
