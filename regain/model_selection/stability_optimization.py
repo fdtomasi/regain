@@ -71,7 +71,9 @@ class GraphicalModelStabilitySelection(GridSearchCV):
             return_train_score=False, n_repetitions=10, sampling_size=10):
         super().__init__(
             estimator=estimator, scoring=scoring, n_jobs=n_jobs, iid=iid,
-            refit=refit, cv=cv, verbose=verbose, pre_dispatch=pre_dispatch,
+            refit=refit,
+            cv=ShuffleSplit(n_splits=n_repetitions, train_size=sampling_size),
+            verbose=verbose, pre_dispatch=pre_dispatch,
             error_score=error_score, return_train_score=return_train_score,
             param_grid=param_grid)
         self.n_repetitions = n_repetitions
