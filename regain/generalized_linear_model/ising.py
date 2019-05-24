@@ -11,9 +11,8 @@ from sklearn.utils import check_array
 from sklearn.utils.extmath import squared_norm
 
 from regain.generalized_linear_model.base import GLM_GM, convergence
-from regain.generalized_linear_model.base import build_adjacency_matrix, \
-                                                 TemporalModel
-from regain.covariance.time_graphical_lasso_ import init_precision
+from regain.generalized_linear_model.base import build_adjacency_matrix
+#from regain.covariance.time_graphical_lasso_ import init_precision
 from regain.prox import soft_thresholding, soft_thresholding_od
 from regain.norm import l1_od_norm
 from regain.utils import convergence as convergence_admm
@@ -93,6 +92,7 @@ def loss(X, theta):
     return objective
 
 def objective(X, theta, alpha):
+    n, _ = X.shape
     objective = loss(X, theta)
     return - (1/n) * objective + alpha*l1_od_norm(theta)
 
@@ -101,7 +101,7 @@ def _gradient_ising(X, theta,  n, A=None, rho=1, T=0):
     n, d = X.shape
     theta_new = np.zeros_like(theta)
     def gradient(X, thetas, r, selector, n, A=None, rho=1, T=0):
-        sum_ = 0
+        sum_ = np.zeros((1, len(selector)))
         for i in range(X.shape[0]):
             XT = X[i, selector].dot(theta[selector, r])
             EXT = np.exp(XT)
@@ -114,6 +114,7 @@ def _gradient_ising(X, theta,  n, A=None, rho=1, T=0):
         selector = [i for i in range(d) if i != ix]
         theta_new[ix, selector] = gradient(
                                     X, theta, ix, selector, n, A, rho, T)
+    theta_new = (theta_new + theta_new.T)/2
     return theta_new
 
 def _fit(X, alpha=1e-2, gamma=1e-3, tol=1e-3, max_iter=1000, verbose=0,
@@ -128,7 +129,7 @@ def _fit(X, alpha=1e-2, gamma=1e-3, tol=1e-3, max_iter=1000, verbose=0,
     checks = []
     for iter_ in range(max_iter):
 
-        theta_new = _gradient_ising(X, theta,  n)
+        theta_new = theta - gamma* _gradient_ising(X, theta,  n)
         theta = (theta_new + theta_new.T)/2
         theta = soft_thresholding_od(theta, alpha*gamma)
         thetas.append(theta)

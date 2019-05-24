@@ -14,8 +14,8 @@ from sklearn.covariance import empirical_covariance, log_likelihood
 
 from regain.covariance.graphical_lasso_ import GraphicalLasso, logl
 from regain.generalized_linear_model.base import GLM_GM, convergence
-from regain.generalized_linear_model.base import build_adjacency_matrix, \
-                                                 TemporalModel
+from regain.generalized_linear_model.base import build_adjacency_matrix#, \
+                                                # TemporalModel
 from regain.generalized_linear_model.ising import _gradient_ising
 from regain.generalized_linear_model.ising import loss as loss_ising_single_time
 from regain.covariance.time_graphical_lasso_ import init_precision
@@ -77,10 +77,10 @@ def _update_K_gaussian(emp_cov, A, n_times, n_samples, rho):
 
 
 def _update_K_ising(X, A, K, n_times, n_samples, rho,
-                    gamma=1e-3, tol=1e-3, max_iter=50, adjust_gamma=False):
+                    gamma=1, tol=1e-3, max_iter=200, adjust_gamma=False):
 
-    _, _, d = X.shape
-    Ks = [K]
+    #_, _, d = X.shape
+    Ks = [np.zeros_like(K)]
     for iter_ in range(max_iter):
         K_grad = np.zeros_like(K)
         for t in range(n_times):
@@ -91,8 +91,7 @@ def _update_K_ising(X, A, K, n_times, n_samples, rho,
         K = K - gamma*K_grad
         Ks.append(K)
 
-        if np.abs(np.linalg.norm(Ks[-2]-Ks[-1]) /
-                  np.linalg.norm(Ks[-1])) < tol:
+        if np.linalg.norm(Ks[-2]-Ks[-1]) < tol:
             break
 
     return K
@@ -159,7 +158,7 @@ def time_graphical_model(X, distribution, alpha=0.01, rho=1, kernel=None,
     if distribution == 'gaussian':
         K = init_precision(X, mode=init)
     elif distribution == 'ising':
-        K = np.zeros((n_features, n_features, n_times))
+        K = np.zeros((n_times, n_features, n_features))
     Z_0 = K.copy()  # np.zeros_like(emp_cov)
     U_0 = np.zeros_like(Z_0)
     Z_0_old = np.zeros_like(Z_0)
@@ -204,7 +203,7 @@ def time_graphical_model(X, distribution, alpha=0.01, rho=1, kernel=None,
         elif distribution =='ising':
             K = _update_K_ising(X, A, K, n_times, n_samples, rho,
                                 gamma=1e-3, tol=1e-3, max_iter=1000,
-                                adjust_gamma=False)
+                                adjust_gamma=True)
         else:
             raise ValueError("Unknown distribution")
         # update Z_0
@@ -325,7 +324,7 @@ def objective_kernel(theta, K, psi, kernel, times):
     return obj
 
 
-class TemporalGraphicalModel(TemporalModel):
+class TemporalGraphicalModel():
     """Temporal Graphical model that follows an Ising model at each time point.
 
     Parameters
