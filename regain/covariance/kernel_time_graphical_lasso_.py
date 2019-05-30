@@ -12,8 +12,8 @@ from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.utils.extmath import squared_norm
 
-from regain.covariance.time_graphical_lasso_ import (TimeGraphicalLasso,
-                                                     init_precision, loss)
+from regain.covariance.time_graphical_lasso_ import (
+    TimeGraphicalLasso, init_precision, loss)
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
@@ -255,6 +255,21 @@ def objective_kernel(theta, K, psi, kernel, times):
     return obj
 
 
+def objective_similarity(theta, K, times, psi):
+    obj = 0
+    n_times = K.shape[0]
+    kernel = np.eye()
+    idx = np.triu_indices(n_times, 1)
+    kernel[idx] = theta
+    kernel[idx[::-1]] = theta
+    for m in range(1, n_times):
+        # all possible markovians jumps
+        obj += np.sum(
+            np.array(list(map(psi, K[m:] - K[:-m]))) * np.diag(kernel, m))
+
+    return obj
+
+
 class KernelTimeGraphicalLasso(TimeGraphicalLasso):
     """As KernelTimeGraphicalLasso, but X is 2d and y specifies time.
 
@@ -402,6 +417,156 @@ class KernelTimeGraphicalLasso(TimeGraphicalLasso):
                         "Kernel size does not match classes of samples, "
                         "got {} classes and kernel has shape {}".format(
                             self.classes_.size, kernel.shape[0]))
+
+            out = kernel_time_graphical_lasso(
+                emp_cov, alpha=self.alpha, rho=self.rho, kernel=kernel,
+                n_samples=n_samples, tol=self.tol, rtol=self.rtol,
+                psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
+                return_n_iter=True, return_history=self.return_history,
+                update_rho_options=self.update_rho_options,
+                compute_objective=self.compute_objective, init=self.init)
+            if self.return_history:
+                self.precision_, self.covariance_, self.history_, self.n_iter_ = out
+            else:
+                self.precision_, self.covariance_, self.n_iter_ = out
+
+        return self
+
+
+class SimilarityTimeGraphicalLasso(TimeGraphicalLasso):
+    """Learn how to relate different precision matrices across times.
+
+    Parameters
+    ----------
+    alpha : positive float, default 0.01
+        Regularization parameter for precision matrix. The higher alpha,
+        the more regularization, the sparser the inverse covariance.
+
+    kernel : ndarray, default None
+        Normalised temporal kernel (1 on the diagonal),
+        with dimensions equal to the dimensionality of the data set.
+        If None, it is interpreted as an identity matrix, where there is no
+        constraint on the temporal behaviour of the precision matrices.
+
+    psi : {'laplacian', 'l1', 'l2', 'linf', 'node'}, default 'laplacian'
+        Type of norm to enforce for consecutive precision matrices in time.
+
+    rho : positive float, default 1
+        Augmented Lagrangian parameter.
+
+    tol : positive float, default 1e-4
+        Absolute tolerance to declare convergence.
+
+    rtol : positive float, default 1e-4
+        Relative tolerance to declare convergence.
+
+    max_iter : integer, default 100
+        The maximum number of iterations.
+
+    verbose : boolean, default False
+        If verbose is True, the objective function, rnorm and snorm are
+        printed at each iteration.
+
+    assume_centered : boolean, default False
+        If True, data are not centered before computation.
+        Useful when working with data whose mean is almost, but not exactly
+        zero.
+        If False, data are centered before computation.
+
+    update_rho_options : dict, default None
+        Options for the update of rho. See `update_rho` function for details.
+
+    compute_objective : boolean, default True
+        Choose if compute the objective function during iterations
+        (only useful if `verbose=True`).
+
+    init : {'empirical', 'zeros', ndarray}, default 'empirical'
+        How to initialise the inverse covariance matrix. Default is take
+        the empirical covariance and inverting it.
+
+    Attributes
+    ----------
+    covariance_ : array-like, shape (n_times, n_features, n_features)
+        Estimated covariance matrix
+
+    precision_ : array-like, shape (n_times, n_features, n_features)
+        Estimated pseudo inverse matrix.
+
+    n_iter_ : int
+        Number of iterations run.
+
+    """
+
+    def __init__(
+            self, alpha=0.01, kernel=None, rho=1., tol=1e-4, rtol=1e-4,
+            psi='laplacian', max_iter=100, verbose=False,
+            assume_centered=False, return_history=False,
+            update_rho_options=None, compute_objective=True, ker_param=1,
+            max_iter_ext=100, init='empirical', eps=1e-6):
+        super(KernelTimeGraphicalLasso, self).__init__(
+            alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
+            verbose=verbose, assume_centered=assume_centered,
+            update_rho_options=update_rho_options,
+            compute_objective=compute_objective, return_history=return_history,
+            psi=psi, init=init)
+        # in this class, `kernel` is either a matrix TxT or None
+        # if None, automatically learn all the weights
+        self.kernel = kernel
+        self.max_iter_ext = max_iter_ext
+        self.eps = eps
+
+    def _fit(self, emp_cov, n_samples):
+        if self.kernel is None:
+            from scipy.optimize import minimize
+            # discover best kernel parameter via EM
+            # initialise precision matrices, as warm start
+            self.precision_ = init_precision(emp_cov, mode=self.init)
+            n_times = self.precision_.shape[0]
+            theta_old = np.zeros(n_times * (n_times - 1) // 2)
+            idx = np.triu_indices(n_times, 1)
+            kernel = np.eye(n_times)
+
+            psi, _, _ = check_norm_prox(self.psi)
+
+            for i in range(self.max_iter_ext):
+                # E step - discover best kernel
+                theta = minimize(
+                    objective_similarity,
+                    args=(self.precision_, self.classes_[:, None], psi),
+                    bounds=(0, emp_cov.shape[0]), method='bounded').x
+
+                if i > 0 and np.linalg.norm(theta_old - theta) / theta.size < self.eps:
+                    break
+                else:
+                    print("Find new theta: %f" % theta)
+
+                # M step - fix the kernel matrix
+                kernel[idx] = theta
+                kernel[idx[::-1]] = theta
+
+                out = kernel_time_graphical_lasso(
+                    emp_cov, alpha=self.alpha, rho=self.rho, kernel=kernel,
+                    n_samples=n_samples, tol=self.tol, rtol=self.rtol,
+                    psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
+                    return_n_iter=True, return_history=self.return_history,
+                    update_rho_options=self.update_rho_options,
+                    compute_objective=self.compute_objective,
+                    init=self.precision_)
+                if self.return_history:
+                    self.precision_, self.covariance_, self.history_, self.n_iter_ = out
+                else:
+                    self.precision_, self.covariance_, self.n_iter_ = out
+                theta_old = theta
+            else:
+                print("warning: theta not converged")
+
+        else:
+            kernel = self.kernel
+            if kernel.shape[0] != self.classes_.size:
+                raise ValueError(
+                    "Kernel size does not match classes of samples, "
+                    "got {} classes and kernel has shape {}".format(
+                        self.classes_.size, kernel.shape[0]))
 
             out = kernel_time_graphical_lasso(
                 emp_cov, alpha=self.alpha, rho=self.rho, kernel=kernel,
