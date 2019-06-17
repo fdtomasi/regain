@@ -22,6 +22,24 @@ from regain.utils import convergence, error_norm_time
 from regain.validation import check_norm_prox
 
 
+
+def init_precision(emp_cov, mode='empirical'):
+    if mode == 'empirical':
+        n_times, _, n_features = emp_cov.shape
+        covariance_ = emp_cov.copy()
+        covariance_ *= 0.95
+        K = np.empty_like(emp_cov)
+        for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
+            c.flat[::n_features + 1] = e.flat[::n_features + 1]
+            K[i] = linalg.pinvh(c)
+    elif mode == 'zeros':
+        K = np.zeros_like(emp_cov)
+    else:
+        K = mode.copy()  # warm start case
+
+    return K
+
+    
 def loss(S, K, n_samples=None):
     """Loss function for time-varying graphical lasso."""
     if n_samples is None:
@@ -44,6 +62,7 @@ def objective(n_samples, S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
         obj += sum(b[0][0] * m for b, m in zip(beta, map(psi, Z_2 - Z_1)))
     else:
         obj += beta * sum(map(psi, Z_2 - Z_1))
+
     return obj
 
 
@@ -68,8 +87,8 @@ def time_graphical_lasso(
         emp_cov, alpha=0.01, rho=1, beta=1, max_iter=100, n_samples=None,
         verbose=False, psi='laplacian', tol=1e-4, rtol=1e-4,
         return_history=False, return_n_iter=True, mode='admm',
-        update_rho_options=None, compute_objective=True, stop_at=None,
-        stop_when=1e-4, init='empirical'):
+        compute_objective=True, stop_at=None, update_rho_options=None,
+        init='empirical'):
     """Time-varying graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -106,9 +125,9 @@ def time_graphical_lasso(
         See regain.update_rules.update_rho function for more information.
     compute_objective : bool, default True
         Choose to compute the objective value.
-    init : {'empirical', 'zeros', ndarray}, default 'empirical'
-        How to initialise the inverse covariance matrix. Default is take
-        the empirical covariance and inverting it.
+    init : {'empirical', 'zero', ndarray}
+        Choose how to initialize the precision matrix, with the inverse
+        empirical covariance, zero matrix or precomputed.
 
     Returns
     -------
@@ -122,7 +141,19 @@ def time_graphical_lasso(
     """
     psi, prox_psi, psi_node_penalty = check_norm_prox(psi)
 
-    K = init_precision(emp_cov, mode=init)
+    if init == 'empirical':
+        n_times, _, n_features = emp_cov.shape
+        covariance_ = emp_cov.copy()
+        covariance_ *= 0.95
+        K = np.empty_like(emp_cov)
+        for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
+            c.flat[::n_features + 1] = e.flat[::n_features + 1]
+            K[i] = linalg.pinvh(c)
+    elif init == 'zero':
+        K = np.zeros_like(emp_cov)
+    else:  # TODO controllo che sia un array
+        K = init
+
     Z_0 = K.copy()  # np.zeros_like(emp_cov)
     Z_1 = K.copy()[:-1]  # np.zeros_like(emp_cov)[:-1]
     Z_2 = K.copy()[1:]  # np.zeros_like(emp_cov)[1:]
@@ -203,6 +234,10 @@ def time_graphical_lasso(
         obj = objective(
             n_samples, emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi) \
             if compute_objective else np.nan
+
+        if np.isinf(obj):
+            covariance_ = np.array([linalg.pinvh(x) for x in Z_0_old])
+            return Z_0_old, covariance_
 
         check = convergence(
             obj=obj,
@@ -364,6 +399,7 @@ class TimeGraphicalLasso(GraphicalLasso):
             Empirical covariance of data.
 
         """
+
         out = time_graphical_lasso(
             emp_cov, alpha=self.alpha, rho=self.rho, beta=self.beta,
             mode=self.mode, n_samples=n_samples, tol=self.tol, rtol=self.rtol,
@@ -387,6 +423,7 @@ class TimeGraphicalLasso(GraphicalLasso):
             Data matrix.
         y : ndarray, shape = (n_times,)
             Indicate the temporal belonging of each sample.
+
         """
         # Covariance does not make sense for a single feature
         X, y = check_X_y(
