@@ -142,7 +142,7 @@ def make_dataset(
                               mode=mode, time_on_axis=time_on_axis,
                               update_ell=update_ell, update_theta=update_theta,
                               normalize_starting_matrices=normalize_starting_matrices,
-                              degree=degree, epsilon=epsilone,
+                              degree=degree, epsilon=epsilon,
                               keep_sparsity=keep_sparsity,
                               proportional=proportional, **kwargs)
 

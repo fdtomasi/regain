@@ -10,6 +10,7 @@ from scipy import signal
 from scipy.spatial.distance import squareform
 from sklearn.datasets.base import Bunch
 from scipy.linalg import pinv
+from scipy.stats import norm
 from sklearn.utils import check_random_state
 
 from regain.utils import is_pos_def
@@ -24,6 +25,7 @@ def normalize_matrix(x):
     d = 1. / np.sqrt(d)
     x *= d
     x *= d.T
+
 
 def compute_probabilities(locations, random_state, mask=None):
     p = len(locations)
@@ -192,7 +194,8 @@ def data_Meinshausen_Yuan_sparse_latent(p=198, h=2, n=200, T=10,
         ixs = []
         sel = 1
         j = 0
-        while sel <= min(to_put - no_nonzero, np.nonzero(pb)[0].shape[0]) and j < h+h:
+        while (sel <= min(to_put - no_nonzero, np.nonzero(pb)[0].shape[0])
+               and j < h+h):
             if ix[j] < i:
                 j += 1
                 continue
@@ -310,7 +313,8 @@ def data_Meinshausen_Yuan_sparse_latent(p=198, h=2, n=200, T=10,
         sampless.append(random_state.multivariate_normal(np.zeros(p), sigma,
                         size=n))
 
-    return locations, thetas_O, thetas_H, thetas_obs, connections,sigmas, sampless
+    return (locations, thetas_O, thetas_H, thetas_obs, connections,
+            sigmas, sampless)
 
 
 def make_ell(n_dim_obs=100, n_dim_lat=10):
@@ -323,7 +327,7 @@ def make_ell(n_dim_obs=100, n_dim_lat=10):
 
     K_HO /= np.sum(K_HO, axis=1)[:, None] / 2.
     L = K_HO.T.dot(K_HO)
-    #print("{}%".format(np.nonzero(L)[0].size / L.size))
+    # print("{}%".format(np.nonzero(L)[0].size / L.size))
     assert (is_pos_semidef(L))
     assert np.linalg.matrix_rank(L) == n_dim_lat
     # from sklearn.datasets import make_low_rank_matrix
@@ -483,7 +487,6 @@ def make_covariance(
     return thetas, thetas_obs, ells
 
 
-
 def make_fixed_sparsity(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """Generate precisions with a fixed L matrix and sparsity."""
     degree = kwargs.get('degree', 2)
@@ -508,8 +511,8 @@ def make_fixed_sparsity(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
         theta = np.abs(theta)
         theta = (theta + theta.T) / 2.
         theta[theta < epsilon] = 0
-        theta.flat[::n_dim_obs + 1] = np.sum(np.abs(theta), axis=1) \
-                                    + np.sum(np.abs(L), axis=1) + .1
+        theta.flat[::n_dim_obs + 1] = (np.sum(np.abs(theta), axis=1)
+                                       + np.sum(np.abs(L), axis=1) + .1)
         nonzeros = np.nonzero(theta - np.diag(theta))
 
         theta_observed = theta - L
@@ -550,12 +553,6 @@ def make_sin(
     ensure_posdef(Y)
 
     return Y, Y, np.zeros_like(Y)
-
-
-
-
-
-
 
 
 def make_fede(
@@ -670,7 +667,7 @@ def make_ma_xue_zou_rand_k(
     po = n_dim_obs
     nnzr = int(sparsity * (np.triu_indices(p, 1)[0].size))
 
-    # Generate A, the original inverse covariance, with random sparsity pattern...
+    # Generate A, the original inverse covariance
     A = np.eye(p)
     idx = np.vstack(np.triu_indices(p, 1))
     idx = idx[:, np.random.choice(idx.shape[1], nnzr, replace=False)]
