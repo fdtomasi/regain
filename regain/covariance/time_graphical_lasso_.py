@@ -22,7 +22,6 @@ from regain.utils import convergence, error_norm_time
 from regain.validation import check_norm_prox
 
 
-
 def init_precision(emp_cov, mode='empirical'):
     if mode == 'empirical':
         n_times, _, n_features = emp_cov.shape
@@ -39,7 +38,7 @@ def init_precision(emp_cov, mode='empirical'):
 
     return K
 
-    
+
 def loss(S, K, n_samples=None):
     """Loss function for time-varying graphical lasso."""
     if n_samples is None:
@@ -87,8 +86,8 @@ def time_graphical_lasso(
         emp_cov, alpha=0.01, rho=1, beta=1, max_iter=100, n_samples=None,
         verbose=False, psi='laplacian', tol=1e-4, rtol=1e-4,
         return_history=False, return_n_iter=True, mode='admm',
-        compute_objective=True, stop_at=None, update_rho_options=None,
-        init='empirical'):
+        compute_objective=True, stop_at=None, stop_when=1e-4,
+        update_rho_options=None, init='empirical'):
     """Time-varying graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -361,12 +360,11 @@ class TimeGraphicalLasso(GraphicalLasso):
     """
 
     def __init__(
-            self, alpha=0.01, beta=1., mode='admm', rho=1.,
-            tol=1e-4, rtol=1e-4, psi='laplacian',
-            max_iter=100, verbose=False, assume_centered=False,
-            return_history=False, update_rho_options=None,
-            compute_objective=True, stop_at=None, stop_when=1e-4,
-            suppress_warn_list=False, init='empirical'):
+            self, alpha=0.01, beta=1., mode='admm', rho=1., tol=1e-4,
+            rtol=1e-4, psi='laplacian', max_iter=100, verbose=False,
+            assume_centered=False, return_history=False,
+            update_rho_options=None, compute_objective=True, stop_at=None,
+            stop_when=1e-4, suppress_warn_list=False, init='empirical'):
         super(TimeGraphicalLasso, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered, mode=mode,
