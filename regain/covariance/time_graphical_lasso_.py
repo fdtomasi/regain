@@ -22,23 +22,6 @@ from regain.utils import convergence, error_norm_time
 from regain.validation import check_norm_prox
 
 
-def init_precision(emp_cov, mode='empirical'):
-    if mode == 'empirical':
-        n_times, _, n_features = emp_cov.shape
-        covariance_ = emp_cov.copy()
-        covariance_ *= 0.95
-        K = np.empty_like(emp_cov)
-        for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
-            c.flat[::n_features + 1] = e.flat[::n_features + 1]
-            K[i] = linalg.pinvh(c)
-    elif mode == 'zeros':
-        K = np.zeros_like(emp_cov)
-    else:
-        K = mode.copy()  # warm start case
-
-    return K
-
-
 def loss(S, K, n_samples=None):
     """Loss function for time-varying graphical lasso."""
     if n_samples is None:
