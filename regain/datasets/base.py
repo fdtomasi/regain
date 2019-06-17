@@ -8,12 +8,13 @@ from sklearn.datasets.base import Bunch
 
 from regain.generalized_linear_model.sampling import ising_sampler
 
-from .gaussian import (
-    data_Meinshausen_Yuan, data_Meinshausen_Yuan_sparse_latent,
-    generate_dataset_l1l1, make_fede, make_fixed_sparsity, make_ma_xue_zou,
-    make_ma_xue_zou_rand_k, make_sin, make_sin_cos, make_sparse_low_rank)
+from .gaussian import (data_Meinshausen_Yuan,
+                       data_Meinshausen_Yuan_sparse_latent, make_fede,
+                       make_fixed_sparsity, make_ma_xue_zou,
+                       make_ma_xue_zou_rand_k, make_sin, make_sin_cos,
+                       make_sparse_low_rank)
 from .ising import ising_theta_generator
-from .kernels import make_exp_sine_squared
+from .kernels import make_exp_sine_squared, make_ticc
 
 
 def _gaussian_case(
@@ -29,7 +30,8 @@ def _gaussian_case(
         # yuan=generate_dataset_yuan,
         # l1l2=generate_dataset_l1l2,
         # norm=make_l2l2_norm,
-        l1l1=generate_dataset_l1l1,
+        # l1l1=generate_dataset_l1l1,
+
         # the previous are deprecated
         my=data_Meinshausen_Yuan,
         mys=data_Meinshausen_Yuan_sparse_latent,
@@ -40,7 +42,8 @@ def _gaussian_case(
         fede=make_fede,
         sklearn=make_sparse_low_rank,
         ma=make_ma_xue_zou,
-        mak=make_ma_xue_zou_rand_k)
+        mak=make_ma_xue_zou_rand_k,
+        ticc=make_ticc)
 
     if mode is not None:
         # mode overrides other parameters, for back compatibility

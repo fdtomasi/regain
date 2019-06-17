@@ -97,10 +97,15 @@ def make_RBF(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
     return thetas, theta_obs, ells
 
 
-def make_ticc(rand_seed, num_blocks=5, n_dim=10, sparsity_inv_matrix=0.5):
+def make_ticc(
+        num_blocks=5, n_dim_obs=5, n_dim_lat=0, sparsity_inv_matrix=0.5,
+        rand_seed=None, **kwargs):
     import networkx as nx
+    if n_dim_lat != 0:
+        raise ValueError("not supported")
+
     np.random.seed(rand_seed)
-    size_blocks = n_dim
+    size_blocks = n_dim_obs
     block_matrices = {}
 
     def genInvCov(size, low=0.3, upper=0.6, portion=0.2, symmetric=True):
@@ -159,6 +164,6 @@ def make_ticc(rand_seed, num_blocks=5, n_dim=10, sparsity_inv_matrix=0.5):
 
     eigs, _ = np.linalg.eig(inv_matrix)
     lambda_min = min(eigs)
-    print("Modified Eigenvalues are:", np.sort(eigs))
+    # print("Modified Eigenvalues are:", np.sort(eigs))
 
     return inv_matrix
