@@ -184,6 +184,15 @@ class TwoLayersTimeGraphicalLasso(TwoLayersGraphicalLasso, TimeGraphicalLasso):
                 return_n_iter=True)
         return self
 
+    def get_observed_precision(self):
+        precision = []
+        for p in self.precision_:
+            obs = p[self.n_latent_:, self.n_latent_:]
+            lat = p[:self.n_latent_, :self.n_latent_]
+            inter = p[:self.n_latent_, self.n_latent_:]
+            precision.append(obs - inter.T.dot(np.linalg.pinv(lat)).dot(inter))
+        return np.array(precision)
+
     def score(self, X, y):
         n = X.shape[0]
         emp_cov = [empirical_covariance(X[y == cl] - self.location_[i],
@@ -198,8 +207,7 @@ class TwoLayersTimeGraphicalLasso(TwoLayersGraphicalLasso, TimeGraphicalLasso):
             warnings.warn("The score type passed is not available, using log "
                           "likelihood.")
             score_func = log_likelihood_t
-        precision = np.array([p[self.n_latent_:, self.n_latent_:]
-                              for p in self.precision_])
+        precision = self.get_observed_precision()
         if not positive_definite(precision):
             ensure_posdef(precision)
         precision = [p for p in precision]
