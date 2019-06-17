@@ -1,16 +1,13 @@
 from __future__ import division
 
-import warnings
-from functools import partial
-
 import numpy as np
-from scipy import signal
+from scipy import linalg
 from scipy.spatial.distance import squareform
-from sklearn.datasets.base import Bunch
-from sklearn.utils import deprecated
 
-from regain.utils import (
-    ensure_posdef, is_pos_def, is_pos_semidef, positive_definite)
+from regain.utils import is_pos_def
+
+from .gaussian import make_ell
+
 
 def make_exp_sine_squared(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
     from regain.bayesian.gaussian_process_ import sample as samplegp
@@ -24,8 +21,8 @@ def make_exp_sine_squared(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
     epsilon = kwargs.get('epsilon', 0.5)
     sparse = kwargs.get('sparse', True)
     temporal_kernel = kernels.ExpSineSquared(
-        periodicity=periodicity, length_scale=length_scale)(
-            np.arange(T)[:, None])
+        periodicity=periodicity,
+        length_scale=length_scale)(np.arange(T)[:, None])
 
     u = samplegp(temporal_kernel, p=n_dim_obs * (n_dim_obs - 1) // 2)[0]
     K, K_obs = [], []
@@ -50,7 +47,6 @@ def make_exp_sine_squared(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
 
 def make_RBF(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
     from regain.bayesian.gaussian_process_ import sample as samplegp
-    from scipy.spatial.distance import squareform
     from sklearn.gaussian_process import kernels
 
     length_scale = kwargs.get('length_scale', 1.0)
@@ -58,8 +54,8 @@ def make_RBF(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
     epsilon = kwargs.get('epsilon', 0.8)
     sparse = kwargs.get('sparse', True)
     temporal_kernel = kernels.RBF(
-        length_scale=length_scale, length_scale_bounds=length_scale_bounds)(
-            np.arange(T)[:, None])
+        length_scale=length_scale,
+        length_scale_bounds=length_scale_bounds)(np.arange(T)[:, None])
 
     n = n_dim_obs + n_dim_lat
     u = samplegp(temporal_kernel, p=n * (n - 1) // 2)[0]
@@ -73,8 +69,8 @@ def make_RBF(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
 
             # sparsify
             theta_obs[np.abs(theta_obs) < epsilon] = 0
-            theta_lat[np.abs(theta_lat) < epsilon/3] = 0
-            theta_OH[np.abs(theta_OH) < epsilon/3] = 0
+            theta_lat[np.abs(theta_lat) < epsilon / 3] = 0
+            theta_OH[np.abs(theta_OH) < epsilon / 3] = 0
             theta[n_dim_lat:, n_dim_lat:] = theta_obs
             theta[:n_dim_lat, :n_dim_lat] = theta_lat
             theta[n_dim_lat:, :n_dim_lat] = theta_OH
@@ -94,8 +90,8 @@ def make_RBF(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
     ells = []
     for t in thetas:
         L = theta[n_dim_lat:, :n_dim_lat].dot(
-            pinv(t[:n_dim_lat, :n_dim_lat])).dot(
-            theta[:n_dim_lat, n_dim_lat:])
+            linalg.pinv(t[:n_dim_lat, :n_dim_lat])).dot(
+                theta[:n_dim_lat, n_dim_lat:])
         theta_obs.append(t[n_dim_lat:, n_dim_lat:] - L)
         ells.append(L)
     return thetas, theta_obs, ells

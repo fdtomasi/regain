@@ -1,22 +1,14 @@
 from __future__ import division
 
-import numpy as np
-
 import warnings
-from functools import partial
 
 import numpy as np
 from scipy import signal
 from scipy.spatial.distance import squareform
-from sklearn.datasets.base import Bunch
-from scipy.linalg import pinv
 from scipy.stats import norm
 from sklearn.utils import check_random_state
 
-from regain.utils import is_pos_def
-
-from regain.utils import (
-    ensure_posdef, is_pos_def, is_pos_semidef, positive_definite)
+from regain.utils import ensure_posdef, is_pos_def, is_pos_semidef
 
 
 def normalize_matrix(x):
@@ -35,8 +27,8 @@ def compute_probabilities(locations, random_state, mask=None):
     for i in range(p):
         for j in range(p):
             d = np.linalg.norm(np.array(locations[i]) - np.array(locations[j]))
-            d = d/10 if mask[i, j] else d
-            probabilities[i, j] = 2*norm.pdf(d*np.sqrt(p), scale=1)
+            d = d / 10 if mask[i, j] else d
+            probabilities[i, j] = 2 * norm.pdf(d * np.sqrt(p), scale=1)
     thresholds = random_state.uniform(low=0, high=1, size=(p, p))
     probabilities[np.where(thresholds > probabilities)] = 0
     return probabilities
@@ -46,9 +38,8 @@ def permute_locations(locations, random_state):
     new_locations = []
     for l in locations:
         perm = random_state.uniform(low=-0.03, high=0.03, size=(1, 2))
-        new_locations.append(np.maximum(
-                                        np.array(l) + np.array(perm),
-                                        0).flatten().tolist())
+        new_locations.append(
+            np.maximum(np.array(l) + np.array(perm), 0).flatten().tolist())
     return new_locations
 
 
@@ -102,7 +93,7 @@ def data_Meinshausen_Yuan(p=198, h=2, n=200, T=10, random_state=None):
     thetas_observed = [theta_observed]
     covariances = [sigma]
     sampless = [samples]
-    for t in range(T-1):
+    for t in range(T - 1):
         theta_prev = thetas[t]
         locs_prev = locations[t]
         locs = permute_locations(locs_prev, random_state)
@@ -143,17 +134,17 @@ def data_Meinshausen_Yuan(p=198, h=2, n=200, T=10, random_state=None):
         assert is_pos_def(sigma)
         thetas_observed.append(theta_observed)
         covariances.append(sigma)
-        sampless.append(random_state.multivariate_normal(np.zeros(p), sigma,
-                        size=n))
+        sampless.append(
+            random_state.multivariate_normal(np.zeros(p), sigma, size=n))
 
     return locations, thetas, thetas_observed, covariances, latent, sampless
 
 
-def data_Meinshausen_Yuan_sparse_latent(p=198, h=2, n=200, T=10,
-                                        random_state=None):
+def data_Meinshausen_Yuan_sparse_latent(
+        p=198, h=2, n=200, T=10, random_state=None):
     random_state = check_random_state(random_state)
     nodes_locations = []
-    for i in range(p+h):
+    for i in range(p + h):
         nodes_locations.append(list(random_state.uniform(size=2)))
     probs = compute_probabilities(nodes_locations, random_state)
     theta = np.zeros((p, p))
@@ -183,11 +174,11 @@ def data_Meinshausen_Yuan_sparse_latent(p=198, h=2, n=200, T=10,
 
     assert is_pos_def(theta)
 
-    latent = np.zeros((h, p+h))
-    to_put = (p + h)*0.5
-    value = 0.98/to_put
+    latent = np.zeros((h, p + h))
+    to_put = (p + h) * 0.5
+    value = 0.98 / to_put
     for i in range(h):
-        pb = probs[p+i, :]
+        pb = probs[p + i, :]
         ix = np.argsort(pb)[::-1]
 
         no_nonzero = np.sum((latent != 0).astype(int), axis=1)[i]
@@ -195,7 +186,7 @@ def data_Meinshausen_Yuan_sparse_latent(p=198, h=2, n=200, T=10,
         sel = 1
         j = 0
         while (sel <= min(to_put - no_nonzero, np.nonzero(pb)[0].shape[0])
-               and j < h+h):
+               and j < h + h):
             if ix[j] < i:
                 j += 1
                 continue
@@ -220,8 +211,7 @@ def data_Meinshausen_Yuan_sparse_latent(p=198, h=2, n=200, T=10,
 
     theta_H = latent[:h, :h]
     theta_obs = theta - connections.T.dot(
-                    np.linalg.inv(theta_H)).dot(
-                        connections)
+        np.linalg.inv(theta_H)).dot(connections)
     assert is_pos_def(theta_obs)
     sigma = np.linalg.inv(theta_obs)
     assert is_pos_def(sigma)
@@ -234,17 +224,17 @@ def data_Meinshausen_Yuan_sparse_latent(p=198, h=2, n=200, T=10,
     locations = [nodes_locations]
     sigmas = [sigma]
     sampless = [samples]
-    for t in range(T-1):
+    for t in range(T - 1):
         theta_prev = thetas_O[t]
         lat_prev = thetas_H[t]
         locs_prev = locations[t]
         locs = permute_locations(locs_prev, random_state)
 
         locations.append(locs)
-        probs_theta = compute_probabilities(locs[:p], random_state,
-                                            theta_prev != 0)
-        probs_lat = compute_probabilities(locs[-h:], random_state,
-                                          lat_prev != 0)
+        probs_theta = compute_probabilities(
+            locs[:p], random_state, theta_prev != 0)
+        probs_lat = compute_probabilities(
+            locs[-h:], random_state, lat_prev != 0)
 
         theta = np.zeros((p, p))
         for i in range(p):
@@ -282,8 +272,7 @@ def data_Meinshausen_Yuan_sparse_latent(p=198, h=2, n=200, T=10,
             ixs = []
             sel = 1
             j = 0
-            while (sel <= to_put[i] - no_nonzero
-                    and j < h):
+            while (sel <= to_put[i] - no_nonzero and j < h):
                 if ix[j] < i:
                     j += 1
                     continue
@@ -292,7 +281,8 @@ def data_Meinshausen_Yuan_sparse_latent(p=198, h=2, n=200, T=10,
                 j += 1
             lat[i, ixs] = value
             lat[ixs, i] = value
-        to_remove = np.where(np.sum((lat != 0).astype(int), axis=1) > to_put)[0]
+        to_remove = np.where(
+            np.sum((lat != 0).astype(int), axis=1) > to_put)[0]
         for t in to_remove:
             edges = np.nonzero(lat[t, :])[0]
             random_state.shuffle(edges)
@@ -303,18 +293,20 @@ def data_Meinshausen_Yuan_sparse_latent(p=198, h=2, n=200, T=10,
         assert is_pos_def(lat)
         thetas_H.append(lat)
 
-        theta_obs = theta - connections.T.dot(np.linalg.inv(lat)).dot(connections)
+        theta_obs = theta - connections.T.dot(
+            np.linalg.inv(lat)).dot(connections)
         assert is_pos_def(theta_obs)
         thetas_obs.append(theta_obs)
 
         sigma = np.linalg.inv(theta_obs)
         assert is_pos_def(sigma)
         sigmas.append(sigma)
-        sampless.append(random_state.multivariate_normal(np.zeros(p), sigma,
-                        size=n))
+        sampless.append(
+            random_state.multivariate_normal(np.zeros(p), sigma, size=n))
 
-    return (locations, thetas_O, thetas_H, thetas_obs, connections,
-            sigmas, sampless)
+    return (
+        locations, thetas_O, thetas_H, thetas_obs, connections, sigmas,
+        sampless)
 
 
 def make_ell(n_dim_obs=100, n_dim_lat=10):
@@ -511,8 +503,8 @@ def make_fixed_sparsity(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
         theta = np.abs(theta)
         theta = (theta + theta.T) / 2.
         theta[theta < epsilon] = 0
-        theta.flat[::n_dim_obs + 1] = (np.sum(np.abs(theta), axis=1)
-                                       + np.sum(np.abs(L), axis=1) + .1)
+        theta.flat[::n_dim_obs + 1] = (
+            np.sum(np.abs(theta), axis=1) + np.sum(np.abs(L), axis=1) + .1)
         nonzeros = np.nonzero(theta - np.diag(theta))
 
         theta_observed = theta - L
