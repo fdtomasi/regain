@@ -5,8 +5,7 @@ from scipy import linalg
 
 from six.moves import map, range, zip
 
-from regain.update_rules import update_rho
-from regain.validation import check_norm_prox
+from sklearn.base import BaseEstimator
 from sklearn.utils import check_array
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_X_y
@@ -16,26 +15,19 @@ from regain.covariance.graphical_lasso_ import GraphicalLasso, logl
 from regain.generalized_linear_model.base import GLM_GM, convergence
 from regain.generalized_linear_model.base import build_adjacency_matrix#, \
                                                 # TemporalModel
-from regain.generalized_linear_model.ising import _gradient_ising
+from regain.generalized_linear_model.ising import _gradient_ising, _fit
 from regain.generalized_linear_model.ising import loss as loss_ising_single_time
 from regain.covariance.time_graphical_lasso_ import init_precision
 from regain.prox import soft_thresholding, soft_thresholding_od
 from regain.prox import prox_logdet
 from regain.norm import l1_od_norm
 from regain.utils import convergence
-
-
-def loss_gaussian(S, K, n_samples=None):
-    """Loss function for time-varying graphical lasso."""
-    if n_samples is None:
-        n_samples = np.ones(S.shape[0])
-    return sum(
-        -ni * logl(emp_cov, precision)
-        for emp_cov, precision, ni in zip(S, K, n_samples))
+from regain.update_rules import update_rho
+from regain.validation import check_norm_prox
 
 
 def loss_ising(X, K, n_samples=None):
-    """Loss function for time-varying graphical lasso."""
+    """Loss function for time-varying ising model."""
     if n_samples is None:
         n_samples = np.ones(X.shape[0])
     return sum(
@@ -43,18 +35,13 @@ def loss_ising(X, K, n_samples=None):
         for x, k, ni in zip(X, K, n_samples))
 
 
-def objective(distribution, X, K, Z_0, Z_M, alpha, kernel, psi):
+def objective(X, K, Z_M, alpha, kernel, psi):
     """Objective function for time-varying ising model."""
-    if distribution == 'gaussian':
-        obj = loss_gaussian(X, K)
-    elif distribution =='ising':
-        obj = loss_ising(X, K)
-    else:
-        # should not reach this point
-        raise ValueError('Unknown distribution.')
-    obj += alpha * sum(map(l1_od_norm, Z_0))
 
-    for m in range(1, Z_0.shape[0]):
+    obj = loss_ising(X, K)
+    obj += alpha * sum(map(l1_od_norm, K))
+
+    for m in range(1, K.shape[0]):
         # all possible non markovians jumps
         Z_L, Z_R = Z_M[m]
         obj += np.sum(np.array(list(map(psi, Z_R - Z_L))) * np.diag(kernel, m))
@@ -62,47 +49,13 @@ def objective(distribution, X, K, Z_0, Z_M, alpha, kernel, psi):
     return obj
 
 
-def _update_K_gaussian(emp_cov, A, n_times, n_samples, rho):
-
-    A *= -rho * n_times / n_samples[:, None, None]
-    A += emp_cov
-
-    K = np.array(
-        [
-            prox_logdet(a, lamda=ni / (rho * n_times))
-            for a, ni in zip(A, n_samples)
-        ])
-    return K
-
-
-
-def _update_K_ising(X, A, K, n_times, n_samples, rho,
-                    gamma=1, tol=1e-3, max_iter=200, adjust_gamma=False):
-
-    #_, _, d = X.shape
-    Ks = [np.zeros_like(K)]
-    for iter_ in range(max_iter):
-        K_grad = np.zeros_like(K)
-        for t in range(n_times):
-            K_grad[t, :, :] = _gradient_ising(X[t, :, :], K[t, :, :],
-                                                  n_samples[t], A=A[t, :, :],
-                                                  rho=rho,
-                                                  T=n_times)
-        K = K - gamma*K_grad
-        Ks.append(K)
-
-        if np.linalg.norm(Ks[-2]-Ks[-1]) < tol:
-            break
-
-    return K
-
-
-def time_graphical_model(X, distribution, alpha=0.01, rho=1, kernel=None,
-                         max_iter=100, verbose=False, psi='laplacian',
-                         tol=1e-4, rtol=1e-4, return_history=False,
-                         return_n_iter=True, mode='admm',
-                         update_rho_options=None, compute_objective=True,
-                         stop_at=None, stop_when=1e-4, init="empirical"):
+def _fit_time_ising_model(X, alpha=0.01, rho=1, kernel=None,
+                          max_iter=100, verbose=False, psi='laplacian',
+                          gamma=0.1,
+                          tol=1e-4, rtol=1e-4, return_history=False,
+                          return_n_iter=True, mode='admm',
+                          update_rho_options=None, compute_objective=True,
+                          stop_at=None, stop_when=1e-4, init="empirical"):
     """Time-varying graphical model solver.
 
     Solves the following problem via ADMM:
@@ -116,12 +69,7 @@ def time_graphical_model(X, distribution, alpha=0.01, rho=1, kernel=None,
     ----------
     X : ndarray, shape (n_times, n_samples, n_features)
         Data matrix. It has to contain two values: 0 or 1, -1 or 1.
-    distribution: string, default='ising'
-        The type of distribution to use for the inference of the graph.
-        Options are 'ising', 'poisson', 'exponential', 'gaussian'.
-        For the gaussian case you may want to check the
-        TimeVaryingGraphicalLasso.
-    alpha, beta : float, optional
+        alpha, beta : float, optional
         Regularisation parameter.
     rho : float, optional
         Augmented Lagrangian parameter.
@@ -150,18 +98,11 @@ def time_graphical_model(X, distribution, alpha=0.01, rho=1, kernel=None,
     psi, prox_psi, psi_node_penalty = check_norm_prox(psi)
     n_times, n_samples, n_features = X.shape
     n_samples = np.array([n_samples]*n_times)
-    distribution = distribution.lower()
 
     if kernel is None:
         kernel = np.eye(n_times)
 
-    if distribution == 'gaussian':
-        K = init_precision(X, mode=init)
-    elif distribution == 'ising':
-        K = np.zeros((n_times, n_features, n_features))
-    Z_0 = K.copy()  # np.zeros_like(emp_cov)
-    U_0 = np.zeros_like(Z_0)
-    Z_0_old = np.zeros_like(Z_0)
+    K = np.zeros((n_times, n_features, n_features))
 
     Z_M = {}
     U_M = {}
@@ -181,16 +122,14 @@ def time_graphical_model(X, distribution, alpha=0.01, rho=1, kernel=None,
         Z_R_old = np.zeros_like(Z_R)
         Z_M_old[m] = (Z_L_old, Z_R_old)
 
-
     checks = [
         convergence(
-            obj=objective(distribution, X, Z_0, K, Z_M, alpha, kernel, psi))
+            obj=objective(X, K, Z_M, alpha, kernel, psi))
     ]
     for iteration_ in range(max_iter):
         # update K
 
-        #THIS IS THE THING THAT CHANGES ACCORDING TO THE distribution
-        A = Z_0 - U_0
+        A = np.zeros_like(K)
         for m in range(1, n_times):
             A[:-m] += Z_M[m][0] - U_M[m][0]
             A[m:] += Z_M[m][1] - U_M[m][1]
@@ -198,22 +137,14 @@ def time_graphical_model(X, distribution, alpha=0.01, rho=1, kernel=None,
         A /= n_times
         A += A.transpose(0, 2, 1)
         A /= 2.
-        if distribution =='gaussian':
-            K = _update_K_gaussian(X, A, n_times, n_samples, rho)
-        elif distribution =='ising':
-            K = _update_K_ising(X, A, K, n_times, n_samples, rho,
-                                gamma=1e-3, tol=1e-3, max_iter=1000,
-                                adjust_gamma=True)
-        else:
-            raise ValueError("Unknown distribution")
-        # update Z_0
-        A = K + U_0
-        A += A.transpose(0, 2, 1)
-        A /= 2.
-        Z_0 = soft_thresholding(A, lamda=alpha / rho)
-
-        # update residuals
-        U_0 += K - Z_0
+        K_new = np.zeros_like(K)
+        for t in range(n_times):
+            K_new[t, :, :] = _fit(X[t, :, :], alpha=alpha, gamma=gamma,
+                                  tol=tol,
+                                  max_iter=max_iter, verbose=0,
+                                  compute_objective=True,
+                                  warm_start=K[t, :, :])[0]
+        K = K_new.copy()
 
         # other Zs
         for m in range(1, n_times):
@@ -238,26 +169,21 @@ def time_graphical_model(X, distribution, alpha=0.01, rho=1, kernel=None,
             U_R += K[m:] - Z_R
 
         # diagnostics, reporting, termination checks
-        rnorm = np.sqrt(
-            squared_norm(K - Z_0) + sum(
-                squared_norm(K[:-m] - Z_M[m][0]) +
-                squared_norm(K[m:] - Z_M[m][1]) for m in range(1, n_times)))
+        rnorm = np.sqrt(sum(squared_norm(K[:-m] - Z_M[m][0]) +
+                        squared_norm(K[m:] - Z_M[m][1])
+                        for m in range(1, n_times)))
 
-        snorm = rho * np.sqrt(
-            squared_norm(Z_0 - Z_0_old) + sum(
-                squared_norm(Z_M[m][0] - Z_M_old[m][0]) +
-                squared_norm(Z_M[m][1] - Z_M_old[m][1])
-                for m in range(1, n_times)))
-        print(distribution)
-        obj = objective(distribution,
-             X, Z_0, K, Z_M, alpha, kernel, psi) \
+        snorm = rho * np.sqrt(sum(squared_norm(Z_M[m][0] - Z_M_old[m][0]) +
+                                  squared_norm(Z_M[m][1] - Z_M_old[m][1])
+                                  for m in range(1, n_times)))
+
+        obj = objective(X, K, Z_M, alpha, kernel, psi) \
             if compute_objective else np.nan
 
         check = convergence(
             obj=obj, rnorm=rnorm, snorm=snorm,
             e_pri=n_features * n_times * tol + rtol * max(
-                np.sqrt(
-                    squared_norm(Z_0) + sum(
+                np.sqrt(sum(
                         squared_norm(Z_M[m][0]) + squared_norm(Z_M[m][1])
                         for m in range(1, n_times))),
                 np.sqrt(
@@ -265,10 +191,9 @@ def time_graphical_model(X, distribution, alpha=0.01, rho=1, kernel=None,
                         squared_norm(K[:-m]) + squared_norm(K[m:])
                         for m in range(1, n_times)))),
             e_dual=n_features * n_times * tol + rtol * rho * np.sqrt(
-                squared_norm(U_0) + sum(
+                sum(
                     squared_norm(U_M[m][0]) + squared_norm(U_M[m][1])
                     for m in range(1, n_times))))
-        Z_0_old = Z_0.copy()
         for m in range(1, n_times):
             Z_M_old[m] = (Z_M[m][0].copy(), Z_M[m][1].copy())
 
@@ -289,7 +214,7 @@ def time_graphical_model(X, distribution, alpha=0.01, rho=1, kernel=None,
             rho, rnorm, snorm, iteration=iteration_,
             **(update_rho_options or {}))
         # scaled dual variables should be also rescaled
-        U_0 *= rho / rho_new
+        #U_0 *= rho / rho_new
         for m in range(1, n_times):
             U_L, U_R = U_M[m]
             U_L *= rho / rho_new
@@ -298,7 +223,7 @@ def time_graphical_model(X, distribution, alpha=0.01, rho=1, kernel=None,
     else:
         warnings.warn("Objective did not converge.")
 
-    return_list = [Z_0]
+    return_list = [K]
     if return_history:
         return_list.append(checks)
     if return_n_iter:
@@ -324,7 +249,7 @@ def objective_kernel(theta, K, psi, kernel, times):
     return obj
 
 
-class TemporalGraphicalModel():
+class TemporalIsingModel(BaseEstimator):
     """Temporal Graphical model that follows an Ising model at each time point.
 
     Parameters
@@ -434,46 +359,14 @@ class TemporalGraphicalModel():
             X, y, accept_sparse=False, dtype=np.float64, order="C",
             ensure_min_features=2, estimator=self)
 
-        n_dimensions = X.shape[1]
         self.classes_, n_samples = np.unique(y, return_counts=True)
-        n_times = self.classes_.size
-
-        # n_samples = np.array([x.shape[0] for x in X])
-        if self.assume_centered:
-            self.location_ = np.zeros((n_times, n_dimensions))
-        else:
-            self.location_ = np.array(
-                [X[y == cl].mean(0) for cl in self.classes_])
-
         self.data = X.copy()
-
-        #Check the data for distribution types
-        self.distribution = self.distribution.lower()
-        if self.distribution == 'ising':
-            if np.unique(self.data).size != 2:
-                raise ValueError('Using the ising distribution your data has '
-                                 'to contain only two values, either 0 and 1 '
-                                 'or -1, 1')
-            X = np.array([self.data[y == cl] for cl in self.classes_ ])
-        elif self.distribution == 'poisson':
-            is_good = True # TODO
-        elif self.distribution == 'gaussian':
-            # check the values
-            #warnings.warn('You are using this class to fit a temporal gaussian '
-            #              'model. Better to use TimeVaryingGraphicalLasso')
-            X = np.array(
-                [
-                    empirical_covariance(
-                        self.data[y == cl], assume_centered=self.assume_centered)
-                    for cl in self.classes_
-                ]) # overwrite X with the empirical covariance for fitting
-        elif self.distribution == 'exponential':
-            is_good = True # TODO
-        else:
-            raise ValueError("Unknown distribution. Passed "
-                            +str(self.distribution) +
-                            ". Options are: ising, poisson, exponential, "
-                            "gaussian.")
+        if np.unique(self.data).size != 2:
+            raise ValueError('Using the ising distribution your data has '
+                             'to contain only two values, either 0 and 1 '
+                             'or -1, 1')
+        X = np.array([X[y == cl] for cl in self.classes_])
+        aux = np.zeros((X.shape[0], X[0].shape[0], X[0].shape[1]))
 
         if self.ker_param == "auto":
             from scipy.optimize import minimize_scalar
@@ -481,7 +374,7 @@ class TemporalGraphicalModel():
             if not callable(self.kernel):
                 raise ValueError(
                     "kernel should be a function if ker_param=='auto'")
-            # discover best kernel parameter via EM
+            # discover best kernel parameter via alternating minimization
             # initialise precision matrices, as warm start
             self.precision_ = init_precision(X, mode=self.init)
             theta_old = 0
@@ -490,7 +383,7 @@ class TemporalGraphicalModel():
                 theta = minimize_scalar(
                     objective_kernel, args=(
                         self.precision_, self.psi, self.kernel,
-                        self.classes_[:, None]), bounds=(0, emp_cov.shape[0]),
+                        self.classes_[:, None]), bounds=(0, X.shape[0]),
                     method='bounded').x
 
                 if i > 0 and abs(theta_old - theta) < 1e-5:
@@ -508,7 +401,7 @@ class TemporalGraphicalModel():
                     kernel = self.kernel(constant_value=theta)(
                         self.classes_[:, None])
 
-                out = time_graphical_model(
+                out = _fit_time_ising_model(
                     X, distribution=self.distribution,
                     alpha=self.alpha, rho=self.rho, kernel=kernel,
                     tol=self.tol, rtol=self.rtol,
@@ -542,9 +435,8 @@ class TemporalGraphicalModel():
                         "Kernel size does not match classes of samples, "
                         "got {} classes and kernel has shape {}".format(
                             self.classes_.size, kernel.shape[0]))
-
-            out = time_graphical_model(
-                X, distribution=self.distribution,
+            out = _fit_time_ising_model(
+                X,
                 alpha=self.alpha, rho=self.rho, kernel=kernel,
                 tol=self.tol, rtol=self.rtol,
                 psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
@@ -582,20 +474,5 @@ class TemporalGraphicalModel():
             X, y, accept_sparse=False, dtype=np.float64, order="C",
             ensure_min_features=2, estimator=self)
 
-        if self.distribution == 'gaussian':
-            # compute empirical covariance of the test set
-            test_cov = np.array(
-                [
-                    empirical_covariance(
-                        X[y == cl] - self.location_[i], assume_centered=True)
-                    for i, cl in enumerate(self.classes_)
-                ])
-
-            res = sum(
-                X[y == cl].shape[0] * log_likelihood(S, K) for S, K, cl in zip(
-                    test_cov, self.get_precision(), self.classes_))
-
-            return -99999999 if res == -np.inf else res
-        else:
-            warnings.warn("Cannot compute a score with other distributions")
-            return -99999999
+        # TO THINK
+        return -99999999
