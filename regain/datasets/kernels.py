@@ -95,3 +95,70 @@ def make_RBF(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
         theta_obs.append(t[n_dim_lat:, n_dim_lat:] - L)
         ells.append(L)
     return thetas, theta_obs, ells
+
+
+def make_ticc(rand_seed, num_blocks=5, n_dim=10, sparsity_inv_matrix=0.5):
+    import networkx as nx
+    np.random.seed(rand_seed)
+    size_blocks = n_dim
+    block_matrices = {}
+
+    def genInvCov(size, low=0.3, upper=0.6, portion=0.2, symmetric=True):
+        portion = portion / 2
+        S = np.zeros((size, size))
+        n_edges = int((size * (size - 1)) * portion)
+        G = nx.gnm_random_graph(size, n_edges)
+        for src, dest in G.edges:
+            S[src, dest] = (np.random.randint(2) - 0.5) * 2 * (
+                low + (upper - low) * np.random.rand(1)[0])
+        if symmetric:
+            S += S.T
+        # vals = alg.eigvalsh(S)
+        # S = S + (0.1 - vals[0])*np.identity(size)
+        return S
+
+    def genRandInv(size, low=0.3, upper=0.6, portion=0.2):
+        S = np.zeros((size, size))
+        for i in range(size):
+            for j in range(size):
+                if np.random.rand() < portion:
+                    value = (np.random.randint(2) - 0.5) * 2 * (
+                        low + (upper - low) * np.random.rand(1)[0])
+                    S[i, j] = value
+        return S
+
+    ##Generate all the blocks
+    for block in range(num_blocks):
+        if block == 0:
+            block_matrices[block] = genInvCov(
+                size=size_blocks, portion=sparsity_inv_matrix,
+                symmetric=(block == 0))
+        else:
+            block_matrices[block] = genRandInv(
+                size=size_blocks, portion=sparsity_inv_matrix)
+
+    ##Initialize the inverse matrix
+    inv_matrix = np.zeros([num_blocks * size_blocks, num_blocks * size_blocks])
+
+    ##go through all the blocks
+    for block_i in range(num_blocks):
+        for block_j in range(num_blocks):
+            block_num = np.abs(block_i - block_j)
+            inv_matrix[
+                block_i * size_blocks:(block_i + 1) * size_blocks,
+                block_j * size_blocks:(block_j + 1) * size_blocks
+            ] = block_matrices[block_num] if block_i > block_j \
+                else np.transpose(block_matrices[block_num])
+
+    ##print out all the eigenvalues
+    eigs, _ = np.linalg.eig(inv_matrix)
+    lambda_min = min(eigs)
+
+    ##Make the matrix positive definite
+    inv_matrix += (0.1 + abs(lambda_min)) * np.eye(size_blocks * num_blocks)
+
+    eigs, _ = np.linalg.eig(inv_matrix)
+    lambda_min = min(eigs)
+    print("Modified Eigenvalues are:", np.sort(eigs))
+
+    return inv_matrix
