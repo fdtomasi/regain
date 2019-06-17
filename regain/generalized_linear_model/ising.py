@@ -91,6 +91,7 @@ def loss(X, theta):
             objective += XXT - XT
     return objective
 
+
 def objective(X, theta, alpha):
     n, _ = X.shape
     objective = loss(X, theta)
@@ -108,7 +109,7 @@ def _gradient_ising(X, theta,  n, A=None, rho=1, T=0):
             E_XT = np.exp(-XT)
             sum_ += X[i, selector]*((EXT - E_XT)/(EXT + E_XT) - X[i, r])
         if A is not None:
-            sum_ += rho*(theta[r, selector] - A[r, selector])
+            sum_ += (rho*T/n)*(theta[r, selector] - A[r, selector])
         return (1/n)*sum_
     for ix in range(theta.shape[0]):
         selector = [i for i in range(d) if i != ix]
@@ -117,30 +118,35 @@ def _gradient_ising(X, theta,  n, A=None, rho=1, T=0):
     theta_new = (theta_new + theta_new.T)/2
     return theta_new
 
+
 def _fit(X, alpha=1e-2, gamma=1e-3, tol=1e-3, max_iter=1000, verbose=0,
-         return_history=True, compute_objective=True,
+         return_history=True, compute_objective=True, warm_start=None,
          return_n_iter=False, adjust_gamma=False):
     n, d = X.shape
-    theta = np.zeros((d, d))
-
+    if warm_start is None:
+        theta = np.zeros((d, d))
+    else:
+        theta = check_array(warm_start)
 
     thetas = [theta]
     theta_new = theta.copy()
     checks = []
     for iter_ in range(max_iter):
 
-        theta_new = theta - gamma* _gradient_ising(X, theta,  n)
+        theta_new = theta - gamma*_gradient_ising(X, theta,  n)
         theta = (theta_new + theta_new.T)/2
         theta = soft_thresholding_od(theta, alpha*gamma)
         thetas.append(theta)
 
-        assert np.all(np.diag(theta) == 0)
-        check = convergence(iter=iter_,
-                            obj=objective(X, theta, alpha),
-                            iter_norm=np.linalg.norm(thetas[-2]-thetas[-1]),
-                            iter_r_norm=(np.linalg.norm(thetas[-2] -
-                                                        thetas[-1]) /
-                                         np.linalg.norm(thetas[-1])))
+        #assert np.all(np.diag(theta) == 0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            check = convergence(iter=iter_,
+                                obj=objective(X, theta, alpha),
+                                iter_norm=np.linalg.norm(thetas[-2]-thetas[-1]),
+                                iter_r_norm=(np.linalg.norm(thetas[-2] -
+                                                            thetas[-1]) /
+                                             np.linalg.norm(thetas[-1])))
         checks.append(check)
         # if adjust_gamma: # TODO multiply or divide
         if verbose:
@@ -173,26 +179,29 @@ def _fit_ADMM(X, alpha=1e-2, gamma=1e-3, tol=1e-3, rtol=1e-4, max_iter=1000,
             EXT = np.exp(XT)
             E_XT = np.exp(-XT)
             sum_ += X[i, selector]*((EXT - E_XT)/(EXT + E_XT) - X[i, r])
-        sum_ += -(rho*A[r, selector] - theta[r, selector] + U[r, selector])
+
+        sum_ += rho*(theta[r, selector] - D)
         return (1/n)*sum_
 
     thetas = [theta]
     theta_new = theta.copy()
     checks = []
-    U = theta.copy()
-    A = theta.copy()
+    U = np.zeros_like(theta)
+    A = np.zeros_like(theta)
     for iter_ in range(max_iter):
 
-        for ix in range(theta.shape[0]):
-            selector = [i for i in range(d) if i != ix]
-            old_iter = theta[ix, selector].copy()
-            for inner_iter_ in range(max_iter//2):
-                theta[ix, selector] = theta[ix, selector] - gamma*gradient(
-                                            X, theta, A, U, ix, selector,
-                                            n, rho)
-                if np.linalg.norm(theta[ix, selector] - old_iter) < tol:
-                    break
-                old_iter = theta_new[ix, selector].copy()
+        theta = np.zeros_like(theta)
+        old_iter = theta.copy()
+        D = A - U
+        D = (D+D.T)/2
+        for inner_iter_ in range(max_iter//2):
+            theta = theta -\
+                gamma*_gradient_ising(X, theta,  n, A=D, rho=rho, T=1)
+            #theta = (theta + theta.T)/2
+            print(np.linalg.norm(theta - old_iter))
+            if np.linalg.norm(theta - old_iter) < tol:
+                break
+            old_iter = theta_new.copy()
 
         thetas.append(theta)
         A = (theta + theta.T)/2
