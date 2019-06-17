@@ -298,7 +298,8 @@ def error_norm(
     # optionally scale the error norm
     if scaling:
         scaling_factor = error.shape[0] if len(error.shape) < 3 \
-            else np.prod(error.shape[:2]) * ((error.shape[1] - 1) / 2. if upper_triangular else error.shape[1])
+            else (np.prod(error.shape[:2]) * ((error.shape[1] - 1) / 2.
+                  if upper_triangular else error.shape[1]))
         squared_norm = squared_norm / scaling_factor
     # finally get either the squared norm or the norm
     if squared:
@@ -369,7 +370,6 @@ def structure_error(
     # avoid inplace modifications
     true = true.copy()
     pred = pred.copy()
-
     if true.ndim > 2:
         y_true = np.array(flatten([squareform(x, checks=None) for x in true]))
         y_pred = np.array(flatten([squareform(x, checks=None) for x in pred]))
@@ -470,6 +470,8 @@ def ensure_posdef(X, inplace=True):
     def _ensure_posdef_2d(X, inplace=True):
         if not inplace:
             raise NotImplementedError("Only inplace implemented")
+        if positive_definite(X):
+            return
         X.flat[::X.shape[0] +
                1] = np.abs(X - np.diag(np.diag(X))).sum(axis=1) + 0.1
 

@@ -1,17 +1,14 @@
-"""Dataset generation module."""
 from __future__ import division
 
 import warnings
-from functools import partial
 
 import numpy as np
 from scipy import signal
 from scipy.spatial.distance import squareform
-from sklearn.datasets.base import Bunch
-from sklearn.utils import deprecated
+from scipy.stats import norm
+from sklearn.utils import check_random_state
 
-from regain.utils import (
-    ensure_posdef, is_pos_def, is_pos_semidef, positive_definite)
+from regain.utils import ensure_posdef, is_pos_def, is_pos_semidef
 
 
 def normalize_matrix(x):
@@ -22,103 +19,294 @@ def normalize_matrix(x):
     x *= d.T
 
 
-def make_dataset(
-        n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10, mode=None,
-        time_on_axis='first', update_ell='l2', update_theta='l2',
-        normalize_starting_matrices=False, degree=2, epsilon=1e-2,
-        keep_sparsity=False, proportional=False, **kwargs):
-    """Generate a synthetic dataset.
+def compute_probabilities(locations, random_state, mask=None):
+    p = len(locations)
+    if mask is None:
+        mask = np.zeros((p, p))
+    probabilities = np.zeros((p, p))
+    for i in range(p):
+        for j in range(p):
+            d = np.linalg.norm(np.array(locations[i]) - np.array(locations[j]))
+            d = d / 10 if mask[i, j] else d
+            probabilities[i, j] = 2 * norm.pdf(d * np.sqrt(p), scale=1)
+    thresholds = random_state.uniform(low=0, high=1, size=(p, p))
+    probabilities[np.where(thresholds > probabilities)] = 0
+    return probabilities
 
-    Parameters
-    ----------
-    n_samples: int,
-        number of samples to generate
-    n_dim_obs: int,
-        number of observed variables of the graph
-    n_dim_lat: int,
-        number of latent variables of the graph
-    T: int,
-        number of times
-    mode: string,
-        "evolving": generate a dataset with evolving observed and latent
-                    variables that have a small Frobenious norm between two
-                    close time points
-        "fixed": generate a dataset with evolving observed and fixed latent
-                    variables that have a small Frobenious norm between two
-                    close time points
-        "l1": generate a dataset with evolving observed and latent variables
-              that differs for a small l1 norm
-        "l1l2": generate a dataset with evolving observed variables that
-                differs for a small l1 norm and evolving latent variables
-                that differs for a small l2 norm
-        "sin": generate a dataset with fixed latent variables and evolving
-                observed variables that are generated from sin functions.
-        func : use the user-defined function to generate the dataset. Such
-            function should return, in this order, "thetas, thetas_obs, ells".
-            See the other functions for an example.
-    *kwargs: other arguments related to each specific data generation mode
 
-    """
-    n_dim_obs = int(n_dim_obs)
-    n_dim_lat = int(n_dim_lat)
-    n_samples = int(n_samples)
+def permute_locations(locations, random_state):
+    new_locations = []
+    for l in locations:
+        perm = random_state.uniform(low=-0.03, high=0.03, size=(1, 2))
+        new_locations.append(
+            np.maximum(np.array(l) + np.array(perm), 0).flatten().tolist())
+    return new_locations
 
-    modes = dict(
-        evolving=make_l2l2,
-        fixed=make_l2,
-        fixedl2=make_l2,
-        fixedl1=make_l1,
-        yuan=generate_dataset_yuan,
-        l1l2=generate_dataset_l1l2,
-        norm=make_l2l2_norm,
-        l1l1=generate_dataset_l1l1,
 
-        # the previous are deprecated
-        sin=make_sin,
-        fixed_sparsity=make_fixed_sparsity,
-        sincos=make_sin_cos,
-        gp=make_exp_sine_squared,
-        fede=make_fede,
-        sklearn=make_sparse_low_rank,
-        ma=make_ma_xue_zou,
-        mak=make_ma_xue_zou_rand_k)
+def data_Meinshausen_Yuan(p=198, h=2, n=200, T=10, random_state=None):
+    random_state = check_random_state(random_state)
+    nodes_locations = []
+    for i in range(p):
+        nodes_locations.append(list(random_state.uniform(size=2)))
+    probs = compute_probabilities(nodes_locations, random_state)
+    theta = np.zeros((p, p))
+    for i in range(p):
+        ix = np.argsort(probs[i, :])[::-1]
+        no_nonzero = np.sum((theta != 0).astype(int), axis=1)[i]
+        ixs = []
+        sel = 1
+        j = 0
+        while sel <= 4 - no_nonzero and j < p:
+            if ix[j] < i:
+                j += 1
+                continue
+            ixs.append(ix[j])
+            sel += 1
+            j += 1
+        theta[i, ixs] = 0.245
+        theta[ixs, i] = 0.245
+    to_remove = np.where(np.sum((theta != 0).astype(int), axis=1) > 4)[0]
+    for t in to_remove:
+        edges = np.nonzero(theta[t, :])[0]
+        random_state.shuffle(edges)
+        removable = edges[:-4]
+        theta[t, removable] = 0
+        theta[removable, t] = 0
+    np.fill_diagonal(theta, 1)
 
-    if mode is not None:
-        # mode overrides other parameters, for back compatibility
-        func = mode if callable(mode) else modes.get(mode, None)
-        if func is None:
-            raise ValueError(
-                "Unknown mode %s. "
-                "Choices are: %s" % (mode, modes.keys()))
-        kwargs.update(
-            degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity,
-            proportional=proportional)
-    else:
-        func = partial(
-            make_covariance, update_ell=update_ell, update_theta=update_theta,
-            normalize_starting_matrices=normalize_starting_matrices,
-            degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity,
-            proportional=proportional)
+    assert is_pos_def(theta)
+    latent = np.zeros((h, p))
+    for i in range(h):
+        for j in range(p):
+            latent[i, j] = random_state.uniform(low=0, high=0.01, size=1)
 
-    thetas, thetas_obs, ells = func(n_dim_obs, n_dim_lat, T, **kwargs)
-    sigmas = map(np.linalg.inv, thetas_obs)
-    # map(normalize_matrix, sigmas)  # in place
+    L = latent.T.dot(latent)
+    theta_observed = theta - L
+    assert is_pos_def(theta_observed)
+    sigma = np.linalg.inv(theta_observed)
+    assert is_pos_def(sigma)
 
-    data = np.array(
-        [
-            np.random.multivariate_normal(
-                np.zeros(n_dim_obs), sigma, size=n_samples) for sigma in sigmas
-        ])
+    samples = random_state.multivariate_normal(np.zeros(p), sigma, size=n)
 
-    X = np.vstack(data)
-    y = np.array([np.ones(x.shape[0]) * i
-                  for i, x in enumerate(data)]).flatten().astype(int)
+    locations = [nodes_locations]
+    thetas = [theta]
+    thetas_observed = [theta_observed]
+    covariances = [sigma]
+    sampless = [samples]
+    for t in range(T - 1):
+        theta_prev = thetas[t]
+        locs_prev = locations[t]
+        locs = permute_locations(locs_prev, random_state)
 
-    if time_on_axis == "last":
-        data = data.transpose(1, 2, 0)
-    return Bunch(
-        data=data, thetas=np.array(thetas), X=X, y=y,
-        thetas_observed=np.array(thetas_obs), ells=np.array(ells))
+        locations.append(locs)
+        probs = compute_probabilities(locs, random_state, theta_prev != 0)
+
+        theta = np.zeros((p, p))
+        for i in range(p):
+            ix = np.argsort(probs[i, :])[::-1]
+            no_nonzero = np.sum((theta != 0).astype(int), axis=1)[i]
+            ixs = []
+            sel = 1
+            j = 0
+            while sel <= 4 - no_nonzero and j < p:
+                if ix[j] < i:
+                    j += 1
+                    continue
+                ixs.append(ix[j])
+                sel += 1
+                j += 1
+            theta[i, ixs] = 0.245
+            theta[ixs, i] = 0.245
+        to_remove = np.where(np.sum((theta != 0).astype(int), axis=1) > 4)[0]
+        for t in to_remove:
+            edges = np.nonzero(theta[t, :])[0]
+            random_state.shuffle(edges)
+            removable = edges[:-4]
+            theta[t, removable] = 0
+            theta[removable, t] = 0
+        np.fill_diagonal(theta, 1)
+
+        assert is_pos_def(theta)
+        thetas.append(theta)
+        theta_observed = theta - L
+        assert is_pos_def(theta_observed)
+        sigma = np.linalg.inv(theta_observed)
+        assert is_pos_def(sigma)
+        thetas_observed.append(theta_observed)
+        covariances.append(sigma)
+        sampless.append(
+            random_state.multivariate_normal(np.zeros(p), sigma, size=n))
+
+    return locations, thetas, thetas_observed, covariances, latent, sampless
+
+
+def data_Meinshausen_Yuan_sparse_latent(
+        p=198, h=2, n=200, T=10, random_state=None):
+    random_state = check_random_state(random_state)
+    nodes_locations = []
+    for i in range(p + h):
+        nodes_locations.append(list(random_state.uniform(size=2)))
+    probs = compute_probabilities(nodes_locations, random_state)
+    theta = np.zeros((p, p))
+    for i in range(p):
+        ix = np.argsort(probs[i, :-h])[::-1]
+        no_nonzero = np.sum((theta != 0).astype(int), axis=1)[i]
+        ixs = []
+        sel = 1
+        j = 0
+        while sel <= 4 - no_nonzero and j < p:
+            if ix[j] < i:
+                j += 1
+                continue
+            ixs.append(ix[j])
+            sel += 1
+            j += 1
+        theta[i, ixs] = 0.245
+        theta[ixs, i] = 0.245
+    to_remove = np.where(np.sum((theta != 0).astype(int), axis=1) > 4)[0]
+    for t in to_remove:
+        edges = np.nonzero(theta[t, :])[0]
+        random_state.shuffle(edges)
+        removable = edges[:-4]
+        theta[t, removable] = 0
+        theta[removable, t] = 0
+    np.fill_diagonal(theta, 1)
+
+    assert is_pos_def(theta)
+
+    latent = np.zeros((h, p + h))
+    to_put = (p + h) * 0.5
+    value = 0.98 / to_put
+    for i in range(h):
+        pb = probs[p + i, :]
+        ix = np.argsort(pb)[::-1]
+
+        no_nonzero = np.sum((latent != 0).astype(int), axis=1)[i]
+        ixs = []
+        sel = 1
+        j = 0
+        while (sel <= min(to_put - no_nonzero, np.nonzero(pb)[0].shape[0])
+               and j < h + h):
+            if ix[j] < i:
+                j += 1
+                continue
+            ixs.append(ix[j])
+            sel += 1
+            j += 1
+        latent[i, ixs] = value
+        for ix in ixs:
+            if ix < h:
+                latent[ix, i] = value
+    to_remove = np.where(np.sum((theta != 0).astype(int), axis=1) > to_put)[0]
+    for t in to_remove:
+        edges = np.nonzero(theta[t, :])[0]
+        random_state.shuffle(edges)
+        removable = edges[:-to_put]
+        latent[t, removable] = 0
+        latent[removable, t] = 0
+    for i in range(h):
+        latent[i, i] = 1
+    assert is_pos_def(latent[:h, :h])
+    connections = latent[:, h:]
+
+    theta_H = latent[:h, :h]
+    theta_obs = theta - connections.T.dot(
+        np.linalg.inv(theta_H)).dot(connections)
+    assert is_pos_def(theta_obs)
+    sigma = np.linalg.inv(theta_obs)
+    assert is_pos_def(sigma)
+
+    samples = random_state.multivariate_normal(np.zeros(p), sigma, size=n)
+
+    thetas_O = [theta]
+    thetas_H = [theta_H]
+    thetas_obs = [theta_obs]
+    locations = [nodes_locations]
+    sigmas = [sigma]
+    sampless = [samples]
+    for t in range(T - 1):
+        theta_prev = thetas_O[t]
+        lat_prev = thetas_H[t]
+        locs_prev = locations[t]
+        locs = permute_locations(locs_prev, random_state)
+
+        locations.append(locs)
+        probs_theta = compute_probabilities(
+            locs[:p], random_state, theta_prev != 0)
+        probs_lat = compute_probabilities(
+            locs[-h:], random_state, lat_prev != 0)
+
+        theta = np.zeros((p, p))
+        for i in range(p):
+            ix = np.argsort(probs_theta[i, :])[::-1]
+            no_nonzero = np.sum((theta != 0).astype(int), axis=1)[i]
+            ixs = []
+            sel = 1
+            j = 0
+            while sel <= 4 - no_nonzero and j < p:
+                if ix[j] < i:
+                    j += 1
+                    continue
+                ixs.append(ix[j])
+                sel += 1
+                j += 1
+            theta[i, ixs] = 0.245
+            theta[ixs, i] = 0.245
+        to_remove = np.where(np.sum((theta != 0).astype(int), axis=1) > 4)[0]
+        for t in to_remove:
+            edges = np.nonzero(theta[t, :])[0]
+            random_state.shuffle(edges)
+            removable = edges[:-4]
+            theta[t, removable] = 0
+            theta[removable, t] = 0
+        np.fill_diagonal(theta, 1)
+        assert is_pos_def(theta)
+        thetas_O.append(theta)
+
+        lat = np.zeros((h, h))
+        to_put = [np.nonzero(lat_prev[i, :])[0].shape[0] for i in range(h)]
+
+        for i in range(h):
+            ix = np.argsort(probs_lat[i, :])[::-1]
+            no_nonzero = np.sum((lat != 0).astype(int), axis=1)[i]
+            ixs = []
+            sel = 1
+            j = 0
+            while (sel <= to_put[i] - no_nonzero and j < h):
+                if ix[j] < i:
+                    j += 1
+                    continue
+                ixs.append(ix[j])
+                sel += 1
+                j += 1
+            lat[i, ixs] = value
+            lat[ixs, i] = value
+        to_remove = np.where(
+            np.sum((lat != 0).astype(int), axis=1) > to_put)[0]
+        for t in to_remove:
+            edges = np.nonzero(lat[t, :])[0]
+            random_state.shuffle(edges)
+            removable = edges[:-4]
+            lat[t, removable] = 0
+            lat[removable, t] = 0
+        np.fill_diagonal(lat, 1)
+        assert is_pos_def(lat)
+        thetas_H.append(lat)
+
+        theta_obs = theta - connections.T.dot(
+            np.linalg.inv(lat)).dot(connections)
+        assert is_pos_def(theta_obs)
+        thetas_obs.append(theta_obs)
+
+        sigma = np.linalg.inv(theta_obs)
+        assert is_pos_def(sigma)
+        sigmas.append(sigma)
+        sampless.append(
+            random_state.multivariate_normal(np.zeros(p), sigma, size=n))
+
+    return (
+        locations, thetas_O, thetas_H, thetas_obs, connections, sigmas,
+        sampless)
 
 
 def make_ell(n_dim_obs=100, n_dim_lat=10):
@@ -131,7 +319,7 @@ def make_ell(n_dim_obs=100, n_dim_lat=10):
 
     K_HO /= np.sum(K_HO, axis=1)[:, None] / 2.
     L = K_HO.T.dot(K_HO)
-    print("{}%".format(np.nonzero(L)[0].size / L.size))
+    # print("{}%".format(np.nonzero(L)[0].size / L.size))
     assert (is_pos_semidef(L))
     assert np.linalg.matrix_rank(L) == n_dim_lat
     # from sklearn.datasets import make_low_rank_matrix
@@ -291,63 +479,6 @@ def make_covariance(
     return thetas, thetas_obs, ells
 
 
-@deprecated("it will be removed in v0.2.0. Use `make_covariance` instead")
-def generate_dataset_l1l1(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
-    """Generate matrices according to a l1-l1 model."""
-    return make_covariance(
-        n_dim_lat=n_dim_lat, n_dim_obs=n_dim_obs, T=T, update_ell='l1',
-        update_theta='l1', **kwargs)
-
-
-@deprecated("it will be removed in v0.2.0. Use `make_covariance` instead")
-def generate_dataset_l1l2(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
-    """DESCRIZIONE, PRIMA O POI."""
-    return make_covariance(
-        n_dim_lat=n_dim_lat, n_dim_obs=n_dim_obs, T=T, update_ell='l2',
-        update_theta='l1', **kwargs)
-
-
-@deprecated("it will be removed in v0.2.0. Use `make_covariance` instead")
-def generate_dataset_yuan(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
-    """Yuan (2012) model."""
-    # number of links for each node
-    return make_covariance(
-        n_dim_lat=n_dim_lat, n_dim_obs=n_dim_obs, T=T, update_ell='yuan',
-        **kwargs)
-
-
-@deprecated("it will be removed in v0.2.0. Use `make_covariance` instead")
-def make_l2l2(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
-    """Generate dataset with evolving L."""
-    return make_covariance(
-        n_dim_lat=n_dim_lat, n_dim_obs=n_dim_obs, T=T, update_ell='l2',
-        update_theta='l2', normalize_starting_matrices=False, **kwargs)
-
-
-@deprecated("it will be removed in v0.2.0. Use `make_covariance` instead")
-def make_l2l2_norm(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
-    """Generate dataset with evolving L."""
-    return make_covariance(
-        n_dim_lat=n_dim_lat, n_dim_obs=n_dim_obs, T=T, update_ell='l2',
-        update_theta='l2', normalize_starting_matrices=True, **kwargs)
-
-
-@deprecated("it will be removed in v0.2.0. Use `make_covariance` instead")
-def make_l2(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
-    """Generate precisions with a fixed L matrix."""
-    return make_covariance(
-        n_dim_lat=n_dim_lat, n_dim_obs=n_dim_obs, T=T, update_ell='fixed',
-        update_theta='l2', normalize_starting_matrices=False, **kwargs)
-
-
-@deprecated("it will be removed in v0.2.0. Use `make_covariance` instead")
-def make_l1(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
-    """Generate precisions with a fixed L matrix."""
-    return make_covariance(
-        n_dim_lat=n_dim_lat, n_dim_obs=n_dim_obs, T=T, update_ell='fixed',
-        update_theta='l1', normalize_starting_matrices=False, **kwargs)
-
-
 def make_fixed_sparsity(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """Generate precisions with a fixed L matrix and sparsity."""
     degree = kwargs.get('degree', 2)
@@ -372,8 +503,8 @@ def make_fixed_sparsity(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
         theta = np.abs(theta)
         theta = (theta + theta.T) / 2.
         theta[theta < epsilon] = 0
-        theta.flat[::n_dim_obs + 1] = np.sum(np.abs(theta), axis=1) \
-                                    + np.sum(np.abs(L), axis=1) + .1
+        theta.flat[::n_dim_obs + 1] = (
+            np.sum(np.abs(theta), axis=1) + np.sum(np.abs(L), axis=1) + .1)
         nonzeros = np.nonzero(theta - np.diag(theta))
 
         theta_observed = theta - L
@@ -414,84 +545,6 @@ def make_sin(
     ensure_posdef(Y)
 
     return Y, Y, np.zeros_like(Y)
-
-
-def make_sin_cos(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
-    """Variables follow sin and cos evolution. L is fixed."""
-    degree = kwargs.get('degree', 2)
-    eps = kwargs.get('epsilon', 1e-2)
-    L, K_HO = make_ell(n_dim_obs, n_dim_lat)
-
-    phase = np.random.randn(n_dim_obs, n_dim_obs) * np.pi
-    upper_idx_diag = np.triu_indices(n_dim_obs)
-    phase[upper_idx_diag[::-1]] = phase[upper_idx_diag]
-
-    upper_idx = np.triu_indices(n_dim_obs, 1)
-    clip = np.zeros((n_dim_obs, n_dim_obs))
-    picks = np.random.permutation(len(upper_idx[0]))
-    dim = int(len(upper_idx[0]) * degree)
-    picks = picks[:dim]
-    clip1 = clip[upper_idx].ravel()
-    clip1[picks] = 1
-    clip[upper_idx[::-1]] = clip[upper_idx] = clip1
-
-    thetas = np.array([np.eye(n_dim_obs) for i in range(T)])
-
-    x = np.linspace(0, 2 * np.pi, T)
-    for i in range(T):
-        for r in range(n_dim_obs):
-            for c in range(n_dim_obs):
-                if r == c:
-                    continue
-                if clip[r, c]:
-                    thetas[i, r, c] = np.sin((x[i] + phase[r, c]) / T**2)
-                else:
-                    thetas[i, r, c] = np.sin((x[i] + phase[r, c]))
-        thetas[i][clip == 1] = np.clip(thetas[i][clip == 1], 0, 1)
-        thetas[i][np.abs(thetas[i]) < eps] = 0
-
-        assert (is_pos_def(thetas[i]))
-        theta_observed = thetas[i] - L
-        assert (is_pos_def(theta_observed))
-        thetas_obs = [theta_observed]
-
-    return thetas, thetas_obs, np.array([L] * T)
-
-
-def make_exp_sine_squared(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
-    from regain.bayesian.gaussian_process_ import sample as samplegp
-    from scipy.spatial.distance import squareform
-    from sklearn.gaussian_process import kernels
-
-    L, K_HO = make_ell(n_dim_obs, n_dim_lat)
-
-    periodicity = kwargs.get('periodicity', np.pi)
-    length_scale = kwargs.get('length_scale', 2)
-    epsilon = kwargs.get('epsilon', 0.5)
-    sparse = kwargs.get('sparse', True)
-    temporal_kernel = kernels.ExpSineSquared(
-        periodicity=periodicity,
-        length_scale=length_scale)(np.arange(T)[:, None])
-
-    u = samplegp(temporal_kernel, p=n_dim_obs * (n_dim_obs - 1) // 2)[0]
-    K, K_obs = [], []
-    for uu in u.T:
-        theta = squareform(uu)
-
-        if sparse:
-            # sparsify
-            theta[np.abs(theta) < epsilon] = 0
-
-        theta += np.diag(np.sum(np.abs(theta), axis=1) + 0.01)
-        K.append(theta)
-
-        assert (is_pos_def(theta))
-        theta_observed = theta - L
-        assert (is_pos_def(theta_observed))
-        K_obs.append(theta_observed)
-
-    thetas = np.array(K)
-    return thetas, np.array(K_obs), np.array([L] * T)
 
 
 def make_fede(
@@ -606,7 +659,7 @@ def make_ma_xue_zou_rand_k(
     po = n_dim_obs
     nnzr = int(sparsity * (np.triu_indices(p, 1)[0].size))
 
-    # Generate A, the original inverse covariance, with random sparsity pattern...
+    # Generate A, the original inverse covariance
     A = np.eye(p)
     idx = np.vstack(np.triu_indices(p, 1))
     idx = idx[:, np.random.choice(idx.shape[1], nnzr, replace=False)]
