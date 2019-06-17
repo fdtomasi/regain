@@ -1,5 +1,4 @@
 import matplotlib.pyplot as plt
-import networkx as nx
 import numpy as np
 
 
@@ -30,3 +29,15 @@ def plot_graph_with_latent_variables(
     ax.set_axis_off()
     ax.set_title(title)
     return ax
+
+
+def plot_meinshausen_yuan(locations, theta, figsize=(10, 10), file=None):
+    plt.figure(figsize=figsize)
+    plt.plot(np.array(locations)[:, 0], np.array(locations)[:, 1], 'ro')
+    nz = np.nonzero(theta)
+    for i, j in zip(nz[0], nz[1]):
+        plt.plot(np.array(locations)[[i, j], 0],
+                 np.array(locations)[[i, j], 1])
+    if file is not None:
+        plt.savefig(file, transparency=True, dpi=200, bbox_inches='tight')
+    plt.show()
