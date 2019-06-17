@@ -89,7 +89,7 @@ def make_dataset(
         if func is None:
             raise ValueError(
                 "Unknown mode %s. "
-                "Choices are: %s" % (mode, modes.keys()))
+                "Choices are: %s" % (mode, list(modes.keys())))
         kwargs.update(
             degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity,
             proportional=proportional)
@@ -101,7 +101,7 @@ def make_dataset(
             proportional=proportional)
 
     thetas, thetas_obs, ells = func(n_dim_obs, n_dim_lat, T, **kwargs)
-    sigmas = map(np.linalg.inv, thetas_obs)
+    sigmas = list(map(np.linalg.inv, thetas_obs))
     # map(normalize_matrix, sigmas)  # in place
 
     data = np.array(
@@ -131,7 +131,7 @@ def make_ell(n_dim_obs=100, n_dim_lat=10):
 
     K_HO /= np.sum(K_HO, axis=1)[:, None] / 2.
     L = K_HO.T.dot(K_HO)
-    print("{}%".format(np.nonzero(L)[0].size / L.size))
+    print(("{}%".format(np.nonzero(L)[0].size / L.size)))
     assert (is_pos_semidef(L))
     assert np.linalg.matrix_rank(L) == n_dim_lat
     # from sklearn.datasets import make_low_rank_matrix
@@ -409,7 +409,7 @@ def make_sin(
         ])
 
     if normalize:
-        map(normalize_matrix, Y)  # in place
+        list(map(normalize_matrix, Y))  # in place
     # assert positive_definite(Y)
     ensure_posdef(Y)
 
@@ -594,7 +594,7 @@ def make_ma_xue_zou(n_dim_obs=12, n_latent=3, T=1, epsilon=1e-3, sparsity=0.1):
     # print(ph)
 
     N = 5 * po
-    print("Note that, with this method, the n_samples should be %d" % N)
+    print(("Note that, with this method, the n_samples should be %d" % N))
     return [K_O] * T, [K_O_tilde] * T, [L] * T
 
 
@@ -625,5 +625,72 @@ def make_ma_xue_zou_rand_k(
     K_O_tilde = K_O - L
 
     N = 5 * po
-    print("Note that, with this method, the n_samples should be %d" % N)
+    print(("Note that, with this method, the n_samples should be %d" % N))
     return [K_O] * T, [K_O_tilde] * T, [L] * T
+
+
+def make_ticc(rand_seed, num_blocks=5, n_dim=10, sparsity_inv_matrix=0.5):
+    import networkx as nx
+    np.random.seed(rand_seed)
+    size_blocks = n_dim
+    block_matrices = {}
+
+    def genInvCov(size, low=0.3, upper=0.6, portion=0.2, symmetric=True):
+        portion = portion / 2
+        S = np.zeros((size, size))
+        n_edges = int((size * (size - 1)) * portion)
+        G = nx.gnm_random_graph(size, n_edges)
+        for src, dest in G.edges:
+            S[src, dest] = (np.random.randint(2) - 0.5) * 2 * (
+                low + (upper - low) * np.random.rand(1)[0])
+        if symmetric:
+            S += S.T
+        # vals = alg.eigvalsh(S)
+        # S = S + (0.1 - vals[0])*np.identity(size)
+        return S
+
+    def genRandInv(size, low=0.3, upper=0.6, portion=0.2):
+        S = np.zeros((size, size))
+        for i in range(size):
+            for j in range(size):
+                if np.random.rand() < portion:
+                    value = (np.random.randint(2) - 0.5) * 2 * (
+                        low + (upper - low) * np.random.rand(1)[0])
+                    S[i, j] = value
+        return S
+
+    ##Generate all the blocks
+    for block in range(num_blocks):
+        if block == 0:
+            block_matrices[block] = genInvCov(
+                size=size_blocks, portion=sparsity_inv_matrix,
+                symmetric=(block == 0))
+        else:
+            block_matrices[block] = genRandInv(
+                size=size_blocks, portion=sparsity_inv_matrix)
+
+    ##Initialize the inverse matrix
+    inv_matrix = np.zeros([num_blocks * size_blocks, num_blocks * size_blocks])
+
+    ##go through all the blocks
+    for block_i in range(num_blocks):
+        for block_j in range(num_blocks):
+            block_num = np.abs(block_i - block_j)
+            inv_matrix[
+                block_i * size_blocks:(block_i + 1) * size_blocks,
+                block_j * size_blocks:(block_j + 1) * size_blocks
+            ] = block_matrices[block_num] if block_i > block_j \
+                else np.transpose(block_matrices[block_num])
+
+    ##print out all the eigenvalues
+    eigs, _ = np.linalg.eig(inv_matrix)
+    lambda_min = min(eigs)
+
+    ##Make the matrix positive definite
+    inv_matrix += (0.1 + abs(lambda_min)) * np.eye(size_blocks * num_blocks)
+
+    eigs, _ = np.linalg.eig(inv_matrix)
+    lambda_min = min(eigs)
+    print("Modified Eigenvalues are:", np.sort(eigs))
+
+    return inv_matrix
