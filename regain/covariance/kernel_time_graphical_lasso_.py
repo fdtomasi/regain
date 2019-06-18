@@ -433,7 +433,7 @@ class KernelTimeGraphicalLasso(TimeGraphicalLasso):
         return self
 
 
-class SimilarityTimeGraphicalLasso(TimeGraphicalLasso):
+class SimilarityTimeGraphicalLasso(KernelTimeGraphicalLasso):
     """Learn how to relate different precision matrices across times.
 
     Parameters
@@ -531,7 +531,7 @@ class SimilarityTimeGraphicalLasso(TimeGraphicalLasso):
             for i in range(self.max_iter_ext):
                 # E step - discover best kernel
                 theta = minimize(
-                    objective_similarity,
+                    objective_similarity, kernel,
                     args=(self.precision_, self.classes_[:, None], psi),
                     bounds=(0, emp_cov.shape[0]), method='bounded').x
 
