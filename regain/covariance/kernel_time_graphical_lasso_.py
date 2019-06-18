@@ -19,6 +19,7 @@ from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence
 from regain.validation import check_norm_prox
+from regain.clustering import graph_k_means
 
 
 def objective(n_samples, S, K, Z_0, Z_M, alpha, kernel, psi):
@@ -258,7 +259,7 @@ def objective_kernel(theta, K, psi, kernel, times):
 def objective_similarity(theta, K, times, psi):
     obj = 0
     n_times = K.shape[0]
-    kernel = np.eye()
+    kernel = np.eye(n_times)
     idx = np.triu_indices(n_times, 1)
     kernel[idx] = theta
     kernel[idx[::-1]] = theta
@@ -530,20 +531,25 @@ class SimilarityTimeGraphicalLasso(KernelTimeGraphicalLasso):
 
             for i in range(self.max_iter_ext):
                 # E step - discover best kernel
+                # , method='bounded'bounds=[(0, None)]*theta_old.size
                 theta = minimize(
-                    objective_similarity, kernel,
-                    args=(self.precision_, self.classes_[:, None], psi),
-                    bounds=(0, emp_cov.shape[0]), method='bounded').x
+                    objective_similarity, theta_old,
+                    args=(self.precision_, self.classes_[:, None], psi)
+                    ).x
+                theta -= np.min(theta)
+                theta /= np.max(theta)
 
                 if i > 0 and np.linalg.norm(theta_old - theta) / theta.size < self.eps:
                     break
                 else:
-                    print("Find new theta: %f" % theta)
+                    print("Find new theta")
+
 
                 # M step - fix the kernel matrix
                 kernel[idx] = theta
                 kernel[idx[::-1]] = theta
 
+                self.similarity_matrix = kernel
                 out = kernel_time_graphical_lasso(
                     emp_cov, alpha=self.alpha, rho=self.rho, kernel=kernel,
                     n_samples=n_samples, tol=self.tol, rtol=self.rtol,
@@ -552,11 +558,19 @@ class SimilarityTimeGraphicalLasso(KernelTimeGraphicalLasso):
                     update_rho_options=self.update_rho_options,
                     compute_objective=self.compute_objective,
                     init=self.precision_)
+
                 if self.return_history:
                     self.precision_, self.covariance_, self.history_, self.n_iter_ = out
                 else:
                     self.precision_, self.covariance_, self.n_iter_ = out
                 theta_old = theta
+                # kernel = graph_k_means(list(self.precision_), 3, max_iter=100)
+                # self.similarity_matrix = kernel
+                # theta_old = kernel
+                # if i > 0 and np.linalg.norm(theta_old - kernel) / kernel.size < self.eps:
+                #     break
+                # else:
+                #     print("Find new theta")
             else:
                 print("warning: theta not converged")
 
