@@ -172,7 +172,8 @@ def make_ticc(
 
 def make_ticc_dataset(
         n_clusters=3, n_dim=5, window_size=5, break_points=None,
-        cluster_ids=None):
+        cluster_ids=None, n_dim_lat=0, sparsity_inv_matrix=0.5, rand_seed=None,
+        **kwargs):
     """Generate data as the TICC method.
 
     Library implementation of `generate_synthetic_data.py`, original can be
@@ -194,7 +195,10 @@ def make_ticc_dataset(
     cluster_inverses = {}
     cluster_covariances = {}
     for cluster in range(n_clusters):
-        cluster_inverses[cluster] = make_ticc(rand_seed=cluster)
+        cluster_inverses[cluster] = make_ticc(
+            rand_seed=cluster, num_blocks=num_blocks, n_dim_obs=n_dim,
+            n_dim_lat=n_dim_lat, sparsity_inv_matrix=sparsity_inv_matrix,
+            **kwargs)
         cluster_covariances[cluster] = linalg.pinvh(cluster_inverses[cluster])
 
     # Data matrix
@@ -284,7 +288,5 @@ def make_ticc_dataset(
                 # print "new mean is:", new_mean
                 # print "size_blocks:", size_blocks
 
-            print(num, cov_mat_tom.shape, new_mean.shape)
-            print(new_mean.shape)
             X[num] = np.random.multivariate_normal(new_mean, cov_mat_tom)
     return X, cluster_covariances
