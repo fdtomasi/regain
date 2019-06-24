@@ -3,6 +3,7 @@
 import numpy as np
 from scipy import linalg
 from scipy.spatial.distance import squareform
+from sklearn.datasets.base import Bunch
 
 from regain.utils import is_pos_def
 
@@ -170,123 +171,88 @@ def make_ticc(
     return inv_matrix
 
 
+def block_matrix(matrix, r, c):
+    S11 = matrix[:r, :c]
+    S22 = matrix[r:, c:]
+    S21 = matrix[r:, :c]
+    S12 = S21.T
+    return S11, S22, S21, S12
+
+
 def make_ticc_dataset(
-        n_clusters=3, n_dim=5, window_size=5, break_points=None,
-        cluster_ids=None, n_dim_lat=0, sparsity_inv_matrix=0.5, rand_seed=None,
-        **kwargs):
+        clusters=(0, 1, 0), n_dim=3, w_size=5, break_points=None,
+        n_samples=200, n_dim_lat=0, sparsity_inv_matrix=0.5, T=9,
+        rand_seed=None, **kwargs):
     """Generate data as the TICC method.
 
     Library implementation of `generate_synthetic_data.py`, original can be
     found at https://github.com/davidhallac/TICC
     """
-    size_blocks = n_dim
-    num_blocks = window_size
-    if cluster_ids is None:
-        cluster_ids = [0, 1, 0]
-    seg_ids = cluster_ids
+    if (len(clusters) * n_samples) % T != 0:
+        raise ValueError(
+            'n_clusters * n_samples should be a multiple of n_times '
+            'to avoid having samples in the same time period in different '
+            'clusters')
 
-    if break_points is None:
-        break_points = np.array([1, 2, 3]) * 200
+    id_cluster = np.repeat(np.asarray(list(clusters)), n_samples)
+    y = np.repeat(np.arange(T), len(clusters) * n_samples // T)
 
-    cluster_mean = np.zeros(size_blocks)
-    cluster_mean_stacked = np.zeros(size_blocks * num_blocks)
+    cluster_mean = np.zeros(n_dim)
+    cluster_mean_stack = np.zeros(n_dim * w_size)
 
+    clusters = np.unique(list(clusters))
     # Generate two inverse matrices
-    cluster_inverses = {}
-    cluster_covariances = {}
-    for cluster in range(n_clusters):
-        cluster_inverses[cluster] = make_ticc(
-            rand_seed=cluster, num_blocks=num_blocks, n_dim_obs=n_dim,
+    precisions = {}
+    covs = {}
+    for i, cluster in enumerate(clusters):
+        precisions[cluster] = make_ticc(
+            rand_seed=i, num_blocks=w_size, n_dim_obs=n_dim,
             n_dim_lat=n_dim_lat, sparsity_inv_matrix=sparsity_inv_matrix,
             **kwargs)
-        cluster_covariances[cluster] = linalg.pinvh(cluster_inverses[cluster])
+        covs[cluster] = linalg.pinvh(precisions[cluster])
 
     # Data matrix
-    X = np.zeros([break_points[-1], size_blocks])
-    # Data_stacked = np.zeros(
-    #     [break_points[-1] - num_blocks + 1, size_blocks * num_blocks])
-    # cluster_point_list = []
-    for counter, break_pt in enumerate(break_points):
-        cluster = seg_ids[counter]
-        if counter == 0:
-            old_break_pt = 0
+    X = np.empty((id_cluster.size, n_dim))
+    precs = []
+    n = n_dim
+    for i, label in enumerate(id_cluster):
+        # for num in range(old_break_pt, break_pt):
+        if i == 0:
+            # conditional covariance and mean
+            cov_tom = covs[label][:n_dim, :n_dim]
+            mean = cluster_mean_stack[n_dim * (w_size - 1):]
+
+        elif i < w_size:
+            cov = covs[label][:(i + 1) * n, :(i + 1) * n]
+            Sig11, Sig22, Sig21, Sig12 = block_matrix(cov, i * n, i * n)
+            Sig21Theta11 = Sig21.dot(linalg.pinvh(Sig11))
+            cov_tom = Sig22 - Sig21Theta11.dot(Sig12)  # sigma2|1
+
+            mean = cluster_mean + Sig21Theta11.dot(
+                X[:i].flatten() - cluster_mean_stack[:i * n_dim])
+
         else:
-            old_break_pt = break_points[counter - 1]
+            cov = covs[label][:w_size * n, :w_size * n]
+            Sig11, Sig22, Sig21, Sig12 = block_matrix(
+                cov, (w_size - 1) * n, (w_size - 1) * n)
+            Sig21Theta11 = Sig21.dot(linalg.pinvh(Sig11))
+            cov_tom = Sig22 - Sig21Theta11.dot(Sig12)  # sigma2|1
 
-        for num in range(old_break_pt, break_pt):
-            if num == 0:
-                # conditional covariance
-                cov_mat_tom = cluster_covariances[cluster][0:size_blocks, 0:
-                                                           size_blocks]
+            mean = cluster_mean + Sig21Theta11.dot(
+                X[i - w_size + 1:i].flatten() -
+                cluster_mean_stack[:(w_size - 1) * n_dim])
 
-                # conditional mean
-                new_mean = cluster_mean_stacked[size_blocks *
-                                                (num_blocks - 1):size_blocks *
-                                                num_blocks]
+        X[i] = np.random.multivariate_normal(mean, cov_tom)
+        precs.append(linalg.pinvh(cov_tom))
 
-            elif num < num_blocks:
-                cov_matrix = cluster_covariances[cluster][:(
-                    num + 1) * size_blocks, :(num + 1) * size_blocks]
-                n = size_blocks
-                Sig22 = cov_matrix[(num) * n:(num + 1) * n, (num) *
-                                   n:(num + 1) * n]
-                Sig11 = cov_matrix[0:(num) * n, 0:(num) * n]
-                Sig21 = cov_matrix[(num) * n:(num + 1) * n, 0:(num) * n]
-                Sig12 = np.transpose(Sig21)
+    id_cluster_group = []
+    for c in np.unique(y):
+        idx = np.where(y == c)[0]
+        # check samples at same time belong to a single cluster
+        assert np.unique(id_cluster[idx]).size == 1
+        id_cluster_group.append(id_cluster[idx][0])
 
-                Theta11 = linalg.pinvh(Sig11)
-                cov_mat_tom = Sig22 - np.dot(
-                    np.dot(Sig21, Theta11), Sig12)  # sigma2|1
-                # log_det_cov_tom = np.log(
-                #     np.linalg.det(cov_mat_tom))  # log(det(sigma2|1))
-                # inv_cov_mat_tom = np.linalg.inv(
-                #     cov_mat_tom)  # The inverse of sigma2|1
-
-                # Generate data
-                a = np.zeros(num * size_blocks)
-                for idx in range(num):
-                    a[idx * size_blocks:(idx + 1) * size_blocks] = X[idx]
-
-                new_mean = cluster_mean + np.dot(
-                    np.dot(Sig21, Theta11),
-                    (a - cluster_mean_stacked[:num * size_blocks]))
-
-            else:
-                cov_matrix = cluster_covariances[cluster]
-                n = size_blocks
-                Sig22 = cov_matrix[(num_blocks - 1) * n:(num_blocks) *
-                                   n, (num_blocks - 1) * n:(num_blocks) * n]
-                Sig11 = cov_matrix[0:(num_blocks - 1) * n, 0:(num_blocks - 1) *
-                                   n]
-                Sig21 = cov_matrix[(num_blocks - 1) * n:(num_blocks) *
-                                   n, 0:(num_blocks - 1) * n]
-                Sig12 = np.transpose(Sig21)
-
-                Theta11 = linalg.pinvh(Sig11)
-                cov_mat_tom = Sig22 - np.dot(
-                    np.dot(Sig21, Theta11), Sig12)  # sigma2|1
-                # log_det_cov_tom = np.log(
-                #     np.linalg.det(cov_mat_tom))  # log(det(sigma2|1))
-                # inv_cov_mat_tom = np.linalg.inv(
-                #     cov_mat_tom)  # The inverse of sigma2|1
-
-                # Generate data
-                # print "shape of inv_cov_mat_tom is:", inv_cov_mat_tom.shape
-                # print "cov_mat_tom", cov_mat_tom.shape
-                # print "Sig11 shape", Sig11.shape
-
-                a = np.zeros((num_blocks - 1) * size_blocks)
-                for idx in range(num_blocks - 1):
-                    a[idx * size_blocks:(idx + 1) *
-                      size_blocks] = X[num - num_blocks + 1 + idx]
-
-                new_mean = cluster_mean + np.dot(
-                    np.dot(Sig21, Theta11), (
-                        a - cluster_mean_stacked[0:(num_blocks - 1) *
-                                                 size_blocks]))
-                # print "shape of new_mean is:", new_mean.shape
-                # print "new mean is:", new_mean
-                # print "size_blocks:", size_blocks
-
-            X[num] = np.random.multivariate_normal(new_mean, cov_mat_tom)
-    return X, cluster_covariances
+    data = Bunch(
+        X=X, y=y, id_cluster=id_cluster, covs=covs, precs=precs,
+        id_cluster_group=np.asarray(id_cluster_group))
+    return data

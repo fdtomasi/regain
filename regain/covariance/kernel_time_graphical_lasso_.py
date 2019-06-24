@@ -271,6 +271,21 @@ def objective_similarity(theta, K, times, psi):
     return obj
 
 
+def precision_similarity(K, times, psi):
+    n_times = K.shape[0]
+    kernel = np.zeros((n_times, n_times))
+    for m in range(1, n_times):
+        # all possible markovians jumps
+        dist = list(map(psi, K[m:] - K[:-m]))
+        np.fill_diagonal(kernel[m:], dist)
+        np.fill_diagonal(kernel[:, m:], dist)
+
+    # kernel /= (kernel.max() or 1)
+    # kernel *= -1
+    # kernel += 1
+    return 1. / (1 + kernel)
+
+
 class KernelTimeGraphicalLasso(TimeGraphicalLasso):
     """As KernelTimeGraphicalLasso, but X is 2d and y specifies time.
 
@@ -336,13 +351,13 @@ class KernelTimeGraphicalLasso(TimeGraphicalLasso):
     """
 
     def __init__(
-            self, alpha=0.01, kernel=None, rho=1., tol=1e-4, rtol=1e-4,
+            self, alpha=0.01, beta=1, kernel=None, rho=1., tol=1e-4, rtol=1e-4,
             psi='laplacian', max_iter=100, verbose=False,
             assume_centered=False, return_history=False,
             update_rho_options=None, compute_objective=True, ker_param=1,
             max_iter_ext=100, init='empirical'):
         super(KernelTimeGraphicalLasso, self).__init__(
-            alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
+            alpha=alpha, beta=beta, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered,
             update_rho_options=update_rho_options,
             compute_objective=compute_objective, return_history=return_history,
@@ -499,13 +514,13 @@ class SimilarityTimeGraphicalLasso(KernelTimeGraphicalLasso):
     """
 
     def __init__(
-            self, alpha=0.01, kernel=None, rho=1., tol=1e-4, rtol=1e-4,
+            self, alpha=0.01, beta=1, kernel=None, rho=1., tol=1e-4, rtol=1e-4,
             psi='laplacian', max_iter=100, verbose=False,
             assume_centered=False, return_history=False,
             update_rho_options=None, compute_objective=True, ker_param=1,
             max_iter_ext=100, init='empirical', eps=1e-6):
         super(KernelTimeGraphicalLasso, self).__init__(
-            alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
+            alpha=alpha, beta=beta, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered,
             update_rho_options=update_rho_options,
             compute_objective=compute_objective, return_history=return_history,
@@ -532,23 +547,26 @@ class SimilarityTimeGraphicalLasso(KernelTimeGraphicalLasso):
             for i in range(self.max_iter_ext):
                 # E step - discover best kernel
                 # , method='bounded'bounds=[(0, None)]*theta_old.size
-                theta = minimize(
-                    objective_similarity, theta_old,
-                    args=(self.precision_, self.classes_[:, None], psi)
-                    ).x
-                theta -= np.min(theta)
-                theta /= np.max(theta)
+                # theta = minimize(
+                #     objective_similarity, theta_old,
+                #     args=(self.precision_, self.classes_[:, None], psi)
+                #     ).x
+                # theta -= np.min(theta)
+                # theta /= np.max(theta)
+                theta = precision_similarity(
+                    self.precision_, self.classes_[:, None], psi)
 
-                if i > 0 and np.linalg.norm(theta_old - theta) / theta.size < self.eps:
+                if i > 0 and np.linalg.norm(theta_old -
+                                            theta) / theta.size < self.eps:
                     break
-                else:
-                    print("Find new theta")
+                # else:
+                #     print("Find new theta")
 
+                # kernel[idx] = theta
+                # kernel[idx[::-1]] = theta
+                kernel = theta * self.beta
 
                 # M step - fix the kernel matrix
-                kernel[idx] = theta
-                kernel[idx[::-1]] = theta
-
                 self.similarity_matrix = kernel
                 out = kernel_time_graphical_lasso(
                     emp_cov, alpha=self.alpha, rho=self.rho, kernel=kernel,
