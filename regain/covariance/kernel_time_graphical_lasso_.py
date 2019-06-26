@@ -271,7 +271,7 @@ def objective_similarity(theta, K, times, psi):
     return obj
 
 
-def precision_similarity(K, times, psi):
+def precision_similarity(K, psi):
     n_times = K.shape[0]
     kernel = np.zeros((n_times, n_times))
     for m in range(1, n_times):
@@ -357,8 +357,9 @@ class KernelTimeGraphicalLasso(TimeGraphicalLasso):
             update_rho_options=None, compute_objective=True, ker_param=1,
             max_iter_ext=100, init='empirical'):
         super(KernelTimeGraphicalLasso, self).__init__(
-            alpha=alpha, beta=beta, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
-            verbose=verbose, assume_centered=assume_centered,
+            alpha=alpha, beta=beta, rho=rho, tol=tol, rtol=rtol,
+            max_iter=max_iter, verbose=verbose,
+            assume_centered=assume_centered,
             update_rho_options=update_rho_options,
             compute_objective=compute_objective, return_history=return_history,
             psi=psi, init=init)
@@ -520,8 +521,9 @@ class SimilarityTimeGraphicalLasso(KernelTimeGraphicalLasso):
             update_rho_options=None, compute_objective=True, ker_param=1,
             max_iter_ext=100, init='empirical', eps=1e-6):
         super(KernelTimeGraphicalLasso, self).__init__(
-            alpha=alpha, beta=beta, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
-            verbose=verbose, assume_centered=assume_centered,
+            alpha=alpha, beta=beta, rho=rho, tol=tol, rtol=rtol,
+            max_iter=max_iter, verbose=verbose,
+            assume_centered=assume_centered,
             update_rho_options=update_rho_options,
             compute_objective=compute_objective, return_history=return_history,
             psi=psi, init=init)
@@ -553,8 +555,7 @@ class SimilarityTimeGraphicalLasso(KernelTimeGraphicalLasso):
                 #     ).x
                 # theta -= np.min(theta)
                 # theta /= np.max(theta)
-                theta = precision_similarity(
-                    self.precision_, self.classes_[:, None], psi)
+                theta = precision_similarity(self.precision_, psi)
 
                 if i > 0 and np.linalg.norm(theta_old -
                                             theta) / theta.size < self.eps:
