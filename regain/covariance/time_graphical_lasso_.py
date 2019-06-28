@@ -18,7 +18,7 @@ from regain.covariance.graphical_lasso_ import GraphicalLasso, logl
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
-from regain.utils import convergence, error_norm_time
+from regain.utils import convergence, error_norm_time, is_pos_def
 from regain.validation import check_norm_prox
 
 
@@ -260,6 +260,8 @@ def time_graphical_lasso(
         U_1 *= rho / rho_new
         U_2 *= rho / rho_new
         rho = rho_new
+
+        #assert is_pos_def(Z_0)
     else:
         warnings.warn("Objective did not converge.")
 

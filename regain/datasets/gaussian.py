@@ -43,7 +43,7 @@ def permute_locations(locations, random_state):
     return new_locations
 
 
-def data_Meinshausen_Yuan(p=198, h=2, n=200, T=10, random_state=None):
+def data_Meinshausen_Yuan(p=198, h=2, n=200, T=10, random_state=None, **kwargs):
     random_state = check_random_state(random_state)
     nodes_locations = []
     for i in range(p):

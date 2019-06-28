@@ -9,6 +9,7 @@ from regain.update_rules import update_rho
 from regain.validation import check_norm_prox
 from sklearn.utils import check_array
 from sklearn.utils.extmath import squared_norm
+from sklearn.base import BaseEstimator
 
 from regain.generalized_linear_model.base import GLM_GM, convergence
 from regain.generalized_linear_model.base import build_adjacency_matrix
@@ -121,7 +122,7 @@ def _gradient_ising(X, theta,  n, A=None, rho=1, T=0):
 
 def _fit(X, alpha=1e-2, gamma=1e-3, tol=1e-3, max_iter=1000, verbose=0,
          return_history=True, compute_objective=True, warm_start=None,
-         return_n_iter=False, adjust_gamma=False):
+         return_n_iter=False, adjust_gamma=False, A=None, T=0, rho=1):
     n, d = X.shape
     if warm_start is None:
         theta = np.zeros((d, d))
@@ -133,7 +134,7 @@ def _fit(X, alpha=1e-2, gamma=1e-3, tol=1e-3, max_iter=1000, verbose=0,
     checks = []
     for iter_ in range(max_iter):
 
-        theta_new = theta - gamma*_gradient_ising(X, theta,  n)
+        theta_new = theta - gamma*_gradient_ising(X, theta,  n, A, rho, T)
         theta = (theta_new + theta_new.T)/2
         theta = soft_thresholding_od(theta, alpha*gamma)
         thetas.append(theta)
@@ -238,7 +239,7 @@ def _fit_ADMM(X, alpha=1e-2, gamma=1e-3, tol=1e-3, rtol=1e-4, max_iter=1000,
     return return_list
 
 
-class Ising_GLM_GM(GLM_GM):
+class Ising_GLM_GM(GLM_GM, BaseEstimator):
 
     def __init__(self, alpha=0.01, tol=1e-4, rtol=1e-4, reconstruction='union',
                  mode='coordinate_descent', rho=1, max_iter=100,
@@ -294,3 +295,6 @@ class Ising_GLM_GM(GLM_GM):
                              ". Options are 'coordiante_descent', "
                              "'symmetric_fbs'")
         return self
+
+    def score(self, X, y=None):
+        return 0

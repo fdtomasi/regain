@@ -12,7 +12,7 @@ from .gaussian import (data_Meinshausen_Yuan,
                        data_Meinshausen_Yuan_sparse_latent, make_fede,
                        make_fixed_sparsity, make_ma_xue_zou,
                        make_ma_xue_zou_rand_k, make_sin, make_sin_cos,
-                       make_sparse_low_rank)
+                       make_sparse_low_rank, make_covariance)
 from .ising import ising_theta_generator
 from .kernels import make_exp_sine_squared, make_ticc
 
@@ -56,11 +56,17 @@ def _gaussian_case(
             degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity,
             proportional=proportional)
     else:
-        func = partial(
-            _gaussian_case, update_ell=update_ell, update_theta=update_theta,
-            normalize_starting_matrices=normalize_starting_matrices,
-            degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity,
-            proportional=proportional)
+        func = partial(make_covariance,
+                       update_ell=update_ell, update_theta=update_theta,
+                       normalize_starting_matrices=normalize_starting_matrices,
+                       degree=degree, epsilon=epsilon,
+                       keep_sparsity=keep_sparsity, proportional=proportional)
+    #     func = partial(
+    #         _gaussian_case, mode='ma',
+    #         update_ell=update_ell, update_theta=update_theta,
+    #         normalize_starting_matrices=normalize_starting_matrices,
+    #         degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity,
+    #         proportional=proportional)
     thetas, thetas_obs, ells = func(n_dim_obs, n_dim_lat, T, **kwargs)
     sigmas = list(map(np.linalg.inv, thetas_obs))
     # map(normalize_matrix, sigmas)  # in place

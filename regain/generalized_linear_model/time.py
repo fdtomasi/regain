@@ -143,7 +143,7 @@ def _fit_time_ising_model(X, alpha=0.01, rho=1, kernel=None,
                                   tol=tol,
                                   max_iter=max_iter, verbose=0,
                                   compute_objective=True,
-                                  warm_start=K[t, :, :])[0]
+                                  warm_start=None, A=A[t, :, :], rho=rho, T=n_times)[0]
         K = K_new.copy()
 
         # other Zs
@@ -402,7 +402,7 @@ class TemporalIsingModel(BaseEstimator):
                         self.classes_[:, None])
 
                 out = _fit_time_ising_model(
-                    X, distribution=self.distribution,
+                    X,
                     alpha=self.alpha, rho=self.rho, kernel=kernel,
                     tol=self.tol, rtol=self.rtol,
                     psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
