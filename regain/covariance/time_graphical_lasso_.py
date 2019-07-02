@@ -49,6 +49,9 @@ def objective(n_samples, S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
 
 
 def init_precision(emp_cov, mode='empirical'):
+    if isinstance(mode, np.ndarray):
+        return mode.copy()
+
     if mode == 'empirical':
         n_times, _, n_features = emp_cov.shape
         covariance_ = emp_cov.copy()
@@ -59,8 +62,6 @@ def init_precision(emp_cov, mode='empirical'):
             K[i] = linalg.pinvh(c)
     elif mode == 'zeros':
         K = np.zeros_like(emp_cov)
-    else:
-        K = mode.copy()  # warm start case
 
     return K
 
