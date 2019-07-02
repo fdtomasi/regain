@@ -156,7 +156,7 @@ def plot_circular(
         py.offline.iplot(fig, filename='networkx')
     """
     if labels is None:
-        labels = ["x_%d" % i for i in G.nodes]
+        labels = [r"$x_%d$" % i for i in G.nodes]
     pos = nx.circular_layout(G)
 
     dmin = 1

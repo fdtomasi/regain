@@ -218,8 +218,8 @@ def time_graphical_lasso(
             if compute_objective else np.nan
 
         if np.isinf(obj):
-            covariance_ = np.array([linalg.pinvh(x) for x in Z_0_old])
-            return Z_0_old, covariance_
+            Z_0 = Z_0_old
+            break
 
         check = convergence(
             obj=obj,

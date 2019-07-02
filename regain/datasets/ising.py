@@ -24,7 +24,7 @@ def update_ising_l1(theta_init, no, n_dim_obs, responses=[-1, 1]):
 
 
 def ising_theta_generator(
-        p=10, n=100, T=10, mode='l1', time_on_axis='first', change=4,
+        p=10, n=100, T=10, mode='l1', time_on_axis='first', change=1,
         responses=[-1, 1]):
     theta = np.random.choice(
         np.array([-0.5, 0, 0.5]), size=(p, p), replace=True)
