@@ -13,8 +13,8 @@ from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.utils.extmath import squared_norm
 
-from regain.covariance.kernel_time_graphical_lasso_ import (KernelTimeGraphicalLasso,
-                                                            init_precision)
+from regain.covariance.kernel_time_graphical_lasso_ import (
+    KernelTimeGraphicalLasso, init_precision, precision_similarity)
 from regain.covariance.kernel_time_graphical_lasso_ import \
     objective as obj_ktgl
 from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
@@ -370,7 +370,8 @@ class KernelLatentTimeGraphicalLasso(KernelTimeGraphicalLasso):
             tol=1e-4, rtol=1e-4, psi='laplacian', phi='laplacian',
             max_iter=100, verbose=False, assume_centered=False,
             return_history=False, update_rho_options=None,
-            compute_objective=True, ker_psi_param=1, ker_phi_param=1, init='empirical'):
+            compute_objective=True, ker_psi_param=1, ker_phi_param=1,
+            init='empirical'):
         super(KernelLatentTimeGraphicalLasso, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered,
@@ -445,5 +446,211 @@ class KernelLatentTimeGraphicalLasso(KernelTimeGraphicalLasso):
                 self.n_iter_ = out
         else:
             self.precision_, self.latent_, self.covariance_, self.n_iter_ = out
+
+        return self
+
+
+class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
+    """Sparse inverse covariance estimation with an l1-penalized estimator.
+
+    Parameters
+    ----------
+    alpha : positive float, default 0.01
+        Regularization parameter for precision matrix. The higher alpha,
+        the more regularization, the sparser the inverse covariance.
+
+    tau : positive float, default 1
+        Regularization parameter for latent variables matrix. The higher tau,
+        the more regularization, the lower rank of the latent matrix.
+
+    kernel_{psi,phi} : ndarray, default None
+        Normalised temporal kernel (1 on the diagonal),
+        with dimensions equal to the dimensionality of the data set.
+        If None, it is interpreted as an identity matrix, where there is no
+        constraint on the temporal behaviour of {precision,latent} matrices.
+
+    {psi,phi} : {'laplacian', 'l1', 'l2', 'linf', 'node'}, default 'laplacian'
+        Type of norm to enforce for consecutive {precision,latent} matrices
+        in time.
+
+    rho : positive float, default 1
+        Augmented Lagrangian parameter.
+
+    tol : positive float, default 1e-4
+        Absolute tolerance to declare convergence.
+
+    rtol : positive float, default 1e-4
+        Relative tolerance to declare convergence.
+
+    max_iter : integer, default 100
+        The maximum number of iterations.
+
+    verbose : boolean, default False
+        If verbose is True, the objective function, rnorm and snorm are
+        printed at each iteration.
+
+    assume_centered : boolean, default False
+        If True, data are not centered before computation.
+        Useful when working with data whose mean is almost, but not exactly
+        zero.
+        If False, data are centered before computation.
+
+    update_rho_options : dict, default None
+        Options for the update of rho. See `update_rho` function for details.
+
+    compute_objective : boolean, default True
+        Choose if compute the objective function during iterations
+        (only useful if `verbose=True`).
+
+    init : {'empirical', 'zeros', ndarray}, default 'empirical'
+        How to initialise the inverse covariance matrix. Default is take
+        the empirical covariance and inverting it.
+
+    Attributes
+    ----------
+    covariance_ : array-like, shape (n_times, n_features, n_features)
+        Estimated covariance matrix
+
+    precision_ : array-like, shape (n_times, n_features, n_features)
+        Estimated pseudo inverse matrix.
+
+    latent_ : array-like, shape (n_times, n_features, n_features)
+        Estimated latent variable matrix.
+
+    n_iter_ : int
+        Number of iterations run.
+
+    """
+
+    def __init__(
+            self, alpha=0.01, tau=1., kernel_psi=None, kernel_phi=None, rho=1.,
+            tol=1e-4, rtol=1e-4, psi='laplacian', phi='laplacian',
+            max_iter=100, verbose=False, assume_centered=False,
+            return_history=False, update_rho_options=None,
+            compute_objective=True, ker_psi_param=1, ker_phi_param=1, max_iter_ext=100,
+            init='empirical', eps=1e-6):
+        super(SimilarityLatentTimeGraphicalLasso, self).__init__(
+            alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
+            verbose=verbose, assume_centered=assume_centered,
+            update_rho_options=update_rho_options,
+            compute_objective=compute_objective, return_history=return_history,
+            psi=psi, init=init)
+        self.kernel_psi = kernel_psi
+        self.kernel_phi = kernel_phi
+        self.tau = tau
+        self.phi = phi
+        self.ker_psi_param = ker_psi_param
+        self.ker_phi_param = ker_phi_param
+        self.max_iter_ext = max_iter_ext
+        self.eps = eps
+
+    def get_observed_precision(self):
+        """Getter for the observed precision matrix.
+
+        Returns
+        -------
+        precision_ : array-like,
+            The precision matrix associated to the current covariance object.
+            Note that this is the observed precision matrix.
+
+        """
+        return self.precision_ - self.latent_
+
+    def _fit(self, emp_cov, n_samples):
+        if self.kernel_psi is None:
+            if self.kernel_phi is None or callable(self.kernel_phi):
+                raise ValueError('not implemented')
+
+            # discover best kernel parameter via EM
+            # initialise precision matrices, as warm start
+            self.precision_ = init_precision(emp_cov, mode=self.init)
+            n_times = self.precision_.shape[0]
+            theta_old = np.zeros(n_times * (n_times - 1) // 2)
+            kernel_psi = np.eye(n_times)
+
+            psi, _, _ = check_norm_prox(self.psi)
+
+            for i in range(self.max_iter_ext):
+                # E step - discover best kernel
+                theta = precision_similarity(self.precision_, psi)
+
+                if i > 0 and np.linalg.norm(theta_old -
+                                            theta) / theta.size < self.eps:
+                    break
+
+                kernel_psi = theta * self.beta
+
+                # M step - fix the kernel matrix
+                self.similarity_matrix = kernel_psi
+                out = kernel_latent_time_graphical_lasso(
+                    emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
+                    kernel_phi=self.kernel_phi, kernel_psi=kernel_psi,
+                    n_samples=n_samples, tol=self.tol, rtol=self.rtol,
+                    psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
+                    return_n_iter=True, return_history=self.return_history,
+                    update_rho_options=self.update_rho_options,
+                    compute_objective=self.compute_objective,
+                    init=self.precision_)
+
+                if self.return_history:
+                    self.precision_, self.latent_, self.covariance_, self.history_, \
+                        self.n_iter_ = out
+                else:
+                    self.precision_, self.latent_, self.covariance_, self.n_iter_ = out
+                theta_old = theta
+            else:
+                print("warning: theta not converged")
+        else:
+            if callable(self.kernel_phi):
+                try:
+                    # this works if it is a ExpSineSquared or RBF kernel
+                    kernel_phi = self.kernel_phi(
+                        length_scale=self.ker_phi_param)(
+                            self.classes_[:, None])
+                except TypeError:
+                    # maybe it's a ConstantKernel
+                    kernel_phi = self.kernel_phi(
+                        constant_value=self.ker_phi_param)(
+                            self.classes_[:, None])
+
+            else:
+                kernel_phi = self.kernel_phi
+                if kernel_phi.shape[0] != self.classes_.size:
+                    raise ValueError(
+                        "kernel_phi size does not match classes of samples, "
+                        "got {} classes and kernel_phi has shape {}".format(
+                            self.classes_.size, kernel_phi.shape[0]))
+            if callable(self.kernel_psi):
+                try:
+                    # this works if it is a ExpSineSquared kernel
+                    kernel_psi = self.kernel_psi(
+                        length_scale=self.ker_psi_param)(
+                            self.classes_[:, None])
+                except TypeError:
+                    # maybe it's a ConstantKernel
+                    kernel_psi = self.kernel_psi(
+                        constant_value=self.ker_psi_param)(
+                            self.classes_[:, None])
+            else:
+                kernel_psi = self.kernel_psi
+                if kernel_psi.shape[0] != self.classes_.size:
+                    raise ValueError(
+                        "kernel_psi size does not match classes of samples, "
+                        "got {} classes and kernel_psi has shape {}".format(
+                            self.classes_.size, kernel_psi.shape[0]))
+
+            out = kernel_latent_time_graphical_lasso(
+                emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
+                kernel_phi=kernel_phi, kernel_psi=kernel_psi,
+                n_samples=n_samples, tol=self.tol, rtol=self.rtol,
+                psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
+                return_n_iter=True, return_history=self.return_history,
+                update_rho_options=self.update_rho_options,
+                compute_objective=self.compute_objective, init=self.init)
+            if self.return_history:
+                self.precision_, self.latent_, self.covariance_, self.history_, \
+                    self.n_iter_ = out
+            else:
+                self.precision_, self.latent_, self.covariance_, self.n_iter_ = out
 
         return self
