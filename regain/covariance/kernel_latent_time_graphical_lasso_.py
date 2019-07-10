@@ -564,6 +564,7 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
             # discover best kernel parameter via EM
             # initialise precision matrices, as warm start
             self.precision_ = init_precision(emp_cov, mode=self.init)
+            self.latent_ = np.zeros_like(self.precision_)
             n_times = self.precision_.shape[0]
             theta_old = np.zeros(n_times * (n_times - 1) // 2)
             kernel_psi = np.eye(n_times)
@@ -572,7 +573,7 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
 
             for i in range(self.max_iter_ext):
                 # E step - discover best kernel
-                theta = precision_similarity(self.precision_, psi)
+                theta = precision_similarity(self.get_observed_precision(), psi)
 
                 if i > 0 and np.linalg.norm(theta_old -
                                             theta) / theta.size < self.eps:

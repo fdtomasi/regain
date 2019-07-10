@@ -164,8 +164,8 @@ def read_network(
     columns = sorted(nn[0].unique(), key=lambda x: int(x[1:]))
     n_top_edges = int(nn.shape[0] * threshold / (2. if full_network else 1))
 
-    nn = nn.sort_values(
-        2, ascending=False)[:(2 if full_network else 1) * n_top_edges]
+    nn = nn.sort_values(2, ascending=False)[:(2 if full_network else 1) *
+                                            n_top_edges]
 
     net_julia = pd.DataFrame(columns=columns, index=columns,
                              dtype=float).fillna(0)
