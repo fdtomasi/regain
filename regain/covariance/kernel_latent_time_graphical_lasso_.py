@@ -12,6 +12,7 @@ import numpy as np
 from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.utils.extmath import squared_norm
+from sklearn.utils.validation import check_is_fitted
 
 from regain.covariance.kernel_time_graphical_lasso_ import (
     KernelTimeGraphicalLasso, init_precision, precision_similarity)
@@ -523,12 +524,12 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
     """
 
     def __init__(
-            self, alpha=0.01, tau=1., kernel_psi=None, kernel_phi=None, rho=1.,
-            tol=1e-4, rtol=1e-4, psi='laplacian', phi='laplacian',
-            max_iter=100, verbose=False, assume_centered=False,
-            return_history=False, update_rho_options=None,
-            compute_objective=True, ker_psi_param=1, ker_phi_param=1, max_iter_ext=100,
-            init='empirical', eps=1e-6):
+            self, alpha=0.01, beta=1., tau=1., kernel_psi=None,
+            kernel_phi=None, rho=1., tol=1e-4, rtol=1e-4, psi='laplacian',
+            phi='laplacian', max_iter=100, verbose=False,
+            assume_centered=False, return_history=False,
+            update_rho_options=None, compute_objective=True, ker_psi_param=1,
+            ker_phi_param=1, max_iter_ext=100, init='empirical', eps=1e-6):
         super(SimilarityLatentTimeGraphicalLasso, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered,
@@ -537,6 +538,7 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
             psi=psi, init=init)
         self.kernel_psi = kernel_psi
         self.kernel_phi = kernel_phi
+        self.beta = beta
         self.tau = tau
         self.phi = phi
         self.ker_psi_param = ker_psi_param
@@ -573,7 +575,8 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
 
             for i in range(self.max_iter_ext):
                 # E step - discover best kernel
-                theta = precision_similarity(self.get_observed_precision(), psi)
+                theta = precision_similarity(
+                    self.get_observed_precision(), psi)
 
                 if i > 0 and np.linalg.norm(theta_old -
                                             theta) / theta.size < self.eps:
@@ -582,7 +585,6 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
                 kernel_psi = theta * self.beta
 
                 # M step - fix the kernel matrix
-                self.similarity_matrix = kernel_psi
                 out = kernel_latent_time_graphical_lasso(
                     emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
                     kernel_phi=self.kernel_phi, kernel_psi=kernel_psi,
@@ -601,6 +603,7 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
                 theta_old = theta
             else:
                 print("warning: theta not converged")
+            self.similarity_matrix_ = kernel_psi
         else:
             if callable(self.kernel_phi):
                 try:
@@ -655,3 +658,8 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
                 self.precision_, self.latent_, self.covariance_, self.n_iter_ = out
 
         return self
+
+    def transform(self, X, y=None):
+        """Possibility to add in a Pipeline."""
+        check_is_fitted(self, ['similarity_matrix_'])
+        return self.similarity_matrix_
