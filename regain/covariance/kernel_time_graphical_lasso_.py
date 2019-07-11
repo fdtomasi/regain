@@ -560,8 +560,6 @@ class SimilarityTimeGraphicalLasso(KernelTimeGraphicalLasso):
                 if i > 0 and np.linalg.norm(theta_old -
                                             theta) / theta.size < self.eps:
                     break
-                # else:
-                #     print("Find new theta")
 
                 # kernel[idx] = theta
                 # kernel[idx[::-1]] = theta

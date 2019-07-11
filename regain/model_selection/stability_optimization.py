@@ -167,7 +167,7 @@ class GraphicalModelStabilitySelection(GridSearchCV):
             pre_dispatch='2*n_jobs', error_score='raise-deprecating',
             mode='stars',
             return_train_score=False, n_repetitions=10, sampling_size=None):
-        super().__init__(
+        super(GraphicalModelStabilitySelection, self).__init__(
             estimator=estimator, scoring=scoring, n_jobs=n_jobs, iid=iid,
             refit=refit, cv=StratifiedShuffleSplit(train_size=sampling_size,
                                                    n_splits=n_repetitions),

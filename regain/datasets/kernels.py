@@ -1,5 +1,7 @@
 """Generate data for kernel-based classes as `KernelTimeGraphicalLasso`."""
 
+from itertools import chain
+
 import numpy as np
 from scipy import linalg
 from scipy.spatial.distance import squareform
@@ -255,4 +257,121 @@ def make_ticc_dataset(
     data = Bunch(
         X=X, y=y, id_cluster=id_cluster, covs=covs, precs=precs,
         id_cluster_group=np.asarray(id_cluster_group))
+    return data
+
+
+def make_ticc_dataset_new(
+        clusters=(0, 1, 0), n_dim=3, w_size=5, break_points=None,
+        n_samples=200, n_dim_lat=0, sparsity_inv_matrix=0.5, T=9,
+        rand_seed=None, **kwargs):
+    """Generate data as the TICC method.
+
+    Library implementation of `generate_synthetic_data.py`, original can be
+    found at https://github.com/davidhallac/TICC
+    """
+    # if (len(clusters) * n_samples) % T != 0:
+    #     raise ValueError(
+    #         'n_clusters * n_samples should be a multiple of n_times '
+    #         'to avoid having samples in the same time period in different '
+    #         'clusters')
+
+    id_cluster = np.repeat(np.asarray(list(clusters)), n_samples)
+    y = np.repeat(np.arange(T), len(clusters) * n_samples // T)
+
+    size_blocks = n_dim
+    num_blocks = n_samples
+    bmc = {}
+
+    for rand_seed in clusters:
+        np.random.seed(rand_seed)
+
+        bmc[rand_seed] = {
+            block: (
+                genInvCov(
+                    size=size_blocks, portion=sparsity_inv_matrix,
+                    symmetric=True) if block == 0 else (
+                        genRandInv(
+                            size=size_blocks, portion=sparsity_inv_matrix))
+                if block < w_size + 1 else np.zeros((n_dim, n_dim)))
+            for block in range(num_blocks)
+        }
+
+    def get_out_diag(r):
+        return np.block(
+            [
+                [
+                    (
+                        bmc[r].get(i, np.zeros(
+                            (n_dim, n_dim))).T if col > j else bmc[r].get(
+                                i, np.zeros((n_dim, n_dim))))
+                    for col, i in enumerate(range(j, num_blocks + j))
+                ] for j in range(1, num_blocks + 1)
+            ][::-1])
+
+    def get_out_zero(r):
+        return np.zeros_like(get_out_diag(r))
+
+    def get_diag(r):
+        return np.block(
+            [
+                [
+                    (bmc[r][i] if col > j else bmc[r][i].T)
+                    for col, i in enumerate(
+                        chain(range(j, 0, -1), range(num_blocks - j)))
+                ] for j in range(num_blocks)
+            ])
+
+    inv = np.block(
+        [
+            [np.zeros_like(get_out_diag(c))] * max(0, k - 1) +
+            ([get_out_diag(clusters[k - 1]).T] if k > 0 else []) +
+            [get_diag(c)] +
+            ([get_out_diag(c)] if k < len(clusters) - 1 else []) +
+            [np.zeros_like(get_out_diag(c))] * max(len(clusters) - 2 - k, 0)
+            for k, c in enumerate(clusters)
+        ])
+    # Make the matrix positive definite
+    eigs, _ = np.linalg.eig(inv)
+    lambda_min = np.min(eigs)
+    inv += (0.1 + abs(lambda_min)) * np.eye(inv.shape[0])
+    C = linalg.pinvh(inv)
+
+    # create data
+    cluster_mean = np.zeros(n_dim)
+    cluster_mean_stack = np.zeros((n_samples * len(clusters), n_dim))
+    X = np.empty((id_cluster.size, n_dim))
+    precs = []
+    for i, label in enumerate(id_cluster):
+        cov = C[max(i - w_size, 0) * n_dim:(i + 1) * n_dim,
+                max(i - w_size, 0) * n_dim:(i + 1) * n_dim]
+
+        # conditional covariance and mean
+        Sig11, Sig22, Sig21, Sig12 = block_matrix(
+            cov,
+            min(i, w_size) * n_dim,
+            min(i, w_size) * n_dim)
+        # print(Sig11.shape, Sig22.shape, Sig21.shape, Sig12.shape)
+
+        # when i = 0, Sig11 has shape (0,0), causing an error in pinvh
+        Sig21Theta11 = Sig21.dot(
+            linalg.pinvh(Sig11) if Sig11.size > 0 else Sig11)
+        cov_tom = Sig22 - Sig21Theta11.dot(Sig12)  # sigma2|1
+
+        mean = cluster_mean + Sig21Theta11.dot(
+            X[max(i - w_size, 0):i].flatten() -
+            cluster_mean_stack[max(i - w_size, 0):i].flatten())
+
+        X[i] = np.random.multivariate_normal(mean, cov_tom)
+        precs.append(linalg.pinvh(cov_tom))
+
+    id_cluster_group = []
+    for c in np.unique(y):
+        idx = np.where(y == c)[0]
+        # check samples at same time belong to a single cluster
+        assert np.unique(id_cluster[idx]).size == 1
+        id_cluster_group.append(id_cluster[idx][0])
+
+    data = Bunch(
+        X=X, y=y, id_cluster=id_cluster, precs=precs,
+        id_cluster_group=np.asarray(id_cluster_group), inv=inv)
     return data
