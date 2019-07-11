@@ -2,9 +2,13 @@ import numpy as np
 
 from sklearn.utils.extmath import fast_logdet
 
+from regain.utils import is_pos_def
+
 
 def log_likelihood(emp_cov, precision):
     """Gaussian log-likelihood without constant term."""
+    if not is_pos_def(precision):
+        return -np.inf
     return fast_logdet(precision) - np.sum(emp_cov * precision)
 
 
@@ -58,5 +62,5 @@ def EBIC_m_t(emp_cov, precision, n=100, epsilon=0.5):
     n_variables = precision.shape[1]*precision.shape[0]
     of_nonzero = np.sum(precision != 0) - n_variables
     penalty = np.log(n)/n*of_nonzero + \
-        4 * epsilon * np.log(n_variables(n_variables-1)/2)/n * of_nonzero
+        4 * epsilon * np.log(n_variables*(n_variables-1)/2)/n * of_nonzero
     return likelihood - penalty

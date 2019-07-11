@@ -1,5 +1,6 @@
 import warnings
 import time
+import matplotlib
 
 from itertools import product
 from collections import defaultdict
@@ -110,10 +111,17 @@ def upper_bound(estimators):
                 np.zeros_like(precisions[0][0])[triu_idx]
                 for i in range(n_times)
             ])
+        for c in precisions:
+            for i in range(n_times):
+                mean_connectivity[i] += (c[i][triu_idx].copy() !=
+                                         0).astype(int)
     mean_connectivity /= len(estimators)
     xi_matrix = 2 * mean_connectivity * (1 - mean_connectivity)
-    p = precisions[0].shape[0]
-    theta_hat = np.sum(xi_matrix)/(p*(p-1)/2)
+
+    p = precisions[0].shape[1]
+    theta_hat = np.sum(xi_matrix)
+    theta_hat = theta_hat/(p*(p-1)/2) if precisions[0].ndim == 2 \
+        else theta_hat/(n_times*p*(p-1)/2)
     return 4*theta_hat*(1 - theta_hat)
 
 
@@ -155,7 +163,7 @@ class GraphicalModelStabilitySelection(GridSearchCV):
     """
     def __init__(
             self, estimator, param_grid, scoring=None, n_jobs=None,
-            iid='deprecated', refit=True, cv='warn', verbose=0, plot=False,
+            iid='deprecated', refit=True, cv='warn', verbose=0,
             pre_dispatch='2*n_jobs', error_score='raise-deprecating',
             mode='stars',
             return_train_score=False, n_repetitions=10, sampling_size=None):
@@ -167,7 +175,6 @@ class GraphicalModelStabilitySelection(GridSearchCV):
             error_score=error_score, return_train_score=return_train_score,
             param_grid=param_grid)
         self.mode = mode
-        self.plot = plot
         self.n_repetitions = n_repetitions
         self.sampling_size = sampling_size
         self.param_grid = _check_param_order(param_grid)
@@ -428,35 +435,24 @@ class GraphicalModelStabilitySelection(GridSearchCV):
             np.max(array_means[:i]) for i in range(1, array_means.size)
         ]
         monotonized_instabilities = np.array(monotonized_instabilities)
+        self.monotonized_instabilities = np.copy(monotonized_instabilities)
 
         if self.mode.lower() == 'gstars':
             graphlets_stability = np.array([graphlet_instability(e_split)
                                             for e_split in estimators])
-            upper_bounds = [upper_bound(e_split) for e_split in estimators]
+            self.graphlets_instabilities = np.copy(graphlets_stability)
+
+            upper_bounds = np.array([upper_bound(e_split) for e_split in estimators])
+            upper_bounds = [upper_bounds[0]] + [
+                np.max(upper_bounds[:i]) for i in range(1, upper_bounds.size)
+            ]
+            self.upper_bounds = np.array(upper_bounds)
             lb = np.where(np.array(monotonized_instabilities) <= 0.05)[0]
             ub = np.where(np.array(upper_bounds) <= 0.05)[0]
-
             lb = lb[-1] if lb.size != 0 else len(monotonized_instabilities)
             ub = ub[-1] if ub.size != 0 else 0
-
-            if self.plot:
-                plt.figure(figsize=(15, 5))
-                plt.plot(monotonized_instabilities, label='Instabilities')
-                plt.plot(np.array(upper_bounds), label='Upper bound')
-                plt.axhline(0.05, color='red')
-                plt.axvline(lb-1, color='green')
-                plt.axvline(ub, color='green')
-                plt.legend()
-                plt.xticks(np.arange(len(monotonized_instabilities)),
-                           results['params'], rotation='vertical')
-                plt.show()
-                plt.figure(figsize=(15, 5))
-                plt.plot(graphlets_stability)
-                plt.axvline(lb, color='green')
-                plt.axvline(ub, color='green')
-                plt.xticks(np.arange(len(monotonized_instabilities)),
-                           results['params'], rotation='vertical')
-                plt.show()
+            self.lower_bound = lb
+            self.upper_bound = ub
             graphlets_stability[0:ub] = np.inf
             graphlets_stability[lb+1:] = np.inf
 
@@ -467,24 +463,59 @@ class GraphicalModelStabilitySelection(GridSearchCV):
                 rankdata(graphlets_stability, method='min'),
                 dtype=np.int32)
         else:
-            if self.plot:
-                plt.figure(figsize=(15, 5))
-                plt.title('Monotonized instabilities')
-                plt.plot(monotonized_instabilities)
-                plt.axhline(0.05, color='red')
-                plt.xticks(np.arange(len(monotonized_instabilities)),
-                           results['params'], rotation='vertical')
-                plt.show()
-
             # discard high values
             monotonized_instabilities[monotonized_instabilities > 0.05] = \
                 -np.inf
-
             key_name = 'test_instability'
             results['raw_%s' % key_name] = array_means
             results['mean_%s' % key_name] = monotonized_instabilities
             results["rank_%s" % key_name] = np.asarray(
                 rankdata(-monotonized_instabilities, method='min'),
                 dtype=np.int32)
-
+        self.results = results
         return results
+
+    def plot(self, axis=None, figsize=(15, 10), filename="", fontsize=15):
+        matplotlib.rcParams.update({'font.size': fontsize})
+        if self.mode.lower() == 'gstars':
+            if axis is None:
+                fig, axis = plt.subplots(2, figsize=figsize)
+            axis[0].plot(self.monotonized_instabilities, label='Instabilities')
+            axis[0].plot(np.array(self.upper_bounds), label='Upper bound')
+            axis[0].axhline(0.05, color='red')
+            axis[0].axvline(self.lower_bound, color='violet', label='Lower bound')
+            axis[0].axvline(self.upper_bound, color='green', label='Upper bound')
+            axis[0].grid()
+            axis[0].legend()
+            axis[0].set_xticks(np.arange(len(self.monotonized_instabilities)))
+            axis[0].set_xticklabels(self.results['params'])
+            axis[1].plot(self.graphlets_instabilities)
+            axis[1].axvline(self.lower_bound, color='violet')
+            axis[1].axvline(self.upper_bound, color='green')
+            axis[1].grid()
+            axis[1].set_xticks(np.arange(len(self.monotonized_instabilities)))
+            axis[1].set_xticklabels(self.results['params'])
+            for tick in axis[0].get_xticklabels():
+                tick.set_rotation(90)
+            for tick in axis[1].get_xticklabels():
+                tick.set_rotation(90)
+
+            plt.tight_layout()
+            if filename != "":
+                plt.savefig(filename, dpi=300, bbox_inches='tight',
+                            transparent=True)
+            plt.show()
+        else:
+            if axis is None:
+                fig, axis = plt.subplots(1, figsize=figsize)
+            axis[0].title('Monotonized instabilities')
+            axis[0].plot(self.monotonized_instabilities)
+            axis[0].axhline(0.05, color='red')
+            axis[0].set_xticks(np.arange(len(self.monotonized_instabilities)))
+            axis[1].set_xticklabels(self.results['params'])
+            for tick in axis[0].get_xticklabels():
+                tick.set_rotation(90)
+            if filename != "":
+                plt.savefig(filename, dpi=300, bbox_inches='tight',
+                            transparent=True)
+            plt.show()
