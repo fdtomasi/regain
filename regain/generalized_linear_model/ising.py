@@ -1,19 +1,13 @@
 import warnings
 
 import numpy as np
-from scipy import linalg
 
-from six.moves import map, range, zip
-
-from regain.update_rules import update_rho
-from regain.validation import check_norm_prox
 from sklearn.utils import check_array
 from sklearn.utils.extmath import squared_norm
 from sklearn.base import BaseEstimator
 
 from regain.generalized_linear_model.base import GLM_GM, convergence
 from regain.generalized_linear_model.base import build_adjacency_matrix
-#from regain.covariance.time_graphical_lasso_ import init_precision
 from regain.prox import soft_thresholding, soft_thresholding_od
 from regain.norm import l1_od_norm
 from regain.utils import convergence as convergence_admm
@@ -239,7 +233,7 @@ def _fit_ADMM(X, alpha=1e-2, gamma=1e-3, tol=1e-3, rtol=1e-4, max_iter=1000,
     return return_list
 
 
-class Ising_GLM_GM(GLM_GM, BaseEstimator):
+class IsingGraphicalModel(GLM_GM, BaseEstimator):
 
     def __init__(self, alpha=0.01, tol=1e-4, rtol=1e-4, reconstruction='union',
                  mode='coordinate_descent', rho=1, max_iter=100,

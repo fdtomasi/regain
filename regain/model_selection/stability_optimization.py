@@ -481,7 +481,7 @@ class GraphicalModelStabilitySelection(GridSearchCV):
             if axis is None:
                 fig, axis = plt.subplots(2, figsize=figsize)
             axis[0].plot(self.monotonized_instabilities, label='Instabilities')
-            axis[0].plot(np.array(self.upper_bounds), label='Upper bound')
+            axis[0].plot(np.array(self.upper_bounds), label='Upper bound instabilities')
             axis[0].axhline(0.05, color='red')
             axis[0].axvline(self.lower_bound, color='violet', label='Lower bound')
             axis[0].axvline(self.upper_bound, color='green', label='Upper bound')
@@ -489,10 +489,11 @@ class GraphicalModelStabilitySelection(GridSearchCV):
             axis[0].legend()
             axis[0].set_xticks(np.arange(len(self.monotonized_instabilities)))
             axis[0].set_xticklabels(self.results['params'])
-            axis[1].plot(self.graphlets_instabilities)
+            axis[1].plot(self.graphlets_instabilities, label='Graphlet instabilities')
             axis[1].axvline(self.lower_bound, color='violet')
             axis[1].axvline(self.upper_bound, color='green')
             axis[1].grid()
+            axis[1].legend()
             axis[1].set_xticks(np.arange(len(self.monotonized_instabilities)))
             axis[1].set_xticklabels(self.results['params'])
             for tick in axis[0].get_xticklabels():

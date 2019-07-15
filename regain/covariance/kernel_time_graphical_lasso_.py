@@ -280,10 +280,11 @@ def precision_similarity(K, psi):
         np.fill_diagonal(kernel[m:], dist)
         np.fill_diagonal(kernel[:, m:], dist)
 
-    # kernel /= (kernel.max() or 1)
+    kernel -= np.min(kernel)
+    kernel /= np.max(kernel)
     # kernel *= -1
     # kernel += 1
-    return 1. / (1 + kernel)
+    return 1 - kernel #1. / (1 + kernel)
 
 
 class KernelTimeGraphicalLasso(TimeGraphicalLasso):
