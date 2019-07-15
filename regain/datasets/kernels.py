@@ -500,3 +500,64 @@ def make_ticc_dataset_v3(
         X=X, y=y, id_cluster=id_cluster, precs=np.array(precs),
         sparse_precs=np.array(sparse_precs), inv=inv)
     return data
+
+
+def make_cluster_representative(
+        n_obs=10, degree=2, clusters=3, T=15, n_samples=100,
+        repetitions=False):
+    """Based on the cluster representative, generate similar graphs."""
+    import networkx as nx
+    clusters_reps = [
+        nx.random_regular_graph(d=degree, n=n_obs) for i in range(clusters)
+    ]
+    adjacencies = []
+    for i in range(clusters):
+        A = nx.adjacency_matrix(clusters_reps[i]).todense().astype(float)
+        A[np.where(A != 0)] = np.random.rand(np.where(A != 0)[0].size) * 0.45
+        np.fill_diagonal(A, 1)
+        adjacencies.append(A)
+
+    pos = np.arange(0, T, T // (clusters + 1))
+    pos = np.sort(pos)
+    pos = list(pos) + [T - 1]
+
+    thetas = []
+    for i in range(len(pos) - 1):
+        how_many = int(pos[i + 1]) - int(pos[i]) - 1
+        new_list = [adjacencies[i % clusters]]
+        target = adjacencies[(i + 1) % clusters]
+
+        for i in range(how_many):
+
+            new = new_list[-1].copy()
+            diffs = (new != 0).astype(int) - (target != 0).astype(int)
+            diff = np.where(diffs != 0)
+            if diff == ():
+                break
+            if (i == 0):
+                edges_per_change = int(
+                    (np.nonzero(diffs)[0].shape[0] / 2) // (how_many + 1))
+                if edges_per_change == 0:
+                    edges_per_change += 1
+            ixs = np.arange(diff[0].shape[0])
+            np.random.shuffle(ixs)
+
+            xs = diff[0][ixs[:edges_per_change]]
+            ys = diff[1][ixs[:edges_per_change]]
+            for j in range(xs.shape[0]):
+                if diffs[xs[j], ys[j]] == -1:
+                    new[xs[j], ys[j]] = np.random.rand(1) * 0.2
+                    new[ys[j], xs[j]] = new[xs[j], ys[j]]
+                else:
+                    new[xs[j], ys[j]] = 0
+                    new[ys[j], xs[j]] = 0
+            new_list.append(new)
+
+        thetas += new_list
+    thetas.append(target)
+    covs = [np.linalg.inv(t) for t in thetas]
+    samples = [
+        np.random.multivariate_normal(np.zeros(n_obs), c, size=n_samples)
+        for c in covs
+    ]
+    return thetas, samples, covs, clusters_reps, pos

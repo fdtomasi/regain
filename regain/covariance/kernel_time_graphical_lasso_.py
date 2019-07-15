@@ -11,6 +11,7 @@ import numpy as np
 from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.utils.extmath import squared_norm
+from sklearn.utils.validation import check_is_fitted
 
 from regain.covariance.time_graphical_lasso_ import (
     TimeGraphicalLasso, init_precision, loss)
@@ -521,7 +522,7 @@ class SimilarityTimeGraphicalLasso(KernelTimeGraphicalLasso):
             assume_centered=False, return_history=False,
             update_rho_options=None, compute_objective=True, ker_param=1,
             max_iter_ext=100, init='empirical', eps=1e-6):
-        super(KernelTimeGraphicalLasso, self).__init__(
+        super(SimilarityTimeGraphicalLasso, self).__init__(
             alpha=alpha, beta=beta, rho=rho, tol=tol, rtol=rtol,
             max_iter=max_iter, verbose=verbose,
             assume_centered=assume_centered,
@@ -567,7 +568,6 @@ class SimilarityTimeGraphicalLasso(KernelTimeGraphicalLasso):
                 kernel = theta * self.beta
 
                 # M step - fix the kernel matrix
-                self.similarity_matrix = kernel
                 out = kernel_time_graphical_lasso(
                     emp_cov, alpha=self.alpha, rho=self.rho, kernel=kernel,
                     n_samples=n_samples, tol=self.tol, rtol=self.rtol,
@@ -591,6 +591,7 @@ class SimilarityTimeGraphicalLasso(KernelTimeGraphicalLasso):
                 #     print("Find new theta")
             else:
                 print("warning: theta not converged")
+            self.similarity_matrix_ = kernel
 
         else:
             kernel = self.kernel
@@ -613,3 +614,9 @@ class SimilarityTimeGraphicalLasso(KernelTimeGraphicalLasso):
                 self.precision_, self.covariance_, self.n_iter_ = out
 
         return self
+
+    def transform(self, X, y=None):
+        """Possibility to add in a Pipeline."""
+        check_is_fitted(self, ['similarity_matrix_'])
+
+        return self.similarity_matrix_

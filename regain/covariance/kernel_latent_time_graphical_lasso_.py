@@ -662,4 +662,5 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
     def transform(self, X, y=None):
         """Possibility to add in a Pipeline."""
         check_is_fitted(self, ['similarity_matrix_'])
+        
         return self.similarity_matrix_
