@@ -524,7 +524,7 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
     """
 
     def __init__(
-            self, alpha=0.01, beta=1., tau=1., kernel_psi=None,
+            self, alpha=0.01, beta=1., tau=1., eta=1., kernel_psi=None,
             kernel_phi=None, rho=1., tol=1e-4, rtol=1e-4, psi='laplacian',
             phi='laplacian', max_iter=100, verbose=False,
             assume_centered=False, return_history=False,
@@ -539,6 +539,7 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
         self.kernel_psi = kernel_psi
         self.kernel_phi = kernel_phi
         self.beta = beta
+        self.eta = eta
         self.tau = tau
         self.phi = phi
         self.ker_psi_param = ker_psi_param
@@ -560,14 +561,19 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
 
     def _fit(self, emp_cov, n_samples):
         if self.kernel_psi is None:
+            n_times = emp_cov.shape[0]
+
             if self.kernel_phi is None or callable(self.kernel_phi):
-                raise ValueError('not implemented')
+                # raise ValueError('not implemented')
+                # mimic LTGL
+                kernel_phi = np.eye(n_times)
+                np.fill_diagonal(kernel_phi[:, 1:], self.eta)
+                np.fill_diagonal(kernel_phi[1:], self.eta)
 
             # discover best kernel parameter via EM
             # initialise precision matrices, as warm start
             self.precision_ = init_precision(emp_cov, mode=self.init)
             self.latent_ = np.zeros_like(self.precision_)
-            n_times = self.precision_.shape[0]
             theta_old = np.zeros(n_times * (n_times - 1) // 2)
             kernel_psi = np.eye(n_times)
 
