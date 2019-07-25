@@ -99,8 +99,8 @@ def latent_time_graphical_lasso(
     phi, prox_phi, phi_node_penalty = check_norm_prox(phi)
 
     Z_0 = init_precision(emp_cov, mode=init)
-    Z_1 = np.zeros_like(Z_0)[:-1]
-    Z_2 = np.zeros_like(Z_0)[1:]
+    Z_1 = Z_0.copy()[:-1]
+    Z_2 = Z_0.copy()[1:]
     W_0 = np.zeros_like(Z_0)
     W_1 = np.zeros_like(Z_1)
     W_2 = np.zeros_like(Z_2)
