@@ -20,13 +20,16 @@ from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence
 from regain.validation import check_norm_prox
-from regain.clustering import graph_k_means
+# from regain.clustering import graph_k_means
 
 
 def objective(n_samples, S, K, Z_0, Z_M, alpha, kernel, psi):
     """Objective function for time-varying graphical lasso."""
     obj = loss(S, K, n_samples=n_samples)
-    obj += alpha * sum(map(l1_od_norm, Z_0))
+    if isinstance(alpha, np.ndarray):
+        obj += sum(l1_od_norm(a * z) for a, z in zip(alpha, Z_0))
+    else:
+        obj += alpha * sum(map(l1_od_norm, Z_0))
 
     for m in range(1, Z_0.shape[0]):
         # all possible markovians jumps
@@ -87,18 +90,16 @@ def kernel_time_graphical_lasso(
     if kernel is None:
         kernel = np.eye(n_times)
 
-    K = init_precision(emp_cov, mode=init)
-    Z_0 = K.copy()  # np.zeros_like(emp_cov)
+    Z_0 = init_precision(emp_cov, mode=init)
     U_0 = np.zeros_like(Z_0)
     Z_0_old = np.zeros_like(Z_0)
 
-    Z_M = {}
+    Z_M, Z_M_old = {}, {}
     U_M = {}
-    Z_M_old = {}
     for m in range(1, n_times):
         # all possible markovians jumps
-        Z_L = K.copy()[:-m]
-        Z_R = K.copy()[m:]
+        Z_L = Z_0.copy()[:-m]
+        Z_R = Z_0.copy()[m:]
         Z_M[m] = (Z_L, Z_R)
 
         U_L = np.zeros_like(Z_L)
@@ -114,7 +115,8 @@ def kernel_time_graphical_lasso(
 
     checks = [
         convergence(
-            obj=objective(n_samples, emp_cov, Z_0, K, Z_M, alpha, kernel, psi))
+            obj=objective(
+                n_samples, emp_cov, Z_0, Z_0, Z_M, alpha, kernel, psi))
     ]
     for iteration_ in range(max_iter):
         # update K
@@ -285,7 +287,7 @@ def precision_similarity(K, psi):
     kernel /= np.max(kernel)
     # kernel *= -1
     # kernel += 1
-    return 1 - kernel #1. / (1 + kernel)
+    return 1 - kernel  # 1. / (1 + kernel)
 
 
 class KernelTimeGraphicalLasso(TimeGraphicalLasso):
@@ -412,7 +414,9 @@ class KernelTimeGraphicalLasso(TimeGraphicalLasso):
                     compute_objective=self.compute_objective,
                     init=self.precision_)
                 if self.return_history:
-                    self.precision_, self.covariance_, self.history_, self.n_iter_ = out
+                    (
+                        self.precision_, self.covariance_, self.history_,
+                        self.n_iter_) = out
                 else:
                     self.precision_, self.covariance_, self.n_iter_ = out
                 theta_old = theta
@@ -445,7 +449,9 @@ class KernelTimeGraphicalLasso(TimeGraphicalLasso):
                 update_rho_options=self.update_rho_options,
                 compute_objective=self.compute_objective, init=self.init)
             if self.return_history:
-                self.precision_, self.covariance_, self.history_, self.n_iter_ = out
+                (
+                    self.precision_, self.covariance_, self.history_,
+                    self.n_iter_) = out
             else:
                 self.precision_, self.covariance_, self.n_iter_ = out
 
@@ -537,13 +543,13 @@ class SimilarityTimeGraphicalLasso(KernelTimeGraphicalLasso):
 
     def _fit(self, emp_cov, n_samples):
         if self.kernel is None:
-            from scipy.optimize import minimize
+            # from scipy.optimize import minimize
             # discover best kernel parameter via EM
             # initialise precision matrices, as warm start
             self.precision_ = init_precision(emp_cov, mode=self.init)
             n_times = self.precision_.shape[0]
             theta_old = np.zeros(n_times * (n_times - 1) // 2)
-            idx = np.triu_indices(n_times, 1)
+            # idx = np.triu_indices(n_times, 1)
             kernel = np.eye(n_times)
 
             psi, _, _ = check_norm_prox(self.psi)
@@ -578,19 +584,21 @@ class SimilarityTimeGraphicalLasso(KernelTimeGraphicalLasso):
                     init=self.precision_)
 
                 if self.return_history:
-                    self.precision_, self.covariance_, self.history_, self.n_iter_ = out
+                    (
+                        self.precision_, self.covariance_, self.history_,
+                        self.n_iter_) = out
                 else:
                     self.precision_, self.covariance_, self.n_iter_ = out
                 theta_old = theta
-                # kernel = graph_k_means(list(self.precision_), 3, max_iter=100)
+                # kernel = graph_k_means(
+                #   list(self.precision_), 3, max_iter=100)
                 # self.similarity_matrix = kernel
                 # theta_old = kernel
-                # if i > 0 and np.linalg.norm(theta_old - kernel) / kernel.size < self.eps:
+                # if i > 0 and np.linalg.norm(theta_old -
+                #                             kernel) / kernel.size < self.eps:
                 #     break
-                # else:
-                #     print("Find new theta")
             else:
-                print("warning: theta not converged")
+                warnings.warn("theta did not converge.")
             self.similarity_matrix_ = kernel
 
         else:
@@ -609,7 +617,9 @@ class SimilarityTimeGraphicalLasso(KernelTimeGraphicalLasso):
                 update_rho_options=self.update_rho_options,
                 compute_objective=self.compute_objective, init=self.init)
             if self.return_history:
-                self.precision_, self.covariance_, self.history_, self.n_iter_ = out
+                (
+                    self.precision_, self.covariance_, self.history_,
+                    self.n_iter_) = out
             else:
                 self.precision_, self.covariance_, self.n_iter_ = out
 

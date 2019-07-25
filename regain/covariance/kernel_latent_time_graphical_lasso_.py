@@ -29,7 +29,10 @@ def objective(
         kernel_phi, psi, phi):
     """Objective function for latent variable time-varying graphical lasso."""
     obj = obj_ktgl(n_samples, S, R, Z_0, Z_M, alpha, kernel_psi, psi)
-    obj += tau * sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
+    if isinstance(tau, np.ndarray):
+        obj += sum(np.linalg.norm(t * w, ord='nuc') for t, w in zip(tau, W_0))
+    else:
+        obj += tau * sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
 
     for m in range(1, W_0.shape[0]):
         # all possible markovians jumps
@@ -98,15 +101,13 @@ def kernel_latent_time_graphical_lasso(
     X_0 = np.zeros_like(Z_0)
     R_old = np.zeros_like(Z_0)
 
-    Z_M = {}
+    Z_M, Z_M_old = {}, {}
     Y_M = {}
-    Z_M_old = {}
-    W_M = {}
+    W_M, W_M_old = {}, {}
     U_M = {}
-    W_M_old = {}
     for m in range(1, n_times):
-        Z_L = np.zeros_like(Z_0)[:-m]
-        Z_R = np.zeros_like(Z_0)[m:]
+        Z_L = Z_0.copy()[:-m]
+        Z_R = Z_0.copy()[m:]
         Z_M[m] = (Z_L, Z_R)
 
         W_L = np.zeros_like(Z_L)
@@ -531,19 +532,16 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
             update_rho_options=None, compute_objective=True, ker_psi_param=1,
             ker_phi_param=1, max_iter_ext=100, init='empirical', eps=1e-6):
         super(SimilarityLatentTimeGraphicalLasso, self).__init__(
-            alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
-            verbose=verbose, assume_centered=assume_centered,
+            alpha=alpha, tau=tau, phi=phi, psi=psi, rho=rho, tol=tol,
+            rtol=rtol, max_iter=max_iter, verbose=verbose,
+            assume_centered=assume_centered,
             update_rho_options=update_rho_options,
             compute_objective=compute_objective, return_history=return_history,
-            psi=psi, init=init)
-        self.kernel_psi = kernel_psi
-        self.kernel_phi = kernel_phi
+            kernel_psi=kernel_psi, kernel_phi=kernel_phi,
+            ker_psi_param=ker_psi_param, ker_phi_param=ker_phi_param,
+            init=init)
         self.beta = beta
         self.eta = eta
-        self.tau = tau
-        self.phi = phi
-        self.ker_psi_param = ker_psi_param
-        self.ker_phi_param = ker_phi_param
         self.max_iter_ext = max_iter_ext
         self.eps = eps
 
@@ -602,10 +600,13 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
                     init=self.precision_)
 
                 if self.return_history:
-                    self.precision_, self.latent_, self.covariance_, self.history_, \
-                        self.n_iter_ = out
+                    (
+                        self.precision_, self.latent_, self.covariance_,
+                        self.history_, self.n_iter_) = out
                 else:
-                    self.precision_, self.latent_, self.covariance_, self.n_iter_ = out
+                    (
+                        self.precision_, self.latent_, self.covariance_,
+                        self.n_iter_) = out
                 theta_old = theta
             else:
                 print("warning: theta not converged")
@@ -658,15 +659,18 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
                 update_rho_options=self.update_rho_options,
                 compute_objective=self.compute_objective, init=self.init)
             if self.return_history:
-                self.precision_, self.latent_, self.covariance_, self.history_, \
-                    self.n_iter_ = out
+                (
+                    self.precision_, self.latent_, self.covariance_,
+                    self.history_, self.n_iter_) = out
             else:
-                self.precision_, self.latent_, self.covariance_, self.n_iter_ = out
+                (
+                    self.precision_, self.latent_, self.covariance_,
+                    self.n_iter_) = out
 
         return self
 
     def transform(self, X, y=None):
         """Possibility to add in a Pipeline."""
         check_is_fitted(self, ['similarity_matrix_'])
-        
+
         return self.similarity_matrix_
