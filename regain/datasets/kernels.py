@@ -1,12 +1,14 @@
 """Generate data for kernel-based classes as `KernelTimeGraphicalLasso`."""
 
-from itertools import chain
+from itertools import chain, combinations
 
 import numpy as np
 from scipy import linalg
 from scipy.spatial.distance import squareform
+from sklearn.cluster import AgglomerativeClustering
 from sklearn.datasets.base import Bunch
 
+from regain.norm import l1_od_norm
 from regain.utils import is_pos_def
 
 from .gaussian import make_ell
@@ -503,32 +505,47 @@ def make_ticc_dataset_v3(
 
 
 def make_cluster_representative(
-        n_obs=10, degree=2, clusters=3, T=15, n_samples=100,
-        repetitions=False):
+        n_dim=10, degree=2, n_clusters=3, T=15, n_samples=100, repetitions=False,
+        cluster_series=None):
     """Based on the cluster representative, generate similar graphs."""
     import networkx as nx
-    clusters_reps = [
-        nx.random_regular_graph(d=degree, n=n_obs) for i in range(clusters)
-    ]
+    cluster_reps = []
     adjacencies = []
-    for i in range(clusters):
-        A = nx.adjacency_matrix(clusters_reps[i]).todense().astype(float)
+    if cluster_series is not None:
+        n_clusters = np.unique(cluster_series).size
+
+    for i in range(n_clusters):
+        representative = nx.random_regular_graph(d=degree, n=n_dim)
+        A = nx.adjacency_matrix(representative).todense().astype(float)
         A[np.where(A != 0)] = np.random.rand(np.where(A != 0)[0].size) * 0.45
         np.fill_diagonal(A, 1)
         adjacencies.append(A)
+        cluster_reps.append(representative)
 
-    pos = np.arange(0, T, T // (clusters + 1))
-    pos = np.sort(pos)
+    pos = np.arange(0, T, T // (n_clusters + 1))
     pos = list(pos) + [T - 1]
+
+    if cluster_series is None:
+        cluster_series = np.tile(range(n_clusters), (len(pos) // n_clusters) + 1)[:len(pos)]
+        np.random.shuffle(cluster_series)
+        print(pos)
+        print(cluster_series)
+        # pos = np.arange(0, T, T // (clusters + 1))
+        # pos = list(pos) + [T - 1]
+    else:
+        assert len(cluster_series) == len(pos)
+    #     a = np.where(cluster_series[:-1] != cluster_series[1:])[0] + 1
+    #     T = len(cluster_series) # overwrites T
+    #     pos = np.concatenate(([0], a, [T-1]))
 
     thetas = []
     for i in range(len(pos) - 1):
+        # last one is always a representative
         how_many = int(pos[i + 1]) - int(pos[i]) - 1
-        new_list = [adjacencies[i % clusters]]
-        target = adjacencies[(i + 1) % clusters]
+        new_list = [adjacencies[cluster_series[i]]]
+        target = adjacencies[cluster_series[i + 1]]
 
         for i in range(how_many):
-
             new = new_list[-1].copy()
             diffs = (new != 0).astype(int) - (target != 0).astype(int)
             diff = np.where(diffs != 0)
@@ -555,9 +572,24 @@ def make_cluster_representative(
 
         thetas += new_list
     thetas.append(target)
-    covs = [np.linalg.inv(t) for t in thetas]
-    samples = [
-        np.random.multivariate_normal(np.zeros(n_obs), c, size=n_samples)
-        for c in covs
-    ]
-    return thetas, samples, covs, clusters_reps, pos
+    covs = [linalg.pinvh(t) for t in thetas]
+    X = np.vstack(
+        [
+            np.random.multivariate_normal(np.zeros(n_dim), c, size=n_samples)
+            for c in covs
+        ])
+    y = np.repeat(np.arange(len(covs)), n_samples)
+
+    distances = squareform(
+        [l1_od_norm(t1 - t2) for t1, t2 in combinations(thetas, 2)])
+    distances /= np.max(distances)
+    labels_pred = AgglomerativeClustering(
+        n_clusters=n_clusters, affinity='precomputed',
+        linkage='complete').fit_predict(distances)
+
+    id_cluster = np.repeat(labels_pred, n_samples)
+    data = Bunch(
+        X=X, y=y, id_cluster=id_cluster, precs=np.array(thetas),
+        thetas=np.array(thetas), sparse_precs=np.array(thetas),
+        cluster_reps=cluster_reps)
+    return data

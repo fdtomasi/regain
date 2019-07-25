@@ -78,8 +78,7 @@ def _gaussian_case(
         ])
 
     X = np.vstack(data)
-    y = np.array([np.ones(x.shape[0]) * i
-                  for i, x in enumerate(data)]).flatten().astype(int)
+    y = np.repeat(range(len(sigmas)), n_samples).astype(int)
 
     if time_on_axis == "last":
         data = data.transpose(1, 2, 0)
