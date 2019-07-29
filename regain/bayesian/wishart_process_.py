@@ -11,14 +11,14 @@ from sklearn.utils.validation import check_X_y
 
 from regain.bayesian import stats
 from regain.bayesian.gaussian_process_ import sample as sample_gp
-from regain.bayesian.sampling import (GWP_construct, elliptical_slice,
-                                      sample_ell, sample_hyper_kernel)
+from regain.bayesian.sampling import (
+    GWP_construct, elliptical_slice, sample_ell, sample_hyper_kernel)
 from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso
 
 
 def fit(
         lp, var_prop, mu_prior, var_prior, var_Lprop, mu_Lprior, var_Lprior,
-        kern, p, nu=None, t=None, n_iter=500, verbose=False, likelihood=None):
+        kern, p, nu=None, n_iter=500, verbose=False, likelihood=None):
     """Sample the parameters of kernel and lower Cholesky.
 
     Parameters
@@ -36,7 +36,7 @@ def fit(
     if nu is None:
         nu = p + 1
 
-    K = kern(t[:, None], inverse_width=lp)
+    K = kern(inverse_width=lp)
     umat = sample_gp(K, nu=nu, p=p)
 
     L = np.tril(np.random.randn(p, p))
@@ -59,7 +59,7 @@ def fit(
 
     for i in range(n_iter):
         # We first do ESS to obtain a new sample for u
-        if verbose:
+        if verbose and i % 10 == 0:
             print(i, "%.3e" % cur_log_like, end='\r')
 
         ff, cur_log_like = elliptical_slice(
@@ -67,10 +67,11 @@ def fit(
 
         # We now do MH for sampling the hyperparameter of the kernel
         lp, accept = sample_hyper_kernel(
-            lp, var_prop, t, ff.xx, kern, mu_prior, var_prior)
+            lp, var_prop, np.vstack(ff.xx), kern, mu_prior, var_prior)
 
         uut = ff.uut
         # We now do MH for sampling the elements in the matrix L
+        # spherical normal prior, element uncorrelated
         Ltau = sample_ell(
             Ltau, var_Lprop, ff.xx, mu_Lprior, var_Lprior, uut=uut,
             likelihood=likelihood)
@@ -80,13 +81,13 @@ def fit(
 
         if accept:
             # new kernel parameter, recompute
-            K = kern(t[:, None], inverse_width=lp)
+            K = kern(inverse_width=lp)
             while True:
                 try:
                     umat = sample_gp(K, nu=nu, p=p)
                     break
-                except:
-                    K += 1e-8 * np.eye(t.size)
+                except Exception:
+                    K += 1e-8 * np.eye(K.shape[0])
 
             uut = np.array([u.dot(u.T) for u in umat.T])
 
@@ -138,7 +139,7 @@ def predict(t_test, t_train, u_map, L_map, kern, inverse_width_map):
 
     # Covariance of test data is
     # I_p - AK^{-1}A^T
-    test_size = t_test.size
+    # test_size = t_test.size
     # test_covariance = np.eye(test_size) - A_invKb.dot(A.T)
 
     return GWP_construct(u_test, L_map)
@@ -218,9 +219,10 @@ class WishartProcess(TimeGraphicalLasso):
         self.nu_ = 1
         samples_u, loglikes, lps, Ls = fit(
             self.theta, self.var_prop, self.mu_prior, self.var_prior,
-            self.var_Lprop, self.mu_Lprior, self.var_Lprior, kern=kern,
-            t=self.classes_, nu=self.nu_, p=n_dimensions, n_iter=self.n_iter,
-            verbose=self.verbose, likelihood=self.likelihood)
+            self.var_Lprop, self.mu_Lprior, self.var_Lprior,
+            kern=partial(kern, self.classes_[:, None]), nu=self.nu_,
+            p=n_dimensions, n_iter=self.n_iter, verbose=self.verbose,
+            likelihood=self.likelihood)
 
         # Burn in
         self.lps_after_burnin = lps[self.burn_in:]
