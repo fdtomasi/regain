@@ -121,9 +121,9 @@ def plot_curve(
                 tprs[-1][0] = int(mode != 'roc')
                 roc_auc = auc(fpr, tpr) if mode == 'roc' else auc(tpr, fpr)
                 aucs.append(roc_auc)
-                ax.plot(
-                    fpr, tpr, lw=1,
-                    color=colors[c] if colors is not None else None, alpha=0.3)
+                # ax.plot(
+                #     fpr, tpr, lw=1,
+                #     color=colors[c] if colors is not None else None, alpha=0.3)
 
             mean_tpr = np.mean(tprs, axis=0)
             mean_tpr[-1] = int(mode == 'roc')

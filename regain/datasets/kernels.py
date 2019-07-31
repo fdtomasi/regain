@@ -506,7 +506,7 @@ def make_ticc_dataset_v3(
 
 def make_cluster_representative(
         n_dim=10, degree=2, n_clusters=3, T=15, n_samples=100, repetitions=False,
-        cluster_series=None):
+        cluster_series=None, shuffle=False):
     """Based on the cluster representative, generate similar graphs."""
     import networkx as nx
     cluster_reps = []
@@ -527,9 +527,10 @@ def make_cluster_representative(
 
     if cluster_series is None:
         cluster_series = np.tile(range(n_clusters), (len(pos) // n_clusters) + 1)[:len(pos)]
-        np.random.shuffle(cluster_series)
-        print(pos)
-        print(cluster_series)
+        if shuffle:
+            np.random.shuffle(cluster_series)
+        # print(pos)
+        # print(cluster_series)
         # pos = np.arange(0, T, T // (clusters + 1))
         # pos = list(pos) + [T - 1]
     else:
@@ -591,5 +592,5 @@ def make_cluster_representative(
     data = Bunch(
         X=X, y=y, id_cluster=id_cluster, precs=np.array(thetas),
         thetas=np.array(thetas), sparse_precs=np.array(thetas),
-        cluster_reps=cluster_reps)
+        cluster_reps=cluster_reps, cluster_series=cluster_series)
     return data

@@ -11,13 +11,16 @@ from functools import partial
 import numpy as np
 from scipy import linalg
 from six.moves import map, range, zip
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.gaussian_process import kernels
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_is_fitted
 
 from regain.covariance.kernel_time_graphical_lasso_ import (
-    KernelTimeGraphicalLasso, init_precision, precision_similarity)
+    KernelTimeGraphicalLasso, init_precision)
 from regain.covariance.kernel_time_graphical_lasso_ import \
     objective as obj_ktgl
+from regain.covariance.kernel_time_graphical_lasso_ import precision_similarity
 from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence
@@ -530,7 +533,8 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
             phi='laplacian', max_iter=100, verbose=False,
             assume_centered=False, return_history=False,
             update_rho_options=None, compute_objective=True, ker_psi_param=1,
-            ker_phi_param=1, max_iter_ext=100, init='empirical', eps=1e-6):
+            ker_phi_param=1, max_iter_ext=100, init='empirical', eps=1e-6,
+            n_clusters=None):
         super(SimilarityLatentTimeGraphicalLasso, self).__init__(
             alpha=alpha, tau=tau, phi=phi, psi=psi, rho=rho, tol=tol,
             rtol=rtol, max_iter=max_iter, verbose=verbose,
@@ -544,6 +548,7 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
         self.eta = eta
         self.max_iter_ext = max_iter_ext
         self.eps = eps
+        self.n_clusters = n_clusters
 
     def get_observed_precision(self):
         """Getter for the observed precision matrix.
@@ -576,17 +581,29 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
             kernel_psi = np.eye(n_times)
 
             psi, _, _ = check_norm_prox(self.psi)
+            if self.n_clusters is None:
+                self.n_clusters = n_times
 
             for i in range(self.max_iter_ext):
                 # E step - discover best kernel
                 theta = precision_similarity(
-                    self.get_observed_precision(), psi)
+                    self.get_precision(), psi)
 
-                if i > 0 and np.linalg.norm(theta_old -
-                                            theta) / theta.size < self.eps:
+                # if i > 0 and np.linalg.norm(theta_old -
+                #                             theta) / theta.size < self.eps:
+                #     break
+
+                # kernel_psi = theta * self.beta
+                kernel_psi = theta
+                labels_pred = AgglomerativeClustering(
+                    n_clusters=self.n_clusters, affinity='precomputed',
+                    linkage='complete').fit_predict(kernel_psi)
+                if i > 0 and np.linalg.norm(labels_pred - labels_pred_old
+                                            ) / labels_pred.size < self.eps:
                     break
-
-                kernel_psi = theta * self.beta
+                kernel_psi = kernels.RBF(0.0001)(
+                    labels_pred[:, None]) + kernels.RBF(self.beta)(
+                        np.arange(n_times)[:, None])
 
                 # M step - fix the kernel matrix
                 out = kernel_latent_time_graphical_lasso(
@@ -608,8 +625,9 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
                         self.precision_, self.latent_, self.covariance_,
                         self.n_iter_) = out
                 theta_old = theta
+                labels_pred_old = labels_pred
             else:
-                print("warning: theta not converged")
+                warnings.warn("theta did not converge.")
             self.similarity_matrix_ = kernel_psi
         else:
             if callable(self.kernel_phi):
