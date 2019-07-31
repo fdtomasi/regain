@@ -1,7 +1,7 @@
 """Statistical functions."""
 import numpy as np
 from sklearn.utils.extmath import squared_norm
-from scipy.stats import multivariate_normal
+from scipy.stats import multivariate_normal, norm
 
 
 def lognormal_pdf(x, mu, sigma):
@@ -43,20 +43,12 @@ def log_lik_frob(S, D, variance):
     return logl
 
 
-def log_likelihood_normal(x, mean, var):
-    """Normal log likelihood."""
-    logl = -0.5 * (np.log(2 * np.pi * var) + (x - mean)**2 / var)
-    # logl2 = stats.norm.logpdf(x, loc=mean, scale=np.sqrt(var))
-    # assert logl == logl2, (logl, logl2)
-    return logl
-
-
 def t_mvn_logpdf(X, Cov):
     """Normal log likelihood based on Cov (mu = 0).
     
     Parameters
     ----------
-    X : ndarray, shape = (n_samples, n_dimensions, n_times)
+    X : ndarray, shape = (n_times, n_samples, n_dimensions)
         Data tensor.
     Cov : ndarray, shape = (n_dimensions, n_dimensions, n_times)
         Tensor of covariance matrices over time.
