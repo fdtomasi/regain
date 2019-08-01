@@ -3,17 +3,17 @@ from __future__ import print_function
 from functools import partial
 
 import numpy as np
-from scipy import linalg
+from scipy import linalg, stats
 from sklearn.covariance import empirical_covariance
 from sklearn.datasets.base import Bunch
 from sklearn.gaussian_process import kernels
 from sklearn.metrics.pairwise import rbf_kernel
 from sklearn.utils.validation import check_X_y
 
-from regain.bayesian import stats
 from regain.bayesian.gaussian_process_ import sample as sample_gp
-from regain.bayesian.sampling import (
-    GWP_construct, elliptical_slice, sample_ell, sample_hyper_kernel)
+from regain.bayesian.sampling import (GWP_construct, elliptical_slice,
+                                      sample_ell, sample_hyper_kernel)
+from regain.bayesian.stats import lognstat, t_mvn_logpdf
 from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso
 
 
@@ -190,7 +190,7 @@ class WishartProcess(TimeGraphicalLasso):
         self.kernel = kernel
         self.learn_ell = learn_ell
 
-        mu_prior, sigma_prior = stats.lognstat(mu_prior, var_prior)
+        mu_prior, sigma_prior = lognstat(mu_prior, var_prior)
         self.prior_theta_kernel = stats.lognorm(
             loc=0, s=sigma_prior, scale=np.exp(mu_prior))
         self.prior_ell = stats.norm(loc=mu_Lprior, scale=np.sqrt(var_Lprior))
@@ -231,8 +231,7 @@ class WishartProcess(TimeGraphicalLasso):
         else:
             kern = periodic_kernel
 
-        self.likelihood = partial(stats.t_mvn_logpdf, X_center)
-
+        self.likelihood = partial(t_mvn_logpdf, X_center)
         self.nu_ = 1
         L = None
         if not self.learn_ell:
@@ -306,5 +305,5 @@ class WishartProcess(TimeGraphicalLasso):
                 X[y == cl] - self.location_[i]
                 for i, cl in enumerate(self.classes_)
             ])
-        logp = stats.t_mvn_logpdf(X_center, self.D_map)
+        logp = t_mvn_logpdf(X_center, self.D_map)
         return logp

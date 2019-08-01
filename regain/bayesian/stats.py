@@ -1,7 +1,7 @@
 """Statistical functions."""
 import numpy as np
-from sklearn.utils.extmath import squared_norm
 from scipy.stats import multivariate_normal, norm
+from sklearn.utils.extmath import squared_norm
 
 
 def lognormal_pdf(x, mu, sigma):

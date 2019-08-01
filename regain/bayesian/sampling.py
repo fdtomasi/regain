@@ -230,8 +230,8 @@ def posterior_iw(inverse_width, ustack, kern, prior_distr):
     # logpugl = ustack.shape[0] * log_likelihood(
     #     empirical_covariance(ustack), k_inverse)
     # this is equivalent to
-    logp = stats.multivariate_normal(ustack.mean(axis=0),
-                                     K).logpdf(ustack).sum()
+    logp = stats.multivariate_normal(
+        ustack.mean(axis=0), cov=K, allow_singular=True).logpdf(ustack).sum()
     # with centering the samples (but there is no need for k_inverse)
 
     logp_prior = prior_distr.logpdf(inverse_width)
