@@ -508,13 +508,13 @@ class GraphicalModelStabilitySelection(GridSearchCV):
             plt.show()
         else:
             if axis is None:
-                fig, axis = plt.subplots(1, figsize=figsize)
-            axis[0].title('Monotonized instabilities')
-            axis[0].plot(self.monotonized_instabilities)
-            axis[0].axhline(0.05, color='red')
-            axis[0].set_xticks(np.arange(len(self.monotonized_instabilities)))
-            axis[1].set_xticklabels(self.results['params'])
-            for tick in axis[0].get_xticklabels():
+                fig, axis = plt.subplots( figsize=figsize)
+            axis.set_title('Monotonized instabilities')
+            axis.plot(self.monotonized_instabilities)
+            axis.axhline(0.05, color='red')
+            axis.set_xticks(np.arange(len(self.monotonized_instabilities)))
+            axis.set_xticklabels(self.results['params'])
+            for tick in axis.get_xticklabels():
                 tick.set_rotation(90)
             if filename != "":
                 plt.savefig(filename, dpi=300, bbox_inches='tight',
