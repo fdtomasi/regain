@@ -16,7 +16,7 @@ from numpy.linalg.linalg import LinAlgError
 from scipy import stats
 from scipy.spatial.distance import squareform
 from six.moves import cPickle as pkl
-from sklearn.metrics import average_precision_score
+from sklearn.metrics import average_precision_score, matthews_corrcoef
 
 
 def top_n_indexes(arr, n):
@@ -378,6 +378,7 @@ def structure_error(
         y_pred = squareform(pred, checks=None)
 
     average_precision = average_precision_score(y_true > 0, y_pred)
+    mcc = matthews_corrcoef(y_true > 0, y_pred > 0)
 
     if thresholding:
         pred[np.abs(pred) < eps] = 0
@@ -435,7 +436,7 @@ def structure_error(
         specificity=specificity, plr=positive_likelihood_ratio,
         nlr=negative_likelihood_ratio, dor=diagnostic_odds_ratio,
         balanced_accuracy=balanced_accuracy,
-        average_precision=average_precision)
+        average_precision=average_precision, mcc=mcc)
     return dictionary
 
 

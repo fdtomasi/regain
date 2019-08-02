@@ -19,7 +19,8 @@ def sample(K, nu=1, p=3):
         Samples from a Gaussian process.
 
     """
-    u = np.empty((nu, p, K.shape[0]))
-    for j in range(nu):
-        u[j] = np.random.multivariate_normal(np.zeros(K.shape[0]), K, size=p)
-    return u
+    # u = np.empty((nu, p, K.shape[0]))
+    # for j in range(nu):
+    #     u[j] = np.random.multivariate_normal(np.zeros(K.shape[0]), K, size=p)
+    # return u
+    return np.random.multivariate_normal(np.zeros(K.shape[0]), K, size=(nu, p))

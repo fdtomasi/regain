@@ -11,13 +11,16 @@ from functools import partial
 import numpy as np
 from scipy import linalg
 from six.moves import map, range, zip
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.gaussian_process import kernels
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_is_fitted
 
 from regain.covariance.kernel_time_graphical_lasso_ import (
-    KernelTimeGraphicalLasso, init_precision, precision_similarity)
+    KernelTimeGraphicalLasso, init_precision)
 from regain.covariance.kernel_time_graphical_lasso_ import \
     objective as obj_ktgl
+from regain.covariance.kernel_time_graphical_lasso_ import precision_similarity
 from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence
@@ -29,7 +32,10 @@ def objective(
         kernel_phi, psi, phi):
     """Objective function for latent variable time-varying graphical lasso."""
     obj = obj_ktgl(n_samples, S, R, Z_0, Z_M, alpha, kernel_psi, psi)
-    obj += tau * sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
+    if isinstance(tau, np.ndarray):
+        obj += sum(np.linalg.norm(t * w, ord='nuc') for t, w in zip(tau, W_0))
+    else:
+        obj += tau * sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
 
     for m in range(1, W_0.shape[0]):
         # all possible markovians jumps
@@ -98,15 +104,13 @@ def kernel_latent_time_graphical_lasso(
     X_0 = np.zeros_like(Z_0)
     R_old = np.zeros_like(Z_0)
 
-    Z_M = {}
+    Z_M, Z_M_old = {}, {}
     Y_M = {}
-    Z_M_old = {}
-    W_M = {}
+    W_M, W_M_old = {}, {}
     U_M = {}
-    W_M_old = {}
     for m in range(1, n_times):
-        Z_L = np.zeros_like(Z_0)[:-m]
-        Z_R = np.zeros_like(Z_0)[m:]
+        Z_L = Z_0.copy()[:-m]
+        Z_R = Z_0.copy()[m:]
         Z_M[m] = (Z_L, Z_R)
 
         W_L = np.zeros_like(Z_L)
@@ -524,27 +528,27 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
     """
 
     def __init__(
-            self, alpha=0.01, beta=1., tau=1., kernel_psi=None,
+            self, alpha=0.01, beta=1., tau=1., eta=1., kernel_psi=None,
             kernel_phi=None, rho=1., tol=1e-4, rtol=1e-4, psi='laplacian',
             phi='laplacian', max_iter=100, verbose=False,
             assume_centered=False, return_history=False,
             update_rho_options=None, compute_objective=True, ker_psi_param=1,
-            ker_phi_param=1, max_iter_ext=100, init='empirical', eps=1e-6):
+            ker_phi_param=1, max_iter_ext=100, init='empirical', eps=1e-6,
+            n_clusters=None):
         super(SimilarityLatentTimeGraphicalLasso, self).__init__(
-            alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
-            verbose=verbose, assume_centered=assume_centered,
+            alpha=alpha, tau=tau, phi=phi, psi=psi, rho=rho, tol=tol,
+            rtol=rtol, max_iter=max_iter, verbose=verbose,
+            assume_centered=assume_centered,
             update_rho_options=update_rho_options,
             compute_objective=compute_objective, return_history=return_history,
-            psi=psi, init=init)
-        self.kernel_psi = kernel_psi
-        self.kernel_phi = kernel_phi
+            kernel_psi=kernel_psi, kernel_phi=kernel_phi,
+            ker_psi_param=ker_psi_param, ker_phi_param=ker_phi_param,
+            init=init)
         self.beta = beta
-        self.tau = tau
-        self.phi = phi
-        self.ker_psi_param = ker_psi_param
-        self.ker_phi_param = ker_phi_param
+        self.eta = eta
         self.max_iter_ext = max_iter_ext
         self.eps = eps
+        self.n_clusters = n_clusters
 
     def get_observed_precision(self):
         """Getter for the observed precision matrix.
@@ -560,29 +564,46 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
 
     def _fit(self, emp_cov, n_samples):
         if self.kernel_psi is None:
+            n_times = emp_cov.shape[0]
+
             if self.kernel_phi is None or callable(self.kernel_phi):
-                raise ValueError('not implemented')
+                # raise ValueError('not implemented')
+                # mimic LTGL
+                kernel_phi = np.eye(n_times)
+                np.fill_diagonal(kernel_phi[:, 1:], self.eta)
+                np.fill_diagonal(kernel_phi[1:], self.eta)
 
             # discover best kernel parameter via EM
             # initialise precision matrices, as warm start
             self.precision_ = init_precision(emp_cov, mode=self.init)
             self.latent_ = np.zeros_like(self.precision_)
-            n_times = self.precision_.shape[0]
             theta_old = np.zeros(n_times * (n_times - 1) // 2)
             kernel_psi = np.eye(n_times)
 
             psi, _, _ = check_norm_prox(self.psi)
+            if self.n_clusters is None:
+                self.n_clusters = n_times
 
             for i in range(self.max_iter_ext):
                 # E step - discover best kernel
                 theta = precision_similarity(
-                    self.get_observed_precision(), psi)
+                    self.get_precision(), psi)
 
-                if i > 0 and np.linalg.norm(theta_old -
-                                            theta) / theta.size < self.eps:
+                # if i > 0 and np.linalg.norm(theta_old -
+                #                             theta) / theta.size < self.eps:
+                #     break
+
+                # kernel_psi = theta * self.beta
+                kernel_psi = theta
+                labels_pred = AgglomerativeClustering(
+                    n_clusters=self.n_clusters, affinity='precomputed',
+                    linkage='complete').fit_predict(kernel_psi)
+                if i > 0 and np.linalg.norm(labels_pred - labels_pred_old
+                                            ) / labels_pred.size < self.eps:
                     break
-
-                kernel_psi = theta * self.beta
+                kernel_psi = kernels.RBF(0.0001)(
+                    labels_pred[:, None]) + kernels.RBF(self.beta)(
+                        np.arange(n_times)[:, None])
 
                 # M step - fix the kernel matrix
                 out = kernel_latent_time_graphical_lasso(
@@ -596,13 +617,17 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
                     init=self.precision_)
 
                 if self.return_history:
-                    self.precision_, self.latent_, self.covariance_, self.history_, \
-                        self.n_iter_ = out
+                    (
+                        self.precision_, self.latent_, self.covariance_,
+                        self.history_, self.n_iter_) = out
                 else:
-                    self.precision_, self.latent_, self.covariance_, self.n_iter_ = out
+                    (
+                        self.precision_, self.latent_, self.covariance_,
+                        self.n_iter_) = out
                 theta_old = theta
+                labels_pred_old = labels_pred
             else:
-                print("warning: theta not converged")
+                warnings.warn("theta did not converge.")
             self.similarity_matrix_ = kernel_psi
         else:
             if callable(self.kernel_phi):
@@ -652,15 +677,18 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
                 update_rho_options=self.update_rho_options,
                 compute_objective=self.compute_objective, init=self.init)
             if self.return_history:
-                self.precision_, self.latent_, self.covariance_, self.history_, \
-                    self.n_iter_ = out
+                (
+                    self.precision_, self.latent_, self.covariance_,
+                    self.history_, self.n_iter_) = out
             else:
-                self.precision_, self.latent_, self.covariance_, self.n_iter_ = out
+                (
+                    self.precision_, self.latent_, self.covariance_,
+                    self.n_iter_) = out
 
         return self
 
     def transform(self, X, y=None):
         """Possibility to add in a Pipeline."""
         check_is_fitted(self, ['similarity_matrix_'])
-        
+
         return self.similarity_matrix_

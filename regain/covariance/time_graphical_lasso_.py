@@ -124,22 +124,10 @@ def time_graphical_lasso(
     """
     psi, prox_psi, psi_node_penalty = check_norm_prox(psi)
 
-    if init == 'empirical':
-        n_times, _, n_features = emp_cov.shape
-        covariance_ = emp_cov.copy()
-        covariance_ *= 0.95
-        K = np.empty_like(emp_cov)
-        for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
-            c.flat[::n_features + 1] = e.flat[::n_features + 1]
-            K[i] = linalg.pinvh(c)
-    elif init == 'zero':
-        K = np.zeros_like(emp_cov)
-    else:  # TODO controllo che sia un array
-        K = init
 
-    Z_0 = K.copy()  # np.zeros_like(emp_cov)
-    Z_1 = K.copy()[:-1]  # np.zeros_like(emp_cov)[:-1]
-    Z_2 = K.copy()[1:]  # np.zeros_like(emp_cov)[1:]
+    Z_0 = init_precision(emp_cov, mode=init)
+    Z_1 = Z_0.copy()[:-1]  # np.zeros_like(emp_cov)[:-1]
+    Z_2 = Z_0.copy()[1:]  # np.zeros_like(emp_cov)[1:]
 
     U_0 = np.zeros_like(Z_0)
     U_1 = np.zeros_like(Z_1)
@@ -160,7 +148,7 @@ def time_graphical_lasso(
     checks = [
         convergence(
             obj=objective(
-                n_samples, emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi))
+                n_samples, emp_cov, Z_0, Z_0, Z_1, Z_2, alpha, beta, psi))
     ]
     for iteration_ in range(max_iter):
         # update K
