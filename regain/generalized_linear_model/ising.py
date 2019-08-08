@@ -96,6 +96,7 @@ def objective(X, theta, alpha):
 def _gradient_ising(X, theta,  n, A=None, rho=1, T=0):
     n, d = X.shape
     theta_new = np.zeros_like(theta)
+
     def gradient(X, thetas, r, selector, n, A=None, rho=1, T=0):
         sum_ = np.zeros((1, len(selector)))
         for i in range(X.shape[0]):
@@ -133,7 +134,6 @@ def _fit(X, alpha=1e-2, gamma=1e-3, tol=1e-3, max_iter=1000, verbose=0,
         theta = soft_thresholding_od(theta, alpha*gamma)
         thetas.append(theta)
 
-        #assert np.all(np.diag(theta) == 0)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             check = convergence(iter=iter_,
@@ -239,7 +239,7 @@ class IsingGraphicalModel(GLM_GM, BaseEstimator):
                  mode='coordinate_descent', rho=1, max_iter=100,
                  verbose=False, return_history=True, return_n_iter=False,
                  compute_objective=True):
-        super(Ising_GLM_GM, self).__init__(
+        super(IsingGraphicalModel, self).__init__(
             alpha, tol, rtol, max_iter, verbose, return_history, return_n_iter,
             compute_objective)
         self.reconstruction = reconstruction
@@ -268,10 +268,10 @@ class IsingGraphicalModel(GLM_GM, BaseEstimator):
             thetas_pred = []
             historys = []
             for ix in range(X.shape[1]):
-                # TODO: livello di verbosita'
+                verbose = min(0, self.verbose-1)
                 res = fit_each_variable(X, ix, self.alpha, tol=self.tol,
                                         gamma=gamma,
-                                        verbose=self.verbose)
+                                        verbose=verbose)
                 thetas_pred.append(res[0])
                 historys.append(res[1:])
             self.precision_ = build_adjacency_matrix(thetas_pred,

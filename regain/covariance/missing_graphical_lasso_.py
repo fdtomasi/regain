@@ -18,55 +18,62 @@ from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding_od
 from regain.update_rules import update_rho
 from regain.utils import convergence
-
-try:
-    # sklean >= 0.20
-    from sklearn.covariance import GraphicalLasso as GraphLasso
-except ImportError:
-    # sklearn < 0.20
-    from sklearn.covariance import GraphLasso
+from regain.covariance.graphical_lasso_ import GraphicalLasso, logl, objective
+from regain.covariance.graphical_lasso_ import init_precision, graphical_lasso
 
 
-def logl(emp_cov, precision):
-    """Gaussian log-likelihood without constant term."""
-    return fast_logdet(precision) - np.sum(emp_cov * precision)
+def compute_empirical_covariance(X, K, cs):
+    emp_cov = np.zeros((X.shape[0], K.shape[0], K.shape[0]))
+    aux = np.nan_to_num(np.copy(X))
+    aux += cs
+    for i in range(X.shape[0]):
+        for v in range(emp_cov.shape[1]):
+            for s in range(emp_cov.shape[1]):
+                if np.isnan(X[i, v]) and np.isnan(X[i, s]):
+                    nans = np.where(np.isnan(X[i, :]))[0]
+                    xxm, yym = np.meshgrid(nans, nans)
+                    inv = np.linalg.pinv(K[xxm, yym])[np.where(nans==v)[0][0], np.where(nans==s)[0][0]]
+                    emp_cov[i, v, s] = inv + cs[i, v]*cs[i, s]
+                else:
+                    emp_cov[i, v, s] = aux[i, v]*aux[i, s]
+    emp_cov =  np.sum(emp_cov, axis=0)
+    return emp_cov/np.max(emp_cov)
 
 
-def objective(emp_cov, x, z, alpha):
-    return -logl(emp_cov, x) + l1_od_norm(alpha * z)
+def compute_cs(means, K, X):
+    cs = np.zeros_like(X)
+    for i in range(X.shape[0]):
+        nans = np.where(np.isnan(X[i, :]))[0]
+        obs = np.where(np.logical_not(np.isnan(X[i, :])))[0]
+        xxm, yym = np.meshgrid(nans, nans)
+        xxm1, yyo = np.meshgrid(obs, nans)
+        KK = np.linalg.pinv(K[xxm, yym]).dot(K[xxm1, yyo])
+        cs[i, nans] = means[nans] - KK.dot(X[i, obs].T - means[obs])
+    return cs/max(np.max(np.abs(cs)),1)
 
 
-def init_precision(emp_cov, mode='empirical'):
-    if mode == 'empirical':
-        _, n_features = emp_cov.shape
-        covariance_ = emp_cov.copy()
-        covariance_ *= 0.95
-        covariance_.flat[::n_features + 1] = emp_cov.flat[::n_features + 1]
-        K = linalg.pinvh(covariance_)
-    elif isinstance(mode, np.ndarray):
-        K = mode
-    else:
-        K = np.zeros_like(emp_cov)
-
-    return K
+def compute_mean(X, cs):
+    aux = np.nan_to_num(np.copy(X))
+    aux += cs
+    return np.sum(aux, axis=0)
 
 
-def graphical_lasso(
-        emp_cov, alpha=0.01, rho=1, over_relax=1, max_iter=100, verbose=False,
+def missing_graphical_lasso(
+        X, alpha=0.01, rho=1, over_relax=1, max_iter=100, verbose=False,
         tol=1e-4, rtol=1e-4, return_history=False, return_n_iter=True,
         update_rho_options=None, compute_objective=True, init='empirical'):
-    r"""Graphical lasso solver via ADMM.
+    r"""Missing Graphical lasso solver via EM algorithm.
 
     Solves the following problem:
         minimize  trace(S*K) - log det K + alpha ||K||_{od,1}
 
     where S = (1/n) X^T \times X is the empirical covariance of the data
-    matrix X (training observations by features).
+    matrix X (which contains missing data).
 
     Parameters
     ----------
-    emp_cov : array-like
-        Empirical covariance matrix.
+    X : array-like shape=(n_samples, n_variables)
+        Data matrix.
     alpha : float, optional
         Regularisation parameter.
     rho : float, optional
@@ -99,7 +106,7 @@ def graphical_lasso(
     X : numpy.array, 2-dimensional
         Solution to the problem.
     S : np.array, 2 dimensional
-        Empirical covariance matrix.
+        Final empirical covariance matrix.
     n_iter : int
         If return_n_iter, returns the number of iterations before convergence.
     history : list
@@ -108,65 +115,54 @@ def graphical_lasso(
         for the primal and dual residual norms at each iteration.
 
     """
-    _, n_features = emp_cov.shape
+    K = np.eye(X.shape[1])
+    means = np.zeros(X.shape[1])
 
-    Z = init_precision(emp_cov, mode=init)
-    U = np.zeros_like(emp_cov)
-    Z_old = np.zeros_like(Z)
-
+    loglik = -np.inf
     checks = []
-    for iteration_ in range(max_iter):
-        # x-update
-        A = Z - U
-        A += A.T
-        A /= 2.
-        K = prox_logdet(emp_cov - rho * A, lamda=1. / rho)
+    for iter_ in range(max_iter):
+        old_logl = loglik
 
-        # z-update with relaxation
-        K_hat = over_relax * K - (1 - over_relax) * Z
-        Z = soft_thresholding_od(K_hat + U, lamda=alpha / rho)
-
-        # update residuals
-        U += K_hat - Z
-
-        # diagnostics, reporting, termination checks
-        obj = objective(emp_cov, K, Z, alpha) if compute_objective else np.nan
-        rnorm = np.linalg.norm(K - Z, 'fro')
-        snorm = rho * np.linalg.norm(Z - Z_old, 'fro')
-        check = convergence(
-            obj=obj, rnorm=rnorm, snorm=snorm, e_pri=np.sqrt(K.size) * tol +
-            rtol * max(np.linalg.norm(K, 'fro'), np.linalg.norm(Z, 'fro')),
-            e_dual=np.sqrt(K.size) * tol + rtol * rho * np.linalg.norm(U))
-
-        Z_old = Z.copy()
+        cs = compute_cs(means, K, X)
+        #print(cs)
+        means = compute_mean(X, cs)
+        emp_cov = compute_empirical_covariance(X, K, cs)
+        #print(emp_cov)
+        K, _ = graphical_lasso(emp_cov, alpha=alpha, rho=rho,
+                               over_relax=over_relax, max_iter=max_iter,
+                               verbose=max(0, int(verbose-1)),
+                               tol=tol, rtol=rtol, return_history=False,
+                               return_n_iter=False,
+                               update_rho_options=update_rho_options,
+                               compute_objective=compute_objective,
+                               init=K)
+        loglik = logl(emp_cov, K)
+        diff = old_logl - loglik
+        checks.append(dict(iteration=iter_,
+                           log_likelihood=logl,
+                           difference=diff))
         if verbose:
-            print(
-                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
-
-        checks.append(check)
-        if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
+            print("Iter %d: log-likelihood %.4f, difference: %.4f" % (
+                    iter_, loglik, diff))
+        if np.abs(diff) < tol:
             break
-
-        rho_new = update_rho(
-            rho, rnorm, snorm, iteration=iteration_,
-            **(update_rho_options or {}))
-        # scaled dual variables should be also rescaled
-        U *= rho / rho_new
-        rho = rho_new
     else:
-        warnings.warn("Objective did not converge.")
-
-    return_list = [Z, emp_cov]
+        warnings.warn("The Missing Graphical Lasso algorithm did not converge")
+    aux = np.nan_to_num(np.copy(X))
+    aux += cs
+    return_list = [K, emp_cov, aux]
     if return_history:
         return_list.append(checks)
     if return_n_iter:
-        return_list.append(iteration_)
+        return_list.append(iter_)
     return return_list
 
 
-class GraphicalLasso(GraphLasso):
-    """Sparse inverse covariance estimation with an l1-penalized estimator.
+class MissingGraphicalLasso(GraphicalLasso):
+    """Graphical Lasso with missing data.
+
+    This method allows for graphical model selection in presence of missing
+    data in the dataset. It is suitable to perform imputing after fitting.
 
     Parameters
     ----------
@@ -227,32 +223,12 @@ class GraphicalLasso(GraphLasso):
             self, alpha=0.01, rho=1., over_relax=1., max_iter=100, mode='admm',
             tol=1e-4, rtol=1e-4, verbose=False, assume_centered=False,
             update_rho_options=None, compute_objective=True, init='empirical'):
-        super(GraphicalLasso, self).__init__(
+        super(MissingGraphicalLasso, self).__init__(
             alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
-            assume_centered=assume_centered, mode=mode)
-        self.rho = rho
-        self.rtol = rtol
-        self.over_relax = over_relax
-        self.update_rho_options = update_rho_options
-        self.compute_objective = compute_objective
-        self.init = init
-
-    def _fit(self, emp_cov):
-        """Fit the GraphicalLasso model to X.
-
-        Parameters
-        ----------
-        emp_cov : ndarray, shape (n_features, n_features)
-            Empirical covariance of data.
-
-        """
-        self.precision_, self.covariance_, self.n_iter_ = graphical_lasso(
-            emp_cov, alpha=self.alpha, tol=self.tol, rtol=self.rtol,
-            max_iter=self.max_iter, over_relax=self.over_relax, rho=self.rho,
-            verbose=self.verbose, return_n_iter=True, return_history=False,
-            update_rho_options=self.update_rho_options,
-            compute_objective=self.compute_objective, init=self.init)
-        return self
+            assume_centered=assume_centered, mode=mode, rho=rho,
+            rtol=rtol, over_relax=over_relax,
+            update_rho_options=update_rho_options,
+            compute_objective=compute_objective, init=init)
 
     def fit(self, X, y=None):
         """Fit the GraphicalLasso model to X.
@@ -265,12 +241,14 @@ class GraphicalLasso(GraphLasso):
 
         """
         # Covariance does not make sense for a single feature
-        X = check_array(
-            X, ensure_min_features=2, ensure_min_samples=2, estimator=self)
-        if self.assume_centered:
-            self.location_ = np.zeros(X.shape[1])
-        else:
-            self.location_ = X.mean(0)
+        # X = check_array(
+        #     X, ensure_min_features=2, ensure_min_samples=2, estimator=self)
 
-        emp_cov = empirical_covariance(X, assume_centered=self.assume_centered)
-        return self._fit(emp_cov)
+        self.precision_, self.covariance_, self.complete_data_matrix_, \
+            self.n_iter_ = missing_graphical_lasso(
+                X, alpha=self.alpha, tol=self.tol, rtol=self.rtol,
+                max_iter=self.max_iter, over_relax=self.over_relax, rho=self.rho,
+                verbose=self.verbose, return_n_iter=True, return_history=False,
+                update_rho_options=self.update_rho_options,
+                compute_objective=self.compute_objective, init=self.init)
+        return self

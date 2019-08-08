@@ -6,14 +6,14 @@ from functools import partial
 import numpy as np
 from sklearn.datasets.base import Bunch
 
-from regain.generalized_linear_model.sampling import ising_sampler
 
 from .gaussian import (data_Meinshausen_Yuan,
                        data_Meinshausen_Yuan_sparse_latent, make_fede,
                        make_fixed_sparsity, make_ma_xue_zou,
                        make_ma_xue_zou_rand_k, make_sin, make_sin_cos,
                        make_sparse_low_rank, make_covariance)
-from .ising import ising_theta_generator
+from .ising import ising_theta_generator,  ising_sampler
+from .poisson import poisson_theta_generator, poisson_sampler
 from .kernels import make_exp_sine_squared, make_ticc
 
 
@@ -102,6 +102,19 @@ def _ising_case(
     return data, thetas
 
 
+def _poisson_case(n_samples=100, n_dim_obs=100, T=10,
+                  time_on_axis='first', update_theta='l1',
+                  **kwargs):
+    thetas = poisson_theta_generator(n_dim_obs=n_dim_obs, T=T,
+                                     mode=update_theta, **kwargs)
+    samples = [poisson_sampler(t, variances=np.zeros(n_dim_obs),
+                               n_samples=n_samples) for t in thetas]
+    data = np.array(samples)
+    if time_on_axis == "last":
+        data = data.transpose(1, 2, 0)
+    return data, thetas
+
+
 def make_dataset(
         n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10, mode=None,
         time_on_axis='first', update_ell='l2', update_theta='l2',
@@ -139,7 +152,7 @@ def make_dataset(
             See the other functions for an example.
     distribution: string, default='gaussian'
         The distribution considered for the generation of data.
-        Options are 'gaussian' and 'ising'.
+        Options are 'gaussian', 'ising', 'poisson'.
     *kwargs: other arguments related to each specific data generation mode
 
     """
@@ -162,5 +175,9 @@ def make_dataset(
             n_samples=n_samples, n_dim_obs=n_dim_obs, T=T,
             time_on_axis=time_on_axis, update_theta=update_theta,
             responses=[-1, 1])
+    elif distribution.lower() == 'poisson':
+        return _poisson_case(
+            n_samples=n_samples, n_dim_obs=n_dim_obs, T=T,
+            time_on_axis=time_on_axis, update_theta=update_theta)
     else:
         raise ValueError('distribution `%s` undefined' % distribution)
