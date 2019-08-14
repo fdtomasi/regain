@@ -236,7 +236,11 @@ class WishartProcess(TimeGraphicalLasso):
         L = None
         if not self.learn_ell:
             cov = empirical_covariance(X)
-            L = np.linalg.cholesky(cov)
+            try:
+                L = np.linalg.cholesky(cov)
+            except:
+                np.fill_diagonal(cov, np.sum(np.abs(cov), axis=0) + 0.01)
+                L = np.linalg.cholesky(cov)
 
         out = fit(
             theta=self.theta, var_prop=self.var_prop,
