@@ -36,7 +36,7 @@ def ensure_ticc_valid(new_r):
 format_2e = lambda x: "{:.2e} (\pm {:.2e})".format(
     (np.nanmean(np.array(x).astype(float))),
     (np.nanstd(np.array(x).astype(float))))
-format_3f = lambda x: "{:.3f} (\pm {:.3f})".format(
+format_3f = lambda x: "{:.3f} \pm {:.3f}".format(
     (np.nanmean(np.array(x).astype(float))),
     (np.nanstd(np.array(x).astype(float))))
 
@@ -77,8 +77,17 @@ def highlight_max_std(s):
     '''
     highlight the maximum in a Series yellow.
     '''
-    ss = s.str.split(' ').apply(lambda x: x[0]).astype(float)
-    is_max = ss.astype(float) == (
-        ss.min() if s.name in ['time', 'error_norm'] else ss.max())
-    s.loc[is_max] = s[is_max].apply(lambda x: '\\bm{%s}' % (x))
-    return ['background-color: yellow' if v else '' for v in is_max]
+    attr = 'background-color: yellow'
+    if s.ndim == 1:  # Series from .apply(axis=0) or axis=1
+        ss = s.str.split(' ').apply(lambda x: x[0]).astype(float)
+        is_max = ss.astype(float) == (
+            ss.min() if s.name in ['time', 'error_norm'] else ss.max())
+        s.loc[is_max] = s[is_max].apply(lambda x: '\\bm{%s}' % (x))
+        return [attr if v else '' for v in is_max]
+    else:
+        ss = s.applymap(lambda s: float(s.split(' ')[0]))
+        is_min = ss.groupby(level=0).transform(
+            lambda x: x.min() if x.name in ['time', 'error_norm'] else x.max()
+        ) == ss.astype(float)
+        return pd.DataFrame(
+            np.where(is_min, attr, ''), index=s.index, columns=s.columns)
