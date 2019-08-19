@@ -1,15 +1,21 @@
-import time
 import warnings
+import time
+import matplotlib
+
+from itertools import product
 from collections import defaultdict
 from functools import partial
-from itertools import product
+
 
 import numpy as np
+import matplotlib.pyplot as plt
+
 from scipy.special import binom
 from scipy.stats import rankdata
 from sklearn.base import clone, is_classifier
 from sklearn.metrics.scorer import _check_multimetric_scoring
-from sklearn.model_selection import GridSearchCV, ParameterGrid, ShuffleSplit
+from sklearn.model_selection import GridSearchCV, ParameterGrid,\
+                        StratifiedShuffleSplit, ShuffleSplit
 from sklearn.model_selection._split import check_cv
 from sklearn.model_selection._validation import (
     _aggregate_score_dicts, _fit_and_score)
@@ -17,6 +23,8 @@ from sklearn.utils import deprecated
 from sklearn.utils._joblib import Parallel, delayed
 from sklearn.utils.fixes import MaskedArray
 from sklearn.utils.validation import indexable
+
+warnings.simplefilter('ignore')
 
 
 def global_instability(estimators):
@@ -47,9 +55,79 @@ def global_instability(estimators):
     return np.sum(xi_matrix) / (binom(precisions[0].shape[1], 2) * n_times)
 
 
+def graphlet_instability(estimators):
+        from netanalytics.graphlets import GCD, graphlet_degree_vectors
+        import networkx as nx
+        n = len(estimators)
+        precisions = [estimator.get_precision() for estimator in estimators]
+
+        if precisions[0].ndim == 2:
+            gdvs = []
+            for p in precisions:
+                g = nx.from_numpy_array(p-np.diag(np.diag(p)))
+                gdvs.append(graphlet_degree_vectors(list(g.nodes),
+                                                    list(g.edges),
+                                                    graphlet_size=4))
+            distances = []
+            for i in range(len(gdvs)):
+                for j in range(i+1, len(gdvs)):
+                    distances.append(GCD(gdvs[i], gdvs[j])[1])
+        else:
+            n_times = precisions[0].shape[0]
+            gdvs = []
+            for p in precisions:
+                times = []
+                for t in range(n_times):
+                    g = nx.from_numpy_array(p[t]-np.diag(np.diag(p[t])))
+                    times.append(graphlet_degree_vectors(list(g.nodes),
+                                                         list(g.edges),
+                                                         graphlet_size=4))
+                gdvs.append(times)
+
+            distances = []
+            for i in range(len(gdvs)):
+                for j in range(i+1, len(gdvs)):
+                    distance = 0
+                    for t in range(n_times):
+                        distance += GCD(gdvs[i][t], gdvs[j][t])[1]
+                    distances.append(distance/n_times)
+        return 2/(n*(n-1))*np.sum(distances)
+
+
+def upper_bound(estimators):
+    precisions = [estimator.get_precision() for estimator in estimators]
+    if precisions[0].ndim == 2:
+        n_times = 1
+        triu_idx = np.triu_indices_from(precisions[0], 1)
+        mean_connectivity = np.zeros_like(precisions[0])[triu_idx]
+        for c in precisions:
+            mean_connectivity += (c[triu_idx].copy() != 0).astype(int)
+    else:
+        # for tri dimensional matrices
+        n_times = precisions[0].shape[0]
+        triu_idx = np.triu_indices_from(precisions[0][0], 1)
+        mean_connectivity = np.array(
+            [
+                np.zeros_like(precisions[0][0])[triu_idx]
+                for i in range(n_times)
+            ])
+        for c in precisions:
+            for i in range(n_times):
+                mean_connectivity[i] += (c[i][triu_idx].copy() !=
+                                         0).astype(int)
+    mean_connectivity /= len(estimators)
+    xi_matrix = 2 * mean_connectivity * (1 - mean_connectivity)
+
+    p = precisions[0].shape[1]
+    theta_hat = np.sum(xi_matrix)
+    theta_hat = theta_hat/(p*(p-1)/2) if precisions[0].ndim == 2 \
+        else theta_hat/(n_times*p*(p-1)/2)
+    return 4*theta_hat*(1 - theta_hat)
+
+
 def _check_param_order(param_grid):
     """Ensure that the parameters are in descending order.
-    
+
     This is required for stability to be correctly computed.
     """
     if hasattr(param_grid, 'items'):
@@ -63,117 +141,78 @@ def _check_param_order(param_grid):
     return dict(pg)
 
 
+# def _change_parameters(param_grid):
+#     if hasattr(param_grid, 'items'):
+#         param_grid = [param_grid]
+#
+#     pg = []
+#     for p in param_grid:
+#         for name, v in p.items():
+#             pg.append((name, 1/v))
+#
+#     return dict(pg)
+
+
 class GraphicalModelStabilitySelection(GridSearchCV):
+    """
+    Parameters
+    ----------
+
+    mode: string, optional default='stars'
+    The alternative option is gstars.
+    """
     def __init__(
             self, estimator, param_grid, scoring=None, n_jobs=None,
             iid='deprecated', refit=True, cv='warn', verbose=0,
             pre_dispatch='2*n_jobs', error_score='raise-deprecating',
-            return_train_score=False, n_repetitions=10, sampling_size=10):
-        super().__init__(
+            mode='stars',
+            return_train_score=False, n_repetitions=10, sampling_size=None):
+        super(GraphicalModelStabilitySelection, self).__init__(
             estimator=estimator, scoring=scoring, n_jobs=n_jobs, iid=iid,
-            refit=refit, cv=cv, verbose=verbose, pre_dispatch=pre_dispatch,
+            refit=refit, cv=StratifiedShuffleSplit(train_size=sampling_size,
+                                                   n_splits=n_repetitions),
+            verbose=verbose, pre_dispatch=pre_dispatch,
             error_score=error_score, return_train_score=return_train_score,
             param_grid=param_grid)
+        self.mode = mode
         self.n_repetitions = n_repetitions
         self.sampling_size = sampling_size
-        _check_param_order(param_grid)
-
-    @deprecated
-    def fit__(self, X, y=None):
-        n, p = X.shape
-        # check params
-        if self.n_repetitions < 10:
-            raise ValueError(
-                "Insert a number of repetitions that is higher or"
-                "equal than 10")
-
-        if self.param_grid == dict():
-            raise ValueError(
-                "Please specify an interval for the parameters "
-                "search")
-
-        if self.sampling_size >= n:
-            raise ValueError(
-                "The sampling size has to be lower than the "
-                "number ofsamples. Found %d, should be lower "
-                "than %d, suggested %d" %
-                (self.sampling_size, n, int(10 * np.sqrt(n))))
-        new_params = {}
-        for key, value in self.param_grid.items():
-            new_params[key] = [1 / v for v in np.sort(value)]
-
-        pg = ParameterGrid(new_params)
-        res = {}
-        instabilities = []
-        params_list = []
-        estimator = clone(self.estimator)
-        for i, params in enumerate(pg.__iter__()):
-            estimator.set_params(**params)
-            ss = ShuffleSplit(
-                n_splits=self.n_repetitions, test_size=n - self.sampling_size,
-                train_size=self.sampling_size)
-            connettivity_matrices = []
-            for train, _ in ss.split(X):
-                X_sampled = X[train, :]
-                estimator.fit(X_sampled)
-                connettivity_matrices.append(estimator.get_precision())
-
-            mean_connectivity = np.zeros_like(connettivity_matrices[0])
-            for c in connettivity_matrices:
-                binarized = (c.copy() != 0).astype(int)
-                mean_connectivity += binarized
-            mean_connectivity /= self.n_repetitions
-
-            xi_matrix = 2 * mean_connectivity * (1 - mean_connectivity)
-            upper = xi_matrix[np.triu_indices_from(xi_matrix)]
-            global_instability = np.sum(upper) / binom(p, 2)
-
-            res[i] = {
-                'params': params,
-                'matrices': connettivity_matrices,
-                'score': global_instability
-            }
-            instabilities.append(global_instability)
-            params_list.append(params)
-
-        # monotonize instabilities
-        monotonized_instabilities = [instabilities[0]] + \
-                                    [np.max(instabilities[:i])
-                                     for i in range(1, len(instabilities))]
-        best_params_ix = \
-            np.where(np.array(monotonized_instabilities) <= 0.05)[0][-1]
-        self.best_params = params_list[best_params_ix]
-
-        if self.refit:
-            self.best_estimator_ = clone(estimator)
-            self.best_estimator_.set_params(**self.best_params)
-            self.best_estimator_.fit(X)
-
-        self.cv_results_ = res
-        return self
+        self.param_grid = _check_param_order(param_grid)
 
     def fit(self, X, y=None, groups=None, **fit_params):
         """Run fit with all sets of parameters.
-
         Parameters
         ----------
-
         X : array-like, shape = [n_samples, n_features]
             Training vector, where n_samples is the number of samples and
             n_features is the number of features.
-
         y : array-like, shape = [n_samples] or [n_samples, n_output], optional
             Target relative to X for classification or regression;
             None for unsupervised learning.
-
         groups : array-like, with shape (n_samples,), optional
             Group labels for the samples used while splitting the dataset into
             train/test set.
-
         **fit_params : dict of string -> object
             Parameters passed to the ``fit`` method of the estimator
         """
         estimator = self.estimator
+
+        if self.sampling_size is None:
+            self.sampling_size = min(10*np.sqrt(X.shape[0]), X.shape[0]-10)
+            self.cv = StratifiedShuffleSplit(train_size=self.sampling_size,
+                                             n_splits=self.n_repetitions)
+        if y is not None:
+            n_classes = np.unique(y).shape[0]
+            if self.sampling_size % n_classes != 0:
+                warnings.warn("Changing sampling size, divisible for the "
+                              "number of classes.")
+                self.sampling_size = (self.sampling_size//n_classes)*n_classes
+                self.cv = StratifiedShuffleSplit(
+                                n_splits=self.n_repetitions,
+                                train_size=self.sampling_size,
+                                test_size=X.shape[0]-self.sampling_size)
+        else:
+            y = np.ones(X.shape[0])
         cv = check_cv(self.cv, y, classifier=is_classifier(estimator))
 
         scorers, self.multimetric_ = _check_multimetric_scoring(
@@ -201,7 +240,6 @@ class GraphicalModelStabilitySelection(GridSearchCV):
 
         X, y, groups = indexable(X, y, groups)
         n_splits = cv.get_n_splits(X, y, groups)
-
         base_estimator = clone(self.estimator)
 
         parallel = Parallel(
@@ -392,17 +430,93 @@ class GraphicalModelStabilitySelection(GridSearchCV):
 
         # monotonize instabilities - require ordered parameters,
         # from high sparsity to low
+
         monotonized_instabilities = [array_means[0]] + [
             np.max(array_means[:i]) for i in range(1, array_means.size)
         ]
         monotonized_instabilities = np.array(monotonized_instabilities)
-        # discard high values
-        monotonized_instabilities[monotonized_instabilities > 0.05] = -np.inf
+        self.monotonized_instabilities = np.copy(monotonized_instabilities)
 
-        key_name = 'test_instability'
-        results['raw_%s' % key_name] = array_means
-        results['mean_%s' % key_name] = monotonized_instabilities
-        results["rank_%s" % key_name] = np.asarray(
-            rankdata(-monotonized_instabilities, method='min'), dtype=np.int32)
+        if self.mode.lower() == 'gstars':
+            graphlets_stability = np.array([graphlet_instability(e_split)
+                                            for e_split in estimators])
+            self.graphlets_instabilities = np.copy(graphlets_stability)
 
+            upper_bounds = np.array([upper_bound(e_split) for e_split in estimators])
+            upper_bounds = [upper_bounds[0]] + [
+                np.max(upper_bounds[:i]) for i in range(1, upper_bounds.size)
+            ]
+            self.upper_bounds = np.array(upper_bounds)
+            lb = np.where(np.array(monotonized_instabilities) <= 0.05)[0]
+            ub = np.where(np.array(upper_bounds) <= 0.05)[0]
+            lb = lb[-1] if lb.size != 0 else len(monotonized_instabilities)
+            ub = ub[-1] if ub.size != 0 else 0
+            self.lower_bound = lb
+            self.upper_bound = ub
+            graphlets_stability[0:ub] = np.inf
+            graphlets_stability[lb+1:] = np.inf
+
+            key_name = 'test_instability'
+            results['raw_%s' % key_name] = array_means
+            results['mean_%s' % key_name] = monotonized_instabilities
+            results["rank_%s" % key_name] = np.asarray(
+                rankdata(graphlets_stability, method='min'),
+                dtype=np.int32)
+        else:
+            # discard high values
+            monotonized_instabilities[monotonized_instabilities > 0.05] = \
+                -np.inf
+            key_name = 'test_instability'
+            results['raw_%s' % key_name] = array_means
+            results['mean_%s' % key_name] = monotonized_instabilities
+            results["rank_%s" % key_name] = np.asarray(
+                rankdata(-monotonized_instabilities, method='min'),
+                dtype=np.int32)
+        self.results = results
         return results
+
+    def plot(self, axis=None, figsize=(15, 10), filename="", fontsize=15):
+        matplotlib.rcParams.update({'font.size': fontsize})
+        if self.mode.lower() == 'gstars':
+            if axis is None:
+                fig, axis = plt.subplots(2, figsize=figsize)
+            axis[0].plot(self.monotonized_instabilities, label='Instabilities')
+            axis[0].plot(np.array(self.upper_bounds), label='Upper bound instabilities')
+            axis[0].axhline(0.05, color='red')
+            axis[0].axvline(self.lower_bound, color='violet', label='Lower bound')
+            axis[0].axvline(self.upper_bound, color='green', label='Upper bound')
+            axis[0].grid()
+            axis[0].legend()
+            axis[0].set_xticks(np.arange(len(self.monotonized_instabilities)))
+            axis[0].set_xticklabels(self.results['params'])
+            axis[1].plot(self.graphlets_instabilities, label='Graphlet instabilities')
+            axis[1].axvline(self.lower_bound, color='violet')
+            axis[1].axvline(self.upper_bound, color='green')
+            axis[1].grid()
+            axis[1].legend()
+            axis[1].set_xticks(np.arange(len(self.monotonized_instabilities)))
+            axis[1].set_xticklabels(self.results['params'])
+            for tick in axis[0].get_xticklabels():
+                tick.set_rotation(90)
+            for tick in axis[1].get_xticklabels():
+                tick.set_rotation(90)
+
+            plt.tight_layout()
+            if filename != "":
+                plt.savefig(filename, dpi=300, bbox_inches='tight',
+                            transparent=True)
+            plt.show()
+        else:
+            if axis is None:
+                fig, axis = plt.subplots( figsize=figsize)
+            axis.set_title('Monotonized instabilities')
+            axis.plot(self.monotonized_instabilities)
+            axis.axhline(0.05, color='red')
+            axis.set_xticks(np.arange(len(self.monotonized_instabilities)))
+            axis.set_xticklabels(self.results['params'])
+            for tick in axis.get_xticklabels():
+                tick.set_rotation(90)
+            if filename != "":
+                plt.savefig(filename, dpi=300, bbox_inches='tight',
+                            transparent=True)
+            plt.show()

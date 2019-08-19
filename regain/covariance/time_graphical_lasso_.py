@@ -18,28 +18,10 @@ from regain.covariance.graphical_lasso_ import GraphicalLasso, logl
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
-from regain.utils import convergence, error_norm_time
+from regain.utils import convergence, error_norm_time, is_pos_def
 from regain.validation import check_norm_prox
 
 
-
-def init_precision(emp_cov, mode='empirical'):
-    if mode == 'empirical':
-        n_times, _, n_features = emp_cov.shape
-        covariance_ = emp_cov.copy()
-        covariance_ *= 0.95
-        K = np.empty_like(emp_cov)
-        for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
-            c.flat[::n_features + 1] = e.flat[::n_features + 1]
-            K[i] = linalg.pinvh(c)
-    elif mode == 'zeros':
-        K = np.zeros_like(emp_cov)
-    else:
-        K = mode.copy()  # warm start case
-
-    return K
-
-    
 def loss(S, K, n_samples=None):
     """Loss function for time-varying graphical lasso."""
     if n_samples is None:
@@ -67,6 +49,9 @@ def objective(n_samples, S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
 
 
 def init_precision(emp_cov, mode='empirical'):
+    if isinstance(mode, np.ndarray):
+        return mode.copy()
+
     if mode == 'empirical':
         n_times, _, n_features = emp_cov.shape
         covariance_ = emp_cov.copy()
@@ -77,8 +62,6 @@ def init_precision(emp_cov, mode='empirical'):
             K[i] = linalg.pinvh(c)
     elif mode == 'zeros':
         K = np.zeros_like(emp_cov)
-    else:
-        K = mode.copy()  # warm start case
 
     return K
 
@@ -87,8 +70,8 @@ def time_graphical_lasso(
         emp_cov, alpha=0.01, rho=1, beta=1, max_iter=100, n_samples=None,
         verbose=False, psi='laplacian', tol=1e-4, rtol=1e-4,
         return_history=False, return_n_iter=True, mode='admm',
-        compute_objective=True, stop_at=None, update_rho_options=None,
-        init='empirical'):
+        compute_objective=True, stop_at=None, stop_when=1e-4,
+        update_rho_options=None, init='empirical'):
     """Time-varying graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -141,22 +124,10 @@ def time_graphical_lasso(
     """
     psi, prox_psi, psi_node_penalty = check_norm_prox(psi)
 
-    if init == 'empirical':
-        n_times, _, n_features = emp_cov.shape
-        covariance_ = emp_cov.copy()
-        covariance_ *= 0.95
-        K = np.empty_like(emp_cov)
-        for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
-            c.flat[::n_features + 1] = e.flat[::n_features + 1]
-            K[i] = linalg.pinvh(c)
-    elif init == 'zero':
-        K = np.zeros_like(emp_cov)
-    else:  # TODO controllo che sia un array
-        K = init
 
-    Z_0 = K.copy()  # np.zeros_like(emp_cov)
-    Z_1 = K.copy()[:-1]  # np.zeros_like(emp_cov)[:-1]
-    Z_2 = K.copy()[1:]  # np.zeros_like(emp_cov)[1:]
+    Z_0 = init_precision(emp_cov, mode=init)
+    Z_1 = Z_0.copy()[:-1]  # np.zeros_like(emp_cov)[:-1]
+    Z_2 = Z_0.copy()[1:]  # np.zeros_like(emp_cov)[1:]
 
     U_0 = np.zeros_like(Z_0)
     U_1 = np.zeros_like(Z_1)
@@ -177,7 +148,7 @@ def time_graphical_lasso(
     checks = [
         convergence(
             obj=objective(
-                n_samples, emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi))
+                n_samples, emp_cov, Z_0, Z_0, Z_1, Z_2, alpha, beta, psi))
     ]
     for iteration_ in range(max_iter):
         # update K
@@ -235,9 +206,9 @@ def time_graphical_lasso(
             n_samples, emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi) \
             if compute_objective else np.nan
 
-        if np.isinf(obj):
-            covariance_ = np.array([linalg.pinvh(x) for x in Z_0_old])
-            return Z_0_old, covariance_
+        # if np.isinf(obj):
+        #     Z_0 = Z_0_old
+        #     break
 
         check = convergence(
             obj=obj,
@@ -278,6 +249,8 @@ def time_graphical_lasso(
         U_1 *= rho / rho_new
         U_2 *= rho / rho_new
         rho = rho_new
+
+        #assert is_pos_def(Z_0)
     else:
         warnings.warn("Objective did not converge.")
 
@@ -361,12 +334,11 @@ class TimeGraphicalLasso(GraphicalLasso):
     """
 
     def __init__(
-            self, alpha=0.01, beta=1., mode='admm', rho=1.,
-            tol=1e-4, rtol=1e-4, psi='laplacian',
-            max_iter=100, verbose=False, assume_centered=False,
-            return_history=False, update_rho_options=None,
-            compute_objective=True, stop_at=None, stop_when=1e-4,
-            suppress_warn_list=False, init='empirical'):
+            self, alpha=0.01, beta=1., mode='admm', rho=1., tol=1e-4,
+            rtol=1e-4, psi='laplacian', max_iter=100, verbose=False,
+            assume_centered=False, return_history=False,
+            update_rho_options=None, compute_objective=True, stop_at=None,
+            stop_when=1e-4, suppress_warn_list=False, init='empirical'):
         super(TimeGraphicalLasso, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered, mode=mode,

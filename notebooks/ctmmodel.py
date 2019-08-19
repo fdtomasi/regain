@@ -166,7 +166,7 @@ class CtmModel(LdaModel):
         for iteration in xrange(self.em_max_iterations):
             old_bound = self.corpus_bound(corpus)
 
-            print (iteration)
+            # print (iteration)
             # print "bound before E-step %f" %(old_bound)
             # E-step and collect sufficient statistics for the M-step
             statistics = self.do_estep(corpus)

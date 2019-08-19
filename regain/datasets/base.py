@@ -6,14 +6,15 @@ from functools import partial
 import numpy as np
 from sklearn.datasets.base import Bunch
 
-from regain.generalized_linear_model.sampling import ising_sampler
 
-from .gaussian import (
-    data_Meinshausen_Yuan, data_Meinshausen_Yuan_sparse_latent,
-    generate_dataset_l1l1, make_fede, make_fixed_sparsity, make_ma_xue_zou,
-    make_ma_xue_zou_rand_k, make_sin, make_sin_cos, make_sparse_low_rank)
-from .ising import ising_theta_generator
-from .kernels import make_exp_sine_squared
+from .gaussian import (data_Meinshausen_Yuan,
+                       data_Meinshausen_Yuan_sparse_latent, make_fede,
+                       make_fixed_sparsity, make_ma_xue_zou,
+                       make_ma_xue_zou_rand_k, make_sin, make_sin_cos,
+                       make_sparse_low_rank, make_covariance)
+from .ising import ising_theta_generator,  ising_sampler
+from .poisson import poisson_theta_generator, poisson_sampler
+from .kernels import make_exp_sine_squared, make_ticc
 
 
 def _gaussian_case(
@@ -29,7 +30,8 @@ def _gaussian_case(
         # yuan=generate_dataset_yuan,
         # l1l2=generate_dataset_l1l2,
         # norm=make_l2l2_norm,
-        l1l1=generate_dataset_l1l1,
+        # l1l1=generate_dataset_l1l1,
+
         # the previous are deprecated
         my=data_Meinshausen_Yuan,
         mys=data_Meinshausen_Yuan_sparse_latent,
@@ -40,7 +42,8 @@ def _gaussian_case(
         fede=make_fede,
         sklearn=make_sparse_low_rank,
         ma=make_ma_xue_zou,
-        mak=make_ma_xue_zou_rand_k)
+        mak=make_ma_xue_zou_rand_k,
+        ticc=make_ticc)
 
     if mode is not None:
         # mode overrides other parameters, for back compatibility
@@ -53,11 +56,17 @@ def _gaussian_case(
             degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity,
             proportional=proportional)
     else:
-        func = partial(
-            _gaussian_case, update_ell=update_ell, update_theta=update_theta,
-            normalize_starting_matrices=normalize_starting_matrices,
-            degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity,
-            proportional=proportional)
+        func = partial(make_covariance,
+                       update_ell=update_ell, update_theta=update_theta,
+                       normalize_starting_matrices=normalize_starting_matrices,
+                       degree=degree, epsilon=epsilon,
+                       keep_sparsity=keep_sparsity, proportional=proportional)
+    #     func = partial(
+    #         _gaussian_case, mode='ma',
+    #         update_ell=update_ell, update_theta=update_theta,
+    #         normalize_starting_matrices=normalize_starting_matrices,
+    #         degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity,
+    #         proportional=proportional)
     thetas, thetas_obs, ells = func(n_dim_obs, n_dim_lat, T, **kwargs)
     sigmas = list(map(np.linalg.inv, thetas_obs))
     # map(normalize_matrix, sigmas)  # in place
@@ -69,8 +78,7 @@ def _gaussian_case(
         ])
 
     X = np.vstack(data)
-    y = np.array([np.ones(x.shape[0]) * i
-                  for i, x in enumerate(data)]).flatten().astype(int)
+    y = np.repeat(range(len(sigmas)), n_samples).astype(int)
 
     if time_on_axis == "last":
         data = data.transpose(1, 2, 0)
@@ -88,6 +96,19 @@ def _ising_case(
         ising_sampler(t, np.zeros(n_dim_obs), n=n_samples, responses=[-1, 1])
         for t in thetas
     ]
+    data = np.array(samples)
+    if time_on_axis == "last":
+        data = data.transpose(1, 2, 0)
+    return data, thetas
+
+
+def _poisson_case(n_samples=100, n_dim_obs=100, T=10,
+                  time_on_axis='first', update_theta='l1',
+                  **kwargs):
+    thetas = poisson_theta_generator(n_dim_obs=n_dim_obs, T=T,
+                                     mode=update_theta, **kwargs)
+    samples = [poisson_sampler(t, variances=np.zeros(n_dim_obs),
+                               n_samples=n_samples) for t in thetas]
     data = np.array(samples)
     if time_on_axis == "last":
         data = data.transpose(1, 2, 0)
@@ -131,7 +152,7 @@ def make_dataset(
             See the other functions for an example.
     distribution: string, default='gaussian'
         The distribution considered for the generation of data.
-        Options are 'gaussian' and 'ising'.
+        Options are 'gaussian', 'ising', 'poisson'.
     *kwargs: other arguments related to each specific data generation mode
 
     """
@@ -154,5 +175,9 @@ def make_dataset(
             n_samples=n_samples, n_dim_obs=n_dim_obs, T=T,
             time_on_axis=time_on_axis, update_theta=update_theta,
             responses=[-1, 1])
+    elif distribution.lower() == 'poisson':
+        return _poisson_case(
+            n_samples=n_samples, n_dim_obs=n_dim_obs, T=T,
+            time_on_axis=time_on_axis, update_theta=update_theta)
     else:
         raise ValueError('distribution `%s` undefined' % distribution)
