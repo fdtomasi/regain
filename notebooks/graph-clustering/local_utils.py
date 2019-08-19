@@ -4,6 +4,7 @@ from sklearn.metrics import v_measure_score
 
 from regain.utils import error_norm_time, structure_error
 
+
 def convert_dict_to_df(input_dict, max_samples=5000):
     neww = {}
     for k, v in input_dict.items():
@@ -59,8 +60,7 @@ def set_results(
         {}).setdefault('error_norm',
                        []).append(error_norm_time(thetas_true_rep, obs_precs))
     vs.setdefault((name, i), {}).setdefault('error_norm_sparse', []).append(
-        error_norm_time(
-            thetas_true_sparse, obs_precs_sparse))
+        error_norm_time(thetas_true_sparse, obs_precs_sparse))
     vs.setdefault((name, i), {}).setdefault('time', []).append(tac)
 
 
@@ -87,7 +87,11 @@ def highlight_max_std(s):
     else:
         ss = s.applymap(lambda s: float(s.split(' ')[0]))
         is_min = ss.groupby(level=0).transform(
-            lambda x: x.min() if x.name in ['time', 'error_norm'] else x.max()
-        ) == ss.astype(float)
-        return pd.DataFrame(
+            lambda x: x.min()
+            if x.name in ['time', 'error_norm'] else x.max()) == ss
+        ret = pd.DataFrame(
             np.where(is_min, attr, ''), index=s.index, columns=s.columns)
+        s.where(
+            ~is_min, lambda x: x.applymap(lambda xx: '\\bm{%s}' % (xx)),
+            inplace=True)
+        return ret
