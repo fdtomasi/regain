@@ -163,7 +163,8 @@ class MissingGraphicalLasso(GraphicalLasso):
 
     This method allows for graphical model selection in presence of missing
     data in the dataset. It is suitable to perform imputing after fitting.
-
+    For references see "Mising values:sparse inverse covariance estimation and
+    an extension to sparse regression", Stadler and Buhlman 2012
     Parameters
     ----------
     alpha : positive float, default 0.01

@@ -79,12 +79,11 @@ def plot_curve(
     curve_func = roc_curve if mode == 'roc' else precision_recall_curve
     for c, (key, preds) in enumerate(predictions.items()):
         if len(preds) == 1:
-            if true.ndim != 2:
-                true = (~np.isclose(true, 0, rtol=1e-7)).astype(int).ravel()
-                preds_new = []
-                for p in preds:
-                    preds_new.append(p.ravel())
-                preds = preds_new
+            true = (~np.isclose(true, 0, rtol=1e-7)).astype(int).ravel()
+            preds_new = []
+            for p in preds:
+                preds_new.append(p.ravel())
+            preds = preds_new
             fpr, tpr, thresholds = curve_func(true, preds[0])
             kwargs = dict(
                 lw=1, color=colors[c] if colors is not None else None)
@@ -92,13 +91,13 @@ def plot_curve(
                 roc_auc = auc(fpr, tpr)
                 ax.plot(
                     fpr, tpr,
-                    label='%s %s (AUC = %0.2f)' % (mode, str(key), roc_auc),
+                    label='%s %s (AUC = %0.2f)' % (mode.upper(), str(key), roc_auc),
                     **kwargs)
             else:
                 roc_auc = auc(tpr, fpr)
                 ax.plot(
                     tpr, fpr,
-                    label='%s %s (AUC = %0.2f)' % (mode, str(key), roc_auc),
+                    label='%s %s (AUC = %0.2f)' % (mode.upper(), str(key), roc_auc),
                     **kwargs)
         else:
             tprs = []

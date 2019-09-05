@@ -10,10 +10,10 @@ from six.moves import xrange
 from sklearn.base import BaseEstimator
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.utils import check_array, check_X_y, deprecated
-from sklearn.utils.extmath import fast_logdet
 from sklearn.utils.multiclass import check_classification_targets
 from sklearn.utils.validation import check_is_fitted
 
+from regain.covariance.graph_lasso_ import fast_logdet
 from regain.utils import ensure_posdef
 
 __all__ = ("DiscriminantAnalysis", "PrecomputedDiscriminantAnalysis")
@@ -58,6 +58,7 @@ class DiscriminantAnalysis(QuadraticDiscriminantAnalysis):
         of the Gaussian distributions along its principal axes, i.e. the
         variance in the rotated coordinate system.
     """
+
     def __init__(self, estimator, ensure_posdef=False, priors=None):
         self.estimator = estimator
         self.priors = np.asarray(priors) if priors is not None else None
@@ -91,17 +92,18 @@ class DiscriminantAnalysis(QuadraticDiscriminantAnalysis):
         else:
             self.priors_ = self.priors
         means = []
+        data = []
         for ind in xrange(n_classes):
             Xg = X[y == ind, :]
-            # meang = Xg.mean(0)
-            # means.append(meang)
+            meang = Xg.mean(0)
+            means.append(meang)
             if len(Xg) == 1:
                 raise ValueError(
                     'y has only 1 sample in class %s, covariance '
                     'is ill defined.' % str(self.classes_[ind]))
-            # data.append(Xg)
+            data.append(Xg)
 
-        self.estimator.fit(X, y)
+        self.estimator.fit(data, y)
         self.precision_ = self.estimator.precision_
 
         if hasattr(self.estimator, "covariance_"):
@@ -115,7 +117,7 @@ class DiscriminantAnalysis(QuadraticDiscriminantAnalysis):
             ensure_posdef(self.precision_, inplace=True)
             self.covariance_ = np.array(
                 [linalg.pinvh(p) for p in self.precision_])
-        self.means_ = self.estimator.location_
+        self.means_ = np.asarray(means)
         return self
 
     @deprecated(
