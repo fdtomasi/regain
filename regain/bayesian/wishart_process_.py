@@ -77,15 +77,6 @@ def fit(
             theta, var_prop, np.vstack(current_state.xx), kern,
             prior_distr=prior_theta_kernel)
 
-        # We now do MH for sampling the elements in the matrix L
-        # spherical normal prior, element uncorrelated
-        if learn_ell:
-            Ltau = sample_ell(
-                Ltau, var_Lprop, current_state.xx, prior_distr=prior_ell,
-                uut=current_state.uut, likelihood=likelihood)
-            L__[np.tril_indices_from(L__)] = Ltau
-            ff['L'] = L__
-
         if accept:
             # new kernel parameter, recompute
             K = kern(inverse_width=theta)
@@ -96,7 +87,17 @@ def fit(
                 except Exception:
                     K += 1e-8 * np.eye(K.shape[0])
 
-            uut = np.array([u.dot(u.T) for u in umat.T])
+            current_state['xx'] = umat
+            current_state['uut'] = np.array([u.dot(u.T) for u in umat.T])
+
+        # We now do MH for sampling the elements in the matrix L
+        # spherical normal prior, element uncorrelated
+        if learn_ell:
+            Ltau = sample_ell(
+                Ltau, var_Lprop, current_state.xx, prior_distr=prior_ell,
+                uut=current_state.uut, likelihood=likelihood)
+            L__[np.tril_indices_from(L__)] = Ltau
+            current_state['L'] = L__
 
         samples_u.append(current_state.xx)
         loglikes[i] = current_state.log_likelihood
@@ -105,7 +106,7 @@ def fit(
             Ls.append(L__)
     return_list = [samples_u, loglikes, lps]
     if learn_ell:
-        return_list += Ls
+        return_list.append(Ls)
     return return_list
 
 
@@ -249,6 +250,7 @@ class WishartProcess(TimeGraphicalLasso):
             kern=partial(kern, self.classes_[:, None]), nu=self.nu_,
             p=n_dimensions, n_iter=self.n_iter, verbose=self.verbose,
             likelihood=self.likelihood, L=L)
+
         if self.learn_ell:
             samples_u, loglikes, lps, Ls = out
         else:
