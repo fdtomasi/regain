@@ -6,7 +6,6 @@ import itertools
 import numpy as np
 
 import warnings
-import numpy as np
 
 # TODO UPDATE ISING DIFFUSION PROCESSES
 # TODO update with switch of an edge

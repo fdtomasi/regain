@@ -33,12 +33,8 @@ def poisson_theta_generator(n_dim_obs=10, T=1, mode='l1',
     else:
         graph = nx.random_graphs.gnm_random_graph(n=n_dim_obs, m=degree)
     graph = nx.adjacency_matrix(graph).todense()
-    print(graph)
-    weights = np.ones((n_dim_obs, n_dim_obs))#np.random.normal(0.1, 0.01, size=(n_dim_obs, n_dim_obs))
-    print(graph.shape)
-    print(weights.shape)
+    weights = np.ones((n_dim_obs, n_dim_obs))#np.random.normal(0.1, 0.01, size=(n_dim_obs, n_dim_obs)) #
     graphs = [np.multiply(graph, weights)]
-    print(graphs[-1])
     for t in range(1, T):
         if mode == 'l2':
             raise ValueError("Still not implemented")
@@ -66,20 +62,18 @@ def _adjacency_to_A(graph, typ='full'):
 
 
 def poisson_sampler(theta, variances=None, n_samples=100, _type='LPGM',
+                    random_graph='scale-free',
                     _lambda=1, _lambda_noise=0.5, max_iter=200):
     n_dim_obs = theta.shape[0]
     if _type == 'LPGM':
-        A = _adjacency_to_A(theta, typ='full')
+        A = _adjacency_to_A(theta, typ='scale-free')
         sigma = _lambda * theta
         ltri_sigma = sigma[np.tril_indices(sigma.shape[0], -1)]
-        aux = np.array([_lambda]*sigma.shape[0]).reshape(sigma.shape[0])
-        print()
-        print(aux.shape)
-        Y_lambda = np.array(list(aux) + ltri_sigma.ravel().tolist()[0])
-        print(Y_lambda.shape)
+        nonzero_sigma = ltri_sigma[np.where(ltri_sigma != 0)]
+        aux = np.array([_lambda]*theta.shape[0]).reshape(theta.shape[0])
+        Y_lambda = np.array(list(aux) + nonzero_sigma.ravel().tolist()[0])
 
         Y = np.array([np.random.poisson(l, n_samples) for l in Y_lambda]).T
-        print(Y.shape)
         X = Y.dot(A.T)
 
         # add noise

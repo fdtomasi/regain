@@ -440,6 +440,58 @@ def structure_error(
     return dictionary
 
 
+def signed_structure_error(
+        true, pred, thresholding=False, eps=1e-2, no_diagonal=False):
+    """Error in structure between a precision matrix and predicted.
+
+    Parameters
+    ----------
+    true: array-like
+        True matrix. In grpahical inference, if an entry is different from 0
+        it is consider as an edge (inverse covariance).
+
+    pred: array-like, shape=(d,d)
+        Predicted matrix. In graphical inference, if an entry is different
+        from 0 it is consider as an edge (inverse covariance).
+
+    thresholding: bool, default False,
+       Apply a threshold (with eps) to the `pred` matrix.
+
+    eps : float, default = 1e-2
+        Apply a threshold (with eps) to the `pred` matrix.
+
+    """
+    from sklearn.metrics import precision_score, recall_score, f1_score, \
+        balanced_accuracy_score
+    # avoid inplace modifications
+    true = true.copy()
+    pred = pred.copy()
+    if true.ndim > 2:
+        y_true = np.sign(np.array(flatten([squareform(x, checks=None) for x in true])))
+        y_pred = np.sign(np.array(flatten([squareform(x, checks=None) for x in pred])))
+    else:
+        y_true = np.sign(squareform(true, checks=None))
+        y_pred = np.sign(squareform(pred, checks=None))
+
+    if no_diagonal:
+        if true.ndim > 2:
+            true = np.array([t - np.diag(np.diag(t)) for t in true])
+            pred = np.array([t - np.diag(np.diag(t)) for t in pred])
+        else:
+            true -= np.diag(np.diag(true))
+            pred -= np.diag(np.diag(pred))
+    mcc = matthews_corrcoef(y_true, y_pred)
+    precision = precision_score(y_true, y_pred, average='weighted')
+    recall = recall_score(y_true, y_pred, average='weighted')
+    f1 = f1_score(y_true, y_pred, average='weighted')
+    balanced_accuracy = balanced_accuracy_score(y_true, y_pred)
+
+    dictionary = dict(
+        precision=precision, recall=recall, f1=f1,
+        balanced_accuracy=balanced_accuracy,mcc=mcc)
+    return dictionary
+
+
 def mean_structure_error(true, preds):
     """
     Mean and std error in structure between a precision matrix and more
@@ -461,7 +513,7 @@ def mean_structure_error(true, preds):
         fdr=[], npv=[],
         prevalence=[], miss_rate=[], fall_out=[],
         specificity=[], plr=[],
-        nlr=[], dor=[],
+        nlr=[], dor=[], mcc=[],
         balanced_accuracy=[],
         average_precision=[])
     for p in preds:

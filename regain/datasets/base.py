@@ -178,6 +178,6 @@ def make_dataset(
     elif distribution.lower() == 'poisson':
         return _poisson_case(
             n_samples=n_samples, n_dim_obs=n_dim_obs, T=T,
-            time_on_axis=time_on_axis, update_theta=update_theta)
+            time_on_axis=time_on_axis, update_theta=update_theta, **kwargs)
     else:
         raise ValueError('distribution `%s` undefined' % distribution)
