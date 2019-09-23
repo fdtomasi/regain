@@ -43,7 +43,7 @@ def permute_locations(locations, random_state):
     return new_locations
 
 
-def data_Meinshausen_Yuan(p=198, h=2, n=200, T=10, random_state=None):
+def data_Meinshausen_Yuan(p=198, h=2, n=200, T=10, random_state=None, **kwargs):
     random_state = check_random_state(random_state)
     nodes_locations = []
     for i in range(p):
@@ -545,6 +545,48 @@ def make_sin(
     ensure_posdef(Y)
 
     return Y, Y, np.zeros_like(Y)
+
+
+def make_sin_cos(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
+    """Variables follow sin and cos evolution. L is fixed."""
+    degree = kwargs.get('degree', 2)
+    eps = kwargs.get('epsilon', 1e-2)
+    L, K_HO = make_ell(n_dim_obs, n_dim_lat)
+
+    phase = np.random.randn(n_dim_obs, n_dim_obs) * np.pi
+    upper_idx_diag = np.triu_indices(n_dim_obs)
+    phase[upper_idx_diag[::-1]] = phase[upper_idx_diag]
+
+    upper_idx = np.triu_indices(n_dim_obs, 1)
+    clip = np.zeros((n_dim_obs, n_dim_obs))
+    picks = np.random.permutation(len(upper_idx[0]))
+    dim = int(len(upper_idx[0]) * degree)
+    picks = picks[:dim]
+    clip1 = clip[upper_idx].ravel()
+    clip1[picks] = 1
+    clip[upper_idx[::-1]] = clip[upper_idx] = clip1
+
+    thetas = np.array([np.eye(n_dim_obs) for i in range(T)])
+
+    x = np.linspace(0, 2 * np.pi, T)
+    for i in range(T):
+        for r in range(n_dim_obs):
+            for c in range(n_dim_obs):
+                if r == c:
+                    continue
+                if clip[r, c]:
+                    thetas[i, r, c] = np.sin((x[i] + phase[r, c]) / T**2)
+                else:
+                    thetas[i, r, c] = np.sin((x[i] + phase[r, c]))
+        thetas[i][clip == 1] = np.clip(thetas[i][clip == 1], 0, 1)
+        thetas[i][np.abs(thetas[i]) < eps] = 0
+
+        assert (is_pos_def(thetas[i]))
+        theta_observed = thetas[i] - L
+        assert (is_pos_def(theta_observed))
+        thetas_obs = [theta_observed]
+
+    return thetas, thetas_obs, np.array([L] * T)
 
 
 def make_fede(

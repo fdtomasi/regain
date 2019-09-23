@@ -16,7 +16,7 @@ from numpy.linalg.linalg import LinAlgError
 from scipy import stats
 from scipy.spatial.distance import squareform
 from six.moves import cPickle as pkl
-from sklearn.metrics import average_precision_score
+from sklearn.metrics import average_precision_score, matthews_corrcoef
 
 
 def top_n_indexes(arr, n):
@@ -164,8 +164,8 @@ def read_network(
     columns = sorted(nn[0].unique(), key=lambda x: int(x[1:]))
     n_top_edges = int(nn.shape[0] * threshold / (2. if full_network else 1))
 
-    nn = nn.sort_values(
-        2, ascending=False)[:(2 if full_network else 1) * n_top_edges]
+    nn = nn.sort_values(2, ascending=False)[:(2 if full_network else 1) *
+                                            n_top_edges]
 
     net_julia = pd.DataFrame(columns=columns, index=columns,
                              dtype=float).fillna(0)
@@ -206,7 +206,7 @@ def compose(*functions):
 
 def convert_data_to_2d(data):
     """Utility to help move to the new API.
-    
+
     Data are 3 dimensional with the first dimension representing classes or
     time. The first dimension is compressed, and the belongin of the samples
     to the class is encoded in y.
@@ -378,6 +378,7 @@ def structure_error(
         y_pred = squareform(pred, checks=None)
 
     average_precision = average_precision_score(y_true > 0, y_pred)
+    mcc = matthews_corrcoef(y_true > 0, y_pred > 0)
 
     if thresholding:
         pred[np.abs(pred) < eps] = 0
@@ -435,8 +436,42 @@ def structure_error(
         specificity=specificity, plr=positive_likelihood_ratio,
         nlr=negative_likelihood_ratio, dor=diagnostic_odds_ratio,
         balanced_accuracy=balanced_accuracy,
-        average_precision=average_precision)
+        average_precision=average_precision, mcc=mcc)
     return dictionary
+
+
+def mean_structure_error(true, preds):
+    """
+    Mean and std error in structure between a precision matrix and more
+    predicted matrices.
+
+    Parameters
+    ----------
+    true: array-like
+        True matrix. In grpahical inference, if an entry is different from 0
+        it is consider as an edge (inverse covariance).
+
+    preds: list of arrays, shape=k*(d,d)
+        Predicted matrices. In graphical inference, if an entry is different
+        from 0 it is consider as an edge (inverse covariance).
+    """
+    dictionary = dict(
+        tp=[], tn=[], fp=[], fn=[], precision=[], recall=[], f1=[],
+        accuracy=[], false_omission_rate=[],
+        fdr=[], npv=[],
+        prevalence=[], miss_rate=[], fall_out=[],
+        specificity=[], plr=[],
+        nlr=[], dor=[],
+        balanced_accuracy=[],
+        average_precision=[])
+    for p in preds:
+        res = structure_error(true, p, no_diagonal=True)
+        for k, v in res.items():
+            dictionary[k].append(v)
+    res = {}
+    for k, l in dictionary.items():
+        res[k] = str(np.mean(l))+"+/-"+str(np.std(l))
+    return res
 
 
 def is_pos_semidef(x, tol=1e-15):

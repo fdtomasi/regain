@@ -109,3 +109,9 @@ ENV/
 /*/**/\.DS_Store
 
 \.DS_Store
+
+notebooks/graph-clustering/temp-plot\.html
+
+*.ipynb
+
+notebooks/

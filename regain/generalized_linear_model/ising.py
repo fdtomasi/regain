@@ -1,18 +1,13 @@
 import warnings
 
 import numpy as np
-from scipy import linalg
 
-from six.moves import map, range, zip
-
-from regain.update_rules import update_rho
-from regain.validation import check_norm_prox
 from sklearn.utils import check_array
 from sklearn.utils.extmath import squared_norm
+from sklearn.base import BaseEstimator
 
 from regain.generalized_linear_model.base import GLM_GM, convergence
 from regain.generalized_linear_model.base import build_adjacency_matrix
-#from regain.covariance.time_graphical_lasso_ import init_precision
 from regain.prox import soft_thresholding, soft_thresholding_od
 from regain.norm import l1_od_norm
 from regain.utils import convergence as convergence_admm
@@ -101,6 +96,7 @@ def objective(X, theta, alpha):
 def _gradient_ising(X, theta,  n, A=None, rho=1, T=0):
     n, d = X.shape
     theta_new = np.zeros_like(theta)
+
     def gradient(X, thetas, r, selector, n, A=None, rho=1, T=0):
         sum_ = np.zeros((1, len(selector)))
         for i in range(X.shape[0]):
@@ -121,7 +117,7 @@ def _gradient_ising(X, theta,  n, A=None, rho=1, T=0):
 
 def _fit(X, alpha=1e-2, gamma=1e-3, tol=1e-3, max_iter=1000, verbose=0,
          return_history=True, compute_objective=True, warm_start=None,
-         return_n_iter=False, adjust_gamma=False):
+         return_n_iter=False, adjust_gamma=False, A=None, T=0, rho=1):
     n, d = X.shape
     if warm_start is None:
         theta = np.zeros((d, d))
@@ -133,12 +129,11 @@ def _fit(X, alpha=1e-2, gamma=1e-3, tol=1e-3, max_iter=1000, verbose=0,
     checks = []
     for iter_ in range(max_iter):
 
-        theta_new = theta - gamma*_gradient_ising(X, theta,  n)
+        theta_new = theta - gamma*_gradient_ising(X, theta,  n, A, rho, T)
         theta = (theta_new + theta_new.T)/2
         theta = soft_thresholding_od(theta, alpha*gamma)
         thetas.append(theta)
 
-        #assert np.all(np.diag(theta) == 0)
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             check = convergence(iter=iter_,
@@ -238,13 +233,13 @@ def _fit_ADMM(X, alpha=1e-2, gamma=1e-3, tol=1e-3, rtol=1e-4, max_iter=1000,
     return return_list
 
 
-class Ising_GLM_GM(GLM_GM):
+class IsingGraphicalModel(GLM_GM, BaseEstimator):
 
     def __init__(self, alpha=0.01, tol=1e-4, rtol=1e-4, reconstruction='union',
                  mode='coordinate_descent', rho=1, max_iter=100,
                  verbose=False, return_history=True, return_n_iter=False,
                  compute_objective=True):
-        super(Ising_GLM_GM, self).__init__(
+        super(IsingGraphicalModel, self).__init__(
             alpha, tol, rtol, max_iter, verbose, return_history, return_n_iter,
             compute_objective)
         self.reconstruction = reconstruction
@@ -273,10 +268,10 @@ class Ising_GLM_GM(GLM_GM):
             thetas_pred = []
             historys = []
             for ix in range(X.shape[1]):
-                # TODO: livello di verbosita'
+                verbose = min(0, self.verbose-1)
                 res = fit_each_variable(X, ix, self.alpha, tol=self.tol,
                                         gamma=gamma,
-                                        verbose=self.verbose)
+                                        verbose=verbose)
                 thetas_pred.append(res[0])
                 historys.append(res[1:])
             self.precision_ = build_adjacency_matrix(thetas_pred,
@@ -294,3 +289,6 @@ class Ising_GLM_GM(GLM_GM):
                              ". Options are 'coordiante_descent', "
                              "'symmetric_fbs'")
         return self
+
+    def score(self, X, y=None):
+        return 0

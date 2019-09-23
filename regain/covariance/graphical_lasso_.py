@@ -43,6 +43,8 @@ def init_precision(emp_cov, mode='empirical'):
         covariance_ *= 0.95
         covariance_.flat[::n_features + 1] = emp_cov.flat[::n_features + 1]
         K = linalg.pinvh(covariance_)
+    elif isinstance(mode, np.ndarray):
+        K = mode
     else:
         K = np.zeros_like(emp_cov)
 
