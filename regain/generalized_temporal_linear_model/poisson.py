@@ -15,8 +15,8 @@ from sklearn.gaussian_process import kernels
 
 from sklearn.utils.validation import check_is_fitted
 
-from regain.generalized_linear_model.ising import _fit
-from regain.generalized_linear_model.ising import loss
+from regain.generalized_linear_model.poisson import _fit
+from regain.generalized_linear_model.poisson import loss
 from regain.covariance.time_graphical_lasso_ import init_precision
 from regain.covariance.kernel_time_graphical_lasso_ import precision_similarity
 from regain.norm import l1_od_norm
@@ -25,8 +25,8 @@ from regain.update_rules import update_rho
 from regain.validation import check_norm_prox
 
 
-def loss_ising(X, K, n_samples=None):
-    """Loss function for time-varying ising model."""
+def loss_poisson(X, K, n_samples=None):
+    """Loss function for time-varying poisson model."""
     if n_samples is None:
         n_samples = np.ones(X.shape[0])
     return sum(
@@ -35,9 +35,9 @@ def loss_ising(X, K, n_samples=None):
 
 
 def objective(X, K, Z_M, alpha, kernel, psi):
-    """Objective function for time-varying ising model."""
+    """Objective function for time-varying poisson model."""
 
-    obj = loss_ising(X, K)
+    obj = loss_poisson(X, K)
     obj += alpha * sum(map(l1_od_norm, K))
 
     for m in range(1, K.shape[0]):
@@ -48,14 +48,14 @@ def objective(X, K, Z_M, alpha, kernel, psi):
     return obj
 
 
-def _fit_time_ising_model(X, alpha=0.01, rho=1, kernel=None,
-                          max_iter=100, verbose=False, psi='laplacian',
-                          gamma=0.1,
-                          tol=1e-4, rtol=1e-4, return_history=False,
-                          return_n_iter=True, mode='admm',
-                          update_rho_options=None, compute_objective=True,
-                          stop_at=None, stop_when=1e-4, init="empirical",
-                          n_cores=-1):
+def _fit_time_poisson_model(X, alpha=0.01, rho=1, kernel=None,
+                            max_iter=100, verbose=False, psi='laplacian',
+                            gamma=0.1,
+                            tol=1e-4, rtol=1e-4, return_history=False,
+                            return_n_iter=True, mode='admm',
+                            update_rho_options=None, compute_objective=True,
+                            stop_at=None, stop_when=1e-4, init="empirical",
+                            n_cores=-1):
     """Time-varying graphical model solver.
 
     Solves the following problem via ADMM:
@@ -128,7 +128,7 @@ def _fit_time_ising_model(X, alpha=0.01, rho=1, kernel=None,
     ]
     for iteration_ in range(max_iter):
         # update K
-
+        print('ci sono')
         A = np.zeros_like(K)
         for m in range(1, n_times):
             A[:-m] += Z_M[m][0] - U_M[m][0]
@@ -140,6 +140,8 @@ def _fit_time_ising_model(X, alpha=0.01, rho=1, kernel=None,
         # K_new = np.zeros_like(K)
 
         print(K.shape)
+        print(X.shape)
+        print(A.shape)
 # what are your inputs, and what operation do you want to
 # perform on each input. For example...
         fit_partial = partial(_fit,  alpha=alpha, gamma=gamma,
@@ -150,7 +152,7 @@ def _fit_time_ising_model(X, alpha=0.01, rho=1, kernel=None,
                               return_history=False, return_n_iter=False)
         if n_cores == -1:
             n_cores = multiprocessing.cpu_count()
-
+        print(A[0, :, :].shape)
         results = Parallel(n_jobs=n_cores)(
                     delayed(fit_partial)(X=X[t, :, :], A=A[t, :, :])
                     for t in range(n_times))
@@ -261,8 +263,9 @@ def objective_kernel(theta, K, psi, kernel, times):
     return obj
 
 
-class TemporalIsingModel(BaseEstimator):
-    """Temporal Graphical model that follows an Ising model at each time point.
+class TemporalPoissonModel(BaseEstimator):
+    """Temporal Graphical model that follows an Poisson local
+        model at each time point.
 
     Parameters
     ----------
@@ -332,8 +335,8 @@ class TemporalIsingModel(BaseEstimator):
     """
 
     def __init__(
-            self, distribution='ising', alpha=0.01, kernel=None, rho=1.,
-            tol=1e-4, rtol=1e-4,
+            self,  alpha=0.01, kernel=None, rho=1.,
+            tol=1e-4, rtol=1e-4, gamma=0.01,
             psi='laplacian', max_iter=100, verbose=False,
             assume_centered=False, return_history=False,
             update_rho_options=None, compute_objective=True, ker_param=1,
@@ -353,7 +356,7 @@ class TemporalIsingModel(BaseEstimator):
         self.ker_param = ker_param
         self.max_iter_ext = max_iter_ext
         self.init = init
-        self.distribution = distribution
+        self.gamma = gamma
         self.n_cores = n_cores
 
     def get_precision(self):
@@ -366,11 +369,11 @@ class TemporalIsingModel(BaseEstimator):
             ensure_min_features=2, estimator=self)
 
         self.classes_, n_samples = np.unique(y, return_counts=True)
+        X = np.around(X)  # to ensure discreteness
         self.data = X.copy()
-        if np.unique(self.data).size != 2:
-            raise ValueError('Using the ising distribution your data has '
-                             'to contain only two values, either 0 and 1 '
-                             'or -1, 1')
+        if np.any(self.data) < 0:
+            raise ValueError('Using the poisson distribution your data has '
+                             'to be positive')
         X = np.array([X[y == cl] for cl in self.classes_])
 
         if self.ker_param == "auto":
@@ -406,8 +409,8 @@ class TemporalIsingModel(BaseEstimator):
                     kernel = self.kernel(constant_value=theta)(
                         self.classes_[:, None])
 
-                out = _fit_time_ising_model(
-                    X,
+                out = _fit_time_poisson_model(
+                    X, gamma=self.gamma,
                     alpha=self.alpha, rho=self.rho, kernel=kernel,
                     tol=self.tol, rtol=self.rtol,
                     psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
@@ -440,8 +443,8 @@ class TemporalIsingModel(BaseEstimator):
                         "Kernel size does not match classes of samples, "
                         "got {} classes and kernel has shape {}".format(
                             self.classes_.size, kernel.shape[0]))
-            out = _fit_time_ising_model(
-                X,
+            out = _fit_time_poisson_model(
+                X, gamma=self.gamma,
                 alpha=self.alpha, rho=self.rho, kernel=kernel,
                 tol=self.tol, rtol=self.rtol,
                 psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
@@ -483,7 +486,7 @@ class TemporalIsingModel(BaseEstimator):
         return -99999999
 
 
-class SimilarityTemporalIsingModel(TemporalIsingModel):
+class SimilarityTemporalPoissonModel(TemporalPoissonModel):
     """Learn how to relate different adjacencies matrices across times.
 
     Parameters
@@ -549,13 +552,13 @@ class SimilarityTemporalIsingModel(TemporalIsingModel):
 
     def __init__(
             self, alpha=0.01, beta=1, kernel=None, rho=1., tol=1e-4, rtol=1e-4,
-            psi='laplacian', max_iter=100, verbose=False,
+            psi='laplacian', max_iter=100, verbose=False, gamma=1e-3,
             assume_centered=False, return_history=False,
             update_rho_options=None, compute_objective=True, ker_param=1,
             max_iter_ext=100, init='empirical', eps=1e-6, n_clusters=None):
-        super(SimilarityTemporalIsingModel, self).__init__(
+        super(SimilarityTemporalPoissonModel, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol,
-            max_iter=max_iter, verbose=verbose,
+            max_iter=max_iter, verbose=verbose, gamma=gamma,
             assume_centered=assume_centered,
             update_rho_options=update_rho_options,
             compute_objective=compute_objective, return_history=return_history,
@@ -580,13 +583,13 @@ class SimilarityTemporalIsingModel(TemporalIsingModel):
                              'to contain only two values, either 0 and 1 '
                              'or -1, 1')
         X = np.array([X[y == cl] for cl in self.classes_])
+        print(X.shape)
         if self.kernel is None:
             # from scipy.optimize import minimize
             # discover best kernel parameter via EM
             # initialise precision matrices, as warm start
             self.precision_ = np.random.rand(X.shape[0], X.shape[0])
             n_times = self.precision_.shape[0]
-            theta_old = np.zeros(n_times * (n_times - 1) // 2)
             kernel = np.eye(n_times)
 
             psi, _, _ = check_norm_prox(self.psi)
@@ -606,7 +609,7 @@ class SimilarityTemporalIsingModel(TemporalIsingModel):
                     labels_pred[:, None]) + kernels.RBF(self.beta)(
                         np.arange(n_times)[:, None])
 
-                out = _fit_time_ising_model(
+                out = _fit_time_poisson_model(
                     X, alpha=self.alpha, rho=self.rho, kernel=kernel,
                     tol=self.tol, rtol=self.rtol,
                     psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
@@ -620,7 +623,7 @@ class SimilarityTemporalIsingModel(TemporalIsingModel):
                         self.precision_,  self.history_,
                         self.n_iter_) = out
                 else:
-                    self.precision_,self.n_iter_ = out
+                    self.precision_, self.n_iter_ = out
                 labels_pred_old = labels_pred
 
             else:
@@ -635,7 +638,7 @@ class SimilarityTemporalIsingModel(TemporalIsingModel):
                     "got {} classes and kernel has shape {}".format(
                         self.classes_.size, kernel.shape[0]))
 
-            out = _fit_time_ising_model(
+            out = _fit_time_poisson_model(
                 X, alpha=self.alpha, rho=self.rho, kernel=kernel,
                 tol=self.tol, rtol=self.rtol,
                 psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,

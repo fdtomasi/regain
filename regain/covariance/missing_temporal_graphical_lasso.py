@@ -1,4 +1,3 @@
-
 from __future__ import division
 
 import warnings
@@ -32,7 +31,7 @@ def compute_empirical_covariance(X, K, cs):
                     emp_cov[i, v, s] = inv + cs[i, v]*cs[i, s]
                 else:
                     emp_cov[i, v, s] = aux[i, v]*aux[i, s]
-    emp_cov =  np.sum(emp_cov, axis=0)
+    emp_cov = np.sum(emp_cov, axis=0)
     return emp_cov/np.max(emp_cov)
 
 
@@ -45,7 +44,7 @@ def compute_cs(means, K, X):
         xxm1, yyo = np.meshgrid(obs, nans)
         KK = np.linalg.pinv(K[xxm, yym]).dot(K[xxm1, yyo])
         cs[i, nans] = means[nans] - KK.dot(X[i, obs].T - means[obs])
-    return cs/max(np.max(np.abs(cs)),1)
+    return cs/max(np.max(np.abs(cs)), 1)
 
 
 def compute_mean(X, cs):
@@ -154,8 +153,8 @@ def missing_graphical_lasso(
     return return_list
 
 
-class MissingGraphicalLasso(GraphicalLasso):
-    """Graphical Lasso with missing data.
+class MissingTimeGraphicalLasso(GraphicalLasso):
+    """Time-Varying Graphical Lasso with missing data.
 
     This method allows for graphical model selection in presence of missing
     data in the dataset. It is suitable to perform imputing after fitting.

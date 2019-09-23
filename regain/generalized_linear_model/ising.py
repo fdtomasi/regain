@@ -3,14 +3,14 @@ import warnings
 import numpy as np
 
 from sklearn.utils import check_array
-from sklearn.utils.extmath import squared_norm
 from sklearn.base import BaseEstimator
+from sklearn.linear_model import LogisticRegression
 
 from regain.generalized_linear_model.base import GLM_GM, convergence
 from regain.generalized_linear_model.base import build_adjacency_matrix
 from regain.prox import soft_thresholding, soft_thresholding_od
 from regain.norm import l1_od_norm
-from regain.utils import convergence as convergence_admm
+# from regain.utils import convergence as convergence_admm
 
 
 def objective_single_variable(X, theta, n, r, selector, alpha):
@@ -47,13 +47,14 @@ def fit_each_variable(X, ix, alpha=1e-2, gamma=1e-3, tol=1e-3,
         thetas.append(theta)
 
         if iter_ > 0:
-            check = convergence(iter=iter_,
-                                obj=objective_single_variable(X, theta, n, ix,
-                                                              selector, alpha),
-                                iter_norm=np.linalg.norm(thetas[-2]-thetas[-1]),
-                                iter_r_norm=(np.linalg.norm(thetas[-2] -
-                                                            thetas[-1]) /
-                                             np.linalg.norm(thetas[-1])))
+            check = convergence(
+                        iter=iter_,
+                        obj=objective_single_variable(X, theta, n, ix,
+                                                      selector, alpha),
+                        iter_norm=np.linalg.norm(thetas[-2]-thetas[-1]),
+                        iter_r_norm=(np.linalg.norm(thetas[-2] -
+                                                    thetas[-1]) /
+                                     np.linalg.norm(thetas[-1])))
             checks.append(check)
             # if adjust_gamma: # TODO multiply or divide
             if verbose:
@@ -161,76 +162,76 @@ def _fit(X, alpha=1e-2, gamma=1e-3, tol=1e-3, max_iter=1000, verbose=0,
     return return_list
 
 
-def _fit_ADMM(X, alpha=1e-2, gamma=1e-3, tol=1e-3, rtol=1e-4, max_iter=1000,
-              rho=1, verbose=0, return_history=True, compute_objective=True,
-              return_n_iter=False, adjust_gamma=False):
-    n, d = X.shape
-    theta = np.zeros((d, d))
-
-    def gradient(X, theta, A, U, r, selector, n, rho):
-        sum_ = 0
-        for i in range(X.shape[0]):
-            XT = X[i, selector].dot(theta[r, selector].T)
-            EXT = np.exp(XT)
-            E_XT = np.exp(-XT)
-            sum_ += X[i, selector]*((EXT - E_XT)/(EXT + E_XT) - X[i, r])
-
-        sum_ += rho*(theta[r, selector] - D)
-        return (1/n)*sum_
-
-    thetas = [theta]
-    theta_new = theta.copy()
-    checks = []
-    U = np.zeros_like(theta)
-    A = np.zeros_like(theta)
-    for iter_ in range(max_iter):
-
-        theta = np.zeros_like(theta)
-        old_iter = theta.copy()
-        D = A - U
-        D = (D+D.T)/2
-        for inner_iter_ in range(max_iter//2):
-            theta = theta -\
-                gamma*_gradient_ising(X, theta,  n, A=D, rho=rho, T=1)
-            #theta = (theta + theta.T)/2
-            print(np.linalg.norm(theta - old_iter))
-            if np.linalg.norm(theta - old_iter) < tol:
-                break
-            old_iter = theta_new.copy()
-
-        thetas.append(theta)
-        A = (theta + theta.T)/2
-        A = soft_thresholding_od(A + U, alpha*gamma/rho)
-
-        U += A - theta
-        assert np.all(np.diag(A) == 0)
-
-        check = convergence_admm(obj=objective(X, theta, alpha),
-                                 rnorm=squared_norm(theta - A),
-                                 snorm=(squared_norm(thetas[-2] - thetas[-1])),
-                                 e_pri=(np.sqrt(theta.size)*tol +
-                                        rtol*max(squared_norm(theta),
-                                                 squared_norm(A))),
-                                 e_dual=(np.sqrt(theta.size)*tol +
-                                         rtol*rho*np.linalg.norm(U)))
-        checks.append(check)
-        # if adjust_gamma: # TODO multiply or divide
-        if verbose:
-            print(
-                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
-
-        if check[1] < check[3] and check[2] < check[4]:
-            break
-
-    return_list = [A]
-    if return_history:
-        return_list.append(thetas)
-        return_list.append(checks)
-    if return_n_iter:
-        return_list.append(iter_)
-
-    return return_list
+# def _fit_ADMM(X, alpha=1e-2, gamma=1e-3, tol=1e-3, rtol=1e-4, max_iter=1000,
+#               rho=1, verbose=0, return_history=True, compute_objective=True,
+#               return_n_iter=False, adjust_gamma=False):
+#     n, d = X.shape
+#     theta = np.zeros((d, d))
+#
+#     def gradient(X, theta, A, U, r, selector, n, rho):
+#         sum_ = 0
+#         for i in range(X.shape[0]):
+#             XT = X[i, selector].dot(theta[r, selector].T)
+#             EXT = np.exp(XT)
+#             E_XT = np.exp(-XT)
+#             sum_ += X[i, selector]*((EXT - E_XT)/(EXT + E_XT) - X[i, r])
+#
+#         sum_ += rho*(theta[r, selector] - D)
+#         return (1/n)*sum_
+#
+#     thetas = [theta]
+#     theta_new = theta.copy()
+#     checks = []
+#     U = np.zeros_like(theta)
+#     A = np.zeros_like(theta)
+#     for iter_ in range(max_iter):
+#
+#         theta = np.zeros_like(theta)
+#         old_iter = theta.copy()
+#         D = A - U
+#         D = (D+D.T)/2
+#         for inner_iter_ in range(max_iter//2):
+#             theta = theta -\
+#                 gamma*_gradient_ising(X, theta,  n, A=D, rho=rho, T=1)
+#             #theta = (theta + theta.T)/2
+#             print(np.linalg.norm(theta - old_iter))
+#             if np.linalg.norm(theta - old_iter) < tol:
+#                 break
+#             old_iter = theta_new.copy()
+#
+#         thetas.append(theta)
+#         A = (theta + theta.T)/2
+#         A = soft_thresholding_od(A + U, alpha*gamma/rho)
+#
+#         U += A - theta
+#         assert np.all(np.diag(A) == 0)
+#
+#         check = convergence_admm(obj=objective(X, theta, alpha),
+#                                  rnorm=squared_norm(theta - A),
+#                                  snorm=(squared_norm(thetas[-2] - thetas[-1])),
+#                                  e_pri=(np.sqrt(theta.size)*tol +
+#                                         rtol*max(squared_norm(theta),
+#                                                  squared_norm(A))),
+#                                  e_dual=(np.sqrt(theta.size)*tol +
+#                                          rtol*rho*np.linalg.norm(U)))
+#         checks.append(check)
+#         # if adjust_gamma: # TODO multiply or divide
+#         if verbose:
+#             print(
+#                 "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
+#                 "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
+#
+#         if check[1] < check[3] and check[2] < check[4]:
+#             break
+#
+#     return_list = [A]
+#     if return_history:
+#         return_list.append(thetas)
+#         return_list.append(checks)
+#     if return_n_iter:
+#         return_list.append(iter_)
+#
+#     return return_list
 
 
 class IsingGraphicalModel(GLM_GM, BaseEstimator):
@@ -277,13 +278,25 @@ class IsingGraphicalModel(GLM_GM, BaseEstimator):
             self.precision_ = build_adjacency_matrix(thetas_pred,
                                                      how=self.reconstruction)
             self.history = historys
-        elif self.mode.lower() == 'admm':
-            res = _fit_ADMM(X, self.alpha, rho=self.rho, tol=self.tol,
-                            rtol=self.rtol, gamma=gamma,
-                            max_iter=self.max_iter,
-                            verbose=self.verbose)
-            self.precision_ = res[0]
-            self.history = res[1:]
+        elif self.mode.lower() == 'logistic_regression':
+            thetas_pred = []
+            for ix in range(X.shape[1]):
+                verbose = min(0, self.verbose-1)
+                selector = np.array([i for i in range(X.shape[1]) if i != ix])
+                res = LogisticRegression(C=1/self.alpha, penalty='l1',
+                                         solver='liblinear',
+                                         verbose=verbose).fit(
+                    X[:, selector], X[:, ix]).coef_
+                thetas_pred.append(res)
+            self.precision_ = build_adjacency_matrix(thetas_pred,
+                                                     how=self.reconstruction)
+        # elif self.mode.lower() == 'admm':
+        #     res = _fit_ADMM(X, self.alpha, rho=self.rho, tol=self.tol,
+        #                     rtol=self.rtol, gamma=gamma,
+        #                     max_iter=self.max_iter,
+        #                     verbose=self.verbose)
+        #     self.precision_ = res[0]
+        #     self.history = res[1:]
         else:
             raise ValueError('Unknown optimization mode. Found ' + self.mode +
                              ". Options are 'coordiante_descent', "
