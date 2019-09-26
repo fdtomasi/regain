@@ -4,7 +4,7 @@ import sys
 import itertools
 
 import numpy as np
-
+import networkx as nx
 import warnings
 
 # TODO UPDATE ISING DIFFUSION PROCESSES
@@ -19,7 +19,7 @@ def update_ising_l1(theta_init, no, n_dim_obs, responses=[-1, 1]):
         rows = np.random.randint(0, n_dim_obs, no)
         cols = np.random.randint(0, n_dim_obs, no)
         for r, c in zip(rows, cols):
-            theta[r, c] = np.random.choice(responses+[0]) \
+            theta[r, c] = np.random.choice(responses) \
                           if theta[r, c] == 0 \
                           else np.random.choice([theta[r, c], 0])  # np.random.rand(1) * .35
             theta[c, r] = theta[r, c]
@@ -28,15 +28,29 @@ def update_ising_l1(theta_init, no, n_dim_obs, responses=[-1, 1]):
 
 
 def ising_theta_generator(
-        p=10, n=100, T=10, mode='l1', time_on_axis='first', change=1,
-        responses=[-1, 1]):
-    theta = np.random.choice(
-        np.array([-0.5, 0, 0.5]), size=(p, p), replace=True)
-    theta += theta.T
-    np.fill_diagonal(theta, 0)
-    theta[np.where(theta > 0)] = 1
-    theta[np.where(theta < 0)] = -1
-    thetas = [theta]
+        n_dim_obs=10, n=100, T=10, mode='l1', time_on_axis='first', change=1,
+        responses=[-1, 1], random_graph='scale-free', probability=0.3,
+        degree=2):
+
+    if random_graph.lower() == 'erdos-renyi':
+        graph = nx.random_graphs.fast_gnp_random_graph(n=n_dim_obs,
+                                                       p=probability)
+        graph = nx.adjacency_matrix(graph).todense()
+    elif random_graph.lower() == 'scale-free':
+        graph = nx.random_graphs.barabasi_albert_graph(n=n_dim_obs, m=degree)
+        graph = nx.adjacency_matrix(graph).todense()
+    elif random_graph.lower() == 'small-world':
+        graph = nx.random_graphs.watts_strogatz_graph(n=n_dim_obs, k=degree,
+                                                      p=probability)
+        graph = nx.adjacency_matrix(graph).todense()
+    else:
+        graph = np.random.choice(
+            np.array([-0.5, 0, 0.5]), size=(p, p), replace=True)
+        graph += graph.T
+        np.fill_diagonal(graph, 0)
+        graph[np.where(graph > 0)] = 1
+        graph[np.where(graph < 0)] = -1
+    thetas = [graph]
 
     for t in range(1, T):
         if mode == 'switch':
@@ -44,10 +58,10 @@ def ising_theta_generator(
         elif mode == 'diffusion':
             raise ValueError("Still not implemented")
         elif mode == 'l1':
-            theta_t = update_ising_l1(thetas[-1], change, theta.shape[0])
+            theta_t = update_ising_l1(thetas[-1], change, thetas[-1].shape[0])
         else:
             warnings.warn("Mode not implemented. Using l1.")
-            theta_t = update_ising_l1(thetas[-1], change, theta.shape[0])
+            theta_t = update_ising_l1(thetas[-1], change, thetas[-1].shape[0])
         thetas.append(theta_t)
     return thetas
 

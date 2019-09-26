@@ -91,7 +91,7 @@ def _ising_case(
         n_samples=100, n_dim_obs=100, T=10, time_on_axis='first',
         update_theta='l2', responses=[-1, 1], **kwargs):
     thetas = ising_theta_generator(
-        p=n_dim_obs, n=n_samples, T=T, mode=update_theta, **kwargs)
+        n_dim_obs=n_dim_obs, n=n_samples, T=T, mode=update_theta, **kwargs)
     samples = [
         ising_sampler(t, np.zeros(n_dim_obs), n=n_samples, responses=[-1, 1])
         for t in thetas
@@ -170,11 +170,10 @@ def make_dataset(
             proportional=proportional, **kwargs)
 
     elif distribution.lower() == 'ising':
-        print(update_theta)
         return _ising_case(
             n_samples=n_samples, n_dim_obs=n_dim_obs, T=T,
             time_on_axis=time_on_axis, update_theta=update_theta,
-            responses=[-1, 1])
+            responses=[-1, 1], **kwargs)
     elif distribution.lower() == 'poisson':
         return _poisson_case(
             n_samples=n_samples, n_dim_obs=n_dim_obs, T=T,

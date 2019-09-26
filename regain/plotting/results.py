@@ -79,6 +79,9 @@ def plot_curve(
     curve_func = roc_curve if mode == 'roc' else precision_recall_curve
     for c, (key, preds) in enumerate(predictions.items()):
         if len(preds) == 1:
+            if multiple_true:
+                raise ValueError('Multiple true matrices and only one ''
+                                 'prediction')
             true = (~np.isclose(true, 0, rtol=1e-7)).astype(int).ravel()
             preds_new = []
             for p in preds:
@@ -105,7 +108,8 @@ def plot_curve(
             mean_fpr = np.linspace(0, 1, 100)
 
             if multiple_true:
-                true = [(~np.isclose(t, 0, rtol=1e-7)).astype(int).ravel() for t in true]
+                true = [(~np.isclose(t, 0, rtol=1e-7)).astype(int).ravel()
+                        for t in true]
             else:
                 true = (~np.isclose(true, 0, rtol=1e-7)).astype(int).ravel()
             preds = [p.ravel() for p in preds]
@@ -115,6 +119,8 @@ def plot_curve(
                     t = true[i]
                 else:
                     t = true
+                print(t.shape)
+                print(p.shape)
                 fpr, tpr, thresholds = curve_func(t, p)
                 tprs.append(interp(mean_fpr, fpr, tpr))
                 tprs[-1][0] = int(mode != 'roc')

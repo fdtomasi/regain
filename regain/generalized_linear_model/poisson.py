@@ -22,7 +22,7 @@ def loss(X, theta):
             XXT = X[i, r] * X[i, selector].dot(theta[r, selector].T)
             expXT = np.exp(X[i, selector].dot(theta[r, selector]).T)
             objective += XXT - expXT
-    return objective
+    return (-1/n) * objective
 
 
 def loss_single_variable(X, theta, n, r, selector):
@@ -30,8 +30,8 @@ def loss_single_variable(X, theta, n, r, selector):
     for i in range(n):
         XXT = X[i, r] * X[i, selector].dot(theta)
         expXT = np.exp(X[i, selector].dot(theta))
-        objective += XXT - expXT
-    return objective
+        objective += expXT - XXT
+    return (1/n)*objective
 
 
 def objective(X, theta, alpha):
@@ -51,12 +51,12 @@ def objective_single_variable(X, theta, n, r, selector, alpha):
     for i in range(X.shape[0]):
         XXT = X[i, r] * X[i, selector].dot(theta)
         expXT = np.exp(X[i, selector].dot(theta))
-        objective += XXT - expXT
-    return - (1/n) * objective + alpha*np.linalg.norm(theta, 1)
+        objective += expXT - XXT
+    return (1/n) * objective + alpha*np.linalg.norm(theta, 1)
 
 
 def fit_each_variable(X, ix, alpha=1e-2, gamma=1, tol=1e-3,
-                      max_iter=1000, verbose=0, update_gamma = 0.5,
+                      max_iter=100, verbose=0, update_gamma=0.5,
                       return_history=True, compute_objective=True,
                       return_n_iter=False, adjust_gamma=False):
     n, d = X.shape
@@ -76,16 +76,16 @@ def fit_each_variable(X, ix, alpha=1e-2, gamma=1, tol=1e-3,
         while True:
             theta_new = theta - gamma*grad
             theta = soft_thresholding(theta_new, alpha*gamma)
-            thetas.append(theta)
 
             loss_new = loss_single_variable(X, theta, n, ix, selector)
-
             loss_old = loss_single_variable(X, theta_old, n,  ix, selector)
-             # Line search
+            # Line search
             diff_theta2 = np.linalg.norm(theta_old - theta)**2
             grad_diff = grad.dot(theta_old - theta)
             diff = loss_old - grad_diff + (diff_theta2/(2*gamma))
-            if loss_new < diff or np.isinf(loss_new) or np.isnan(loss_new):
+            #print(loss_new)
+            #print(diff)
+            if loss_new > diff or np.isinf(loss_new) or np.isnan(loss_new):
                 gamma = update_gamma * gamma
                 theta = theta_old - gamma * grad
                 theta = soft_thresholding(theta, alpha*gamma)
@@ -93,18 +93,21 @@ def fit_each_variable(X, ix, alpha=1e-2, gamma=1, tol=1e-3,
                 diff = loss_old - grad_diff + (diff_theta2/(2*gamma))
             else:
                 break
+        thetas.append(theta)
+        print(gamma)
         check = convergence(iter=iter_,
                             obj=objective_single_variable(X, theta, n, ix,
                                                           selector, alpha),
                             iter_norm=np.linalg.norm(thetas[-2]-thetas[-1]),
                             iter_r_norm=(np.linalg.norm(thetas[-2] -
                                                         thetas[-1]) /
-                                         np.linalg.norm(thetas[-1])))
+                                         np.linalg.norm(thetas[-2])))
         checks.append(check)
         # if adjust_gamma: # TODO multiply or divide
         if verbose:
-            print('Iter: %d, objective: %.4f, iter_norm %.4f' %
-                  (check[0], check[1], check[2]))
+            print('Iter: %d, objective: %.4f, iter_norm %.4f,'
+                  ' iter_norm_normalized: %.4f' %
+                  (check[0], check[1], check[2], check[3]))
 
         if np.abs(check[2]) < tol:
             break
@@ -209,6 +212,7 @@ class PoissonGraphicalModel(GLM_GM, BaseEstimator):
 
     def __init__(self, alpha=0.01, tol=1e-4, rtol=1e-4, reconstruction='union',
                  mode='coordinate_descent', max_iter=100, gamma=0.1,
+                 intercept=True,
                  verbose=False, return_history=True, return_n_iter=False,
                  compute_objective=True):
         super(PoissonGraphicalModel, self).__init__(
@@ -217,6 +221,7 @@ class PoissonGraphicalModel(GLM_GM, BaseEstimator):
         self.reconstruction = reconstruction
         self.mode = mode
         self.gamma = gamma
+        self.intercept = intercept
 
     def get_precision(self):
         return self.precision_
@@ -240,6 +245,10 @@ class PoissonGraphicalModel(GLM_GM, BaseEstimator):
             print('sono qui')
             thetas_pred = []
             historys = []
+            if self.intercept:
+                print(X.shape)
+                print(np.ones((X.shape[0],1)).shape)
+                X = np.hstack((X, np.ones((X.shape[0],1))))
             for ix in range(X.shape[1]):
                 verbose = max(0, self.verbose-1)
                 res = fit_each_variable(X, ix, self.alpha, tol=self.tol,

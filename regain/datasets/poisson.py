@@ -11,9 +11,7 @@ def update_l1(G, how_many, n_dim_obs):
         rows = np.random.randint(0, n_dim_obs, how_many)
         cols = np.random.randint(0, n_dim_obs, how_many)
         for r, c in zip(rows, cols):
-            G[r, c] = np.random.choice([0, G[r, c]]) \
-                      if G[r, c] != 0 \
-                      else np.random.choice([0, np.random.normal(0.1, 0.01)])
+            G[r, c] = np.random.choice([0, G[r, c]])
             G[c, r] = G[r, c]
     assert (np.all(G == G.T))
     return G
@@ -24,28 +22,28 @@ def poisson_theta_generator(n_dim_obs=10, T=1, mode='l1',
                             degree=3, n_to_change=3, **kwargs):
     if random_graph.lower() == 'erdos-renyi':
         graph = nx.random_graphs.fast_gnp_random_graph(n=n_dim_obs,
-                                                      p=probability)
+                                                       p=probability)
     elif random_graph.lower() == 'scale-free':
         graph = nx.random_graphs.barabasi_albert_graph(n=n_dim_obs, m=degree)
     elif random_graph.lower() == 'small-world':
         graph = nx.random_graphs.watts_strogatz_graph(n=n_dim_obs, k=degree,
-                                                     p=probability)
+                                                      p=probability)
     else:
         graph = nx.random_graphs.gnm_random_graph(n=n_dim_obs, m=degree)
     graph = nx.adjacency_matrix(graph).todense()
-    weights = np.ones((n_dim_obs, n_dim_obs))#np.random.normal(0.1, 0.01, size=(n_dim_obs, n_dim_obs)) #
-    graphs = [np.multiply(graph, weights)]
+    np.fill_diagonal(graph, 0)
+    graphs = [graph]
     for t in range(1, T):
-        if mode == 'l2':
-            raise ValueError("Still not implemented")
-        elif mode == 'reshuffle':
+        if mode == 'reshuffle':
             raise ValueError("Still not implemented")
         elif mode == 'l1':
             graph_t = update_l1(graphs[-1], n_to_change, graphs[0].shape[0])
         else:
             warnings.warn("Mode not implemented. Using l1.")
             graph_t = update_l1(graphs[-1], n_to_change, graphs[0].shape[0])
+        np.fill_diagonal(graph_t, 0)
         graphs.append(graph_t)
+
 
     return graphs
 
@@ -54,7 +52,7 @@ def _adjacency_to_A(graph, typ='full'):
     A = np.eye(graph.shape[0])
     for i in range(graph.shape[0]-1):
         for j in range(i+1, graph.shape[0]):
-            if typ == "full" or graph[i, j] != 0:
+            if typ == "full" or graph[i, j] == 1:
                 tmp = np.zeros((graph.shape[0], 1))
                 tmp[np.array([i, j]), 0] = 1
                 A = np.hstack((A, tmp))
@@ -68,10 +66,10 @@ def poisson_sampler(theta, variances=None, n_samples=100, _type='LPGM',
     if _type == 'LPGM':
         A = _adjacency_to_A(theta, typ='scale-free')
         sigma = _lambda * theta
-        ltri_sigma = sigma[np.tril_indices(sigma.shape[0], -1)]
+        ltri_sigma = sigma[np.tril_indices(sigma.shape[0], k=-1)]
         nonzero_sigma = ltri_sigma[np.where(ltri_sigma != 0)]
-        aux = np.array([_lambda]*theta.shape[0]).reshape(theta.shape[0])
-        Y_lambda = np.array(list(aux) + nonzero_sigma.ravel().tolist()[0])
+        aux = [_lambda]*theta.shape[0]
+        Y_lambda = np.array(aux + nonzero_sigma.ravel().tolist()[0])
 
         Y = np.array([np.random.poisson(l, n_samples) for l in Y_lambda]).T
         X = Y.dot(A.T)

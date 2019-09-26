@@ -15,7 +15,7 @@ from sklearn.gaussian_process import kernels
 
 from sklearn.utils.validation import check_is_fitted
 
-from regain.generalized_linear_model.poisson import _fit
+from regain.generalized_linear_model.poisson import fit_each_variable
 from regain.generalized_linear_model.poisson import loss
 from regain.covariance.time_graphical_lasso_ import init_precision
 from regain.covariance.kernel_time_graphical_lasso_ import precision_similarity
@@ -144,7 +144,7 @@ def _fit_time_poisson_model(X, alpha=0.01, rho=1, kernel=None,
         print(A.shape)
 # what are your inputs, and what operation do you want to
 # perform on each input. For example...
-        fit_partial = partial(_fit,  alpha=alpha, gamma=gamma,
+        fit_partial = partial(_fit_ ,  alpha=alpha, gamma=gamma,
                               tol=tol,
                               max_iter=max_iter, verbose=0,
                               compute_objective=True,
