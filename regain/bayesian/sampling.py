@@ -155,8 +155,14 @@ def sample_hyper_kernel(
         proposal, loc=0, s=sigma, scale=np.exp(mu))
 
     # Criterion to choose whether to accept the proposed sample or not
-    logp_post = partial(
-        posterior_iw, ustack=ustack, kern=kern, prior_distr=prior_distr)
+    def logp_post(inverse_width):
+        K = kern(inverse_width=inverse_width)
+        logp = stats.multivariate_normal(
+            ustack.mean(axis=0), cov=K,
+            allow_singular=True).logpdf(ustack).sum()
+        logp_prior = prior_distr.logpdf(inverse_width)
+        return logp + logp_prior
+
     logp_diff = logp_post(proposal) - logp_post(initial_theta)
 
     mu, sigma = lognstat(proposal, var_proposal)
@@ -170,47 +176,6 @@ def sample_hyper_kernel(
 
     sample = proposal if accept else initial_theta
     return sample, accept
-
-
-def posterior_iw(inverse_width, ustack, kern, prior_distr):
-    """Posterior probability of inverse_width.
-
-    Parameters
-    ----------
-    inverse_width : float
-        Kernel parameter.
-    ustack : ndarray, shape (v*p, n)
-        Sample tensor.
-    kern : function
-        Function for computing the kernel.
-    prior_distr : rv_frozen
-        Prior for inverse_width.
-
-    Returns
-    -------
-    logprob
-        Posterior probability.
-    """
-    K = kern(inverse_width=inverse_width)
-
-    # k_inverse = linalg.pinvh(K)
-    # v, p, _ = u.shape
-    # F = np.tensordot(u, u, axes=([1, 0], [1, 0]))
-    # logpugl = v * p * fast_logdet(k_inverse) - np.sum(F * k_inverse)
-    # logpugl -= v * p * n * np.log(2 * np.pi)
-    # logpugl /= 2.
-
-    # creates a (vp * n) matrix, then compute centered empirical covariance
-    # ustack = np.vstack(u)
-    # logpugl = ustack.shape[0] * log_likelihood(
-    #     empirical_covariance(ustack), k_inverse)
-    # this is equivalent to
-    logp = stats.multivariate_normal(
-        ustack.mean(axis=0), cov=K, allow_singular=True).logpdf(ustack).sum()
-    # with centering the samples (but there is no need for k_inverse)
-
-    logp_prior = prior_distr.logpdf(inverse_width)
-    return logp + logp_prior
 
 
 def sample_ell(Ltau, var_proposal, umat, prior_distr, likelihood=None):
@@ -244,11 +209,10 @@ def sample_ell(Ltau, var_proposal, umat, prior_distr, likelihood=None):
 
 
 def _sample_ell_comp(Ltaug, i, sigma_proposal, prior_distr, likelihood=None):
-    """Sample a single element for L."""
-    if likelihood is None:
-        raise ValueError(
-            "`likelihood` parameter is None, should be a "
-            "function to evaluate likelihood")
+    """Sample a single element for L.
+    
+    likelihood: function to compute likelihood of ell.
+    """
     # Propose a sample
     Ltau = Ltaug[i]
     Last = np.random.normal(Ltau, sigma_proposal)
@@ -268,6 +232,5 @@ def _sample_ell_comp(Ltaug, i, sigma_proposal, prior_distr, likelihood=None):
     # Now we decide whether to accept zast or use the previous value
     log_acceptance_proba = min(0, logp_diff + logq_diff)
     accept = np.log(np.random.uniform()) < log_acceptance_proba
-
     sample = Last if accept else Ltau
     return sample

@@ -86,6 +86,8 @@ def fit(
                     K += 1e-8 * np.eye(K.shape[0])
 
             current_state['xx'] = umat
+            current_state['log_likelihood'] = likelihood(
+                GWP_construct(umat, current_state['L']))
 
         # We now do MH for sampling the elements in the matrix L
         # spherical normal prior, element uncorrelated
@@ -95,6 +97,8 @@ def fit(
                 likelihood=likelihood)
             L__[np.tril_indices_from(L__)] = Ltau
             current_state['L'] = L__
+            current_state['log_likelihood'] = likelihood(
+                GWP_construct(current_state['xx'], current_state['L']))
 
         samples_u.append(current_state.xx)
         loglikes[i] = current_state.log_likelihood
