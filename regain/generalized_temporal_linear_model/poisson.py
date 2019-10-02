@@ -6,6 +6,7 @@ from six.moves import map, range, zip
 from joblib import Parallel, delayed
 import multiprocessing
 from functools import partial
+from itertools import product
 
 from sklearn.base import BaseEstimator
 from sklearn.utils.extmath import squared_norm
@@ -17,6 +18,7 @@ from sklearn.utils.validation import check_is_fitted
 
 from regain.generalized_linear_model.poisson import fit_each_variable
 from regain.generalized_linear_model.poisson import loss
+from regain.generalized_linear_model.base import build_adjacency_matrix
 from regain.covariance.time_graphical_lasso_ import init_precision
 from regain.covariance.kernel_time_graphical_lasso_ import precision_similarity
 from regain.norm import l1_od_norm
@@ -139,26 +141,38 @@ def _fit_time_poisson_model(X, alpha=0.01, rho=1, kernel=None,
         A /= 2.
         # K_new = np.zeros_like(K)
 
-        print(K.shape)
-        print(X.shape)
-        print(A.shape)
-# what are your inputs, and what operation do you want to
-# perform on each input. For example...
-        fit_partial = partial(_fit_ ,  alpha=alpha, gamma=gamma,
-                              tol=tol,
-                              max_iter=max_iter, verbose=0,
-                              compute_objective=True,
-                              warm_start=None, rho=rho, T=n_times,
-                              return_history=False, return_n_iter=False)
-        if n_cores == -1:
-            n_cores = multiprocessing.cpu_count()
-        print(A[0, :, :].shape)
-        results = Parallel(n_jobs=n_cores)(
-                    delayed(fit_partial)(X=X[t, :, :], A=A[t, :, :])
-                    for t in range(n_times))
+        for t in range(n_times):
+            thetas_pred = []
+            for v in range(n_features):
+                inner_verbose = max(0, verbose-1)
+                res = fit_each_variable(X[t, :, :], v, alpha, tol=tol,
+                                        verbose=inner_verbose, A=A[t, :, :],
+                                        T=n_times, rho=rho)
+                thetas_pred.append(res[0])
 
-        K = np.array([r[0] for r in results])
-        print(K.shape)
+            K[t, :, :] = build_adjacency_matrix(thetas_pred, 'union')
+                # K[t, v, selector]fit_each_variable,  alpha=alpha, gamma=gamma,
+                #               tol=tol,
+                #               max_iter=max_iter, verbose=0, update_gamma=0.5,
+                #               compute_objective=True,
+                #               warm_start=None, rho=rho, T=n_times,
+                #               return_history=False, return_n_iter=False)
+
+        # fit_partial = partial(fit_each_variable,  alpha=alpha, gamma=gamma,
+        #                       tol=tol,
+        #                       max_iter=max_iter, verbose=0, update_gamma=0.5,
+        #                       compute_objective=True,
+        #                       warm_start=None, rho=rho, T=n_times,
+        #                       return_history=False, return_n_iter=False)
+        # if n_cores == -1:
+        #     n_cores = multiprocessing.cpu_count()
+        # print(A[0, :, :].shape)
+        # results = Parallel(n_jobs=n_cores)(
+        #             delayed(fit_partial)(X=X[t, :, :], ix=v, A=A[t, :, :])
+        #             for (t, v) in product(np.arange(n_times), np.arange(n_features)))
+        #
+        # K = np.array([r[0] for r in results])
+        # print(K.shape)
 
         # other Zs
         for m in range(1, n_times):

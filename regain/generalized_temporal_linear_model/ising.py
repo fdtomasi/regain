@@ -18,7 +18,6 @@ from sklearn.utils.validation import check_is_fitted
 from regain.generalized_linear_model.ising import _fit
 from regain.generalized_linear_model.ising import loss
 from regain.covariance.time_graphical_lasso_ import init_precision
-from regain.covariance.kernel_time_graphical_lasso_ import precision_similarity
 from regain.norm import l1_od_norm
 from regain.utils import convergence
 from regain.update_rules import update_rho
@@ -50,7 +49,7 @@ def objective(X, K, Z_M, alpha, kernel, psi):
 
 def _fit_time_ising_model(X, alpha=0.01, rho=1, kernel=None,
                           max_iter=100, verbose=False, psi='laplacian',
-                          gamma=0.1,
+                          gamma=1e-3,
                           tol=1e-4, rtol=1e-4, return_history=False,
                           return_n_iter=True, mode='admm',
                           update_rho_options=None, compute_objective=True,
@@ -140,23 +139,31 @@ def _fit_time_ising_model(X, alpha=0.01, rho=1, kernel=None,
         # K_new = np.zeros_like(K)
 
         print(K.shape)
-# what are your inputs, and what operation do you want to
-# perform on each input. For example...
-        fit_partial = partial(_fit,  alpha=alpha, gamma=gamma,
-                              tol=tol,
-                              max_iter=max_iter, verbose=0,
-                              compute_objective=True,
-                              warm_start=None, rho=rho, T=n_times,
-                              return_history=False, return_n_iter=False)
-        if n_cores == -1:
-            n_cores = multiprocessing.cpu_count()
 
-        results = Parallel(n_jobs=n_cores)(
-                    delayed(fit_partial)(X=X[t, :, :], A=A[t, :, :])
-                    for t in range(n_times))
+        for t in range(n_times):
+            K[t, :, :] = _fit(X=X[t, :, :], A=A[t, :, :],
+                        alpha=alpha, gamma=gamma,
+                          tol=tol,
+                          max_iter=max_iter, verbose=max(0, verbose-1),
+                          compute_objective=True,
+                          warm_start=None, rho=rho, T=n_times,
+                          return_history=False, return_n_iter=False)[0]
 
-        K = np.array([r[0] for r in results])
-        print(K.shape)
+        # fit_partial = partial(_fit,  alpha=alpha, gamma=gamma,
+        #                       tol=tol,
+        #                       max_iter=max_iter, verbose=0,
+        #                       compute_objective=True,
+        #                       warm_start=None, rho=rho, T=n_times,
+        #                       return_history=False, return_n_iter=False)
+        # if n_cores == -1:
+        #     n_cores = multiprocessing.cpu_count()
+        #
+        # results = Parallel(n_jobs=n_cores)(
+        #             delayed(fit_partial)(X=X[t, :, :], A=A[t, :, :])
+        #             for t in range(n_times))
+        #
+        # K = np.array([r[0] for r in results])
+        # print(K.shape)
 
         # other Zs
         for m in range(1, n_times):
@@ -483,6 +490,37 @@ class TemporalIsingModel(BaseEstimator):
         return -99999999
 
 
+def precision_similarity(precision, psi=None):
+    from regain.norm import l1_od_norm
+    from scipy.spatial.distance import squareform
+    from itertools import combinations
+    distances = squareform(
+        [l1_od_norm(t1 - t2) for t1, t2 in combinations(precision, 2)])
+    distances /= np.max(distances)
+    return 1 - distances
+    #print(precision.shape)
+    # n_times, _, _ = precision.shape
+    # kernel = np.zeros((n_times, n_times))
+    # precisions_c = precision.copy()
+    # precisions_c = np.array([np.abs(t) for t in precisions_c])
+    #
+    # #print(precisions_c)
+    # for m in range(1, n_times):
+    #     # all possible markovians jumps
+    #     dist = list(map(l1_od_norm,
+    #                     precisions_c[m:] - precisions_c[:-m]))
+    #     np.fill_diagonal(kernel[m:], dist)
+    #     np.fill_diagonal(kernel[:, m:], dist)
+    #
+    # kernel -= np.min(kernel)
+    # if np.max(kernel) == 0:
+    #     print('porca paletta')
+    # kernel /= np.max(kernel)
+    # # kernel *= -1
+    # # kernel += 1
+    # return 1 - kernel  # 1.
+
+
 class SimilarityTemporalIsingModel(TemporalIsingModel):
     """Learn how to relate different adjacencies matrices across times.
 
@@ -584,7 +622,8 @@ class SimilarityTemporalIsingModel(TemporalIsingModel):
             # from scipy.optimize import minimize
             # discover best kernel parameter via EM
             # initialise precision matrices, as warm start
-            self.precision_ = np.random.rand(X.shape[0], X.shape[0])
+            self.precision_ = np.random.rand(self.classes_.shape[0],
+                                             X.shape[1], X.shape[1])
             n_times = self.precision_.shape[0]
             theta_old = np.zeros(n_times * (n_times - 1) // 2)
             kernel = np.eye(n_times)
@@ -594,18 +633,6 @@ class SimilarityTemporalIsingModel(TemporalIsingModel):
                 self.n_clusters = n_times
             labels_pred_old = 0
             for i in range(self.max_iter_ext):
-                theta = precision_similarity(self.precision_, psi)
-                kernel = theta
-                labels_pred = AgglomerativeClustering(
-                    n_clusters=self.n_clusters, affinity='precomputed',
-                    linkage='complete').fit_predict(kernel)
-                if i > 0 and np.linalg.norm(labels_pred - labels_pred_old
-                                            ) / labels_pred.size < self.eps:
-                    break
-                kernel = kernels.RBF(0.0001)(
-                    labels_pred[:, None]) + kernels.RBF(self.beta)(
-                        np.arange(n_times)[:, None])
-
                 out = _fit_time_ising_model(
                     X, alpha=self.alpha, rho=self.rho, kernel=kernel,
                     tol=self.tol, rtol=self.rtol,
@@ -614,13 +641,25 @@ class SimilarityTemporalIsingModel(TemporalIsingModel):
                     update_rho_options=self.update_rho_options,
                     compute_objective=self.compute_objective,
                     init=self.precision_)
-
                 if self.return_history:
                     (
                         self.precision_,  self.history_,
                         self.n_iter_) = out
                 else:
-                    self.precision_,self.n_iter_ = out
+                    self.precision_, self.n_iter_ = out
+                theta = precision_similarity(self.precision_, psi)
+                kernel = theta
+                labels_pred = AgglomerativeClustering(
+                    n_clusters=self.n_clusters, affinity='precomputed',
+                    linkage='complete').fit_predict(kernel)
+
+                if i > 0 and np.linalg.norm(labels_pred - labels_pred_old
+                                            ) / labels_pred.size < self.eps:
+                    break
+                kernel = kernels.RBF(0.0001)(
+                    labels_pred[:, None]) + kernels.RBF(self.beta)(
+                        np.arange(n_times)[:, None])
+                print(kernel)
                 labels_pred_old = labels_pred
 
             else:

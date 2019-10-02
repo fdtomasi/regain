@@ -11,20 +11,6 @@ from regain.prox import soft_thresholding, soft_thresholding_od
 from regain.norm import l1_od_norm
 
 
-def loss(X, theta):
-    n, d = X.shape
-    objective = 0
-    if not np.all(theta == theta.T):
-        return np.float('inf')
-    for r in range(d):
-        selector = [i for i in range(d) if i != r]
-        for i in range(n):
-            XXT = X[i, r] * X[i, selector].dot(theta[r, selector].T)
-            expXT = np.exp(X[i, selector].dot(theta[r, selector]).T)
-            objective += XXT - expXT
-    return (-1/n) * objective
-
-
 def loss_single_variable(X, theta, n, r, selector):
     objective = 0
     for i in range(n):
@@ -43,7 +29,7 @@ def objective(X, theta, alpha):
         selector = [i for i in range(d) if i != r]
         objective += objective_single_variable(X, theta[r, selector], n, r,
                                                selector, 0)
-    return objective
+    return objective + alpha*l1_od_norm(theta)
 
 
 def objective_single_variable(X, theta, n, r, selector, alpha):
@@ -58,25 +44,28 @@ def objective_single_variable(X, theta, n, r, selector, alpha):
 def fit_each_variable(X, ix, alpha=1e-2, gamma=1, tol=1e-3,
                       max_iter=100, verbose=0, update_gamma=0.5,
                       return_history=True, compute_objective=True,
-                      return_n_iter=False, adjust_gamma=False):
+                      return_n_iter=False, adjust_gamma=False, A=None,
+                      T=0, rho=1):
     n, d = X.shape
     theta = np.zeros(d-1)
     selector = [i for i in range(d) if i != ix]
 
-    def gradient(X, theta, r, selector, n):
+    def gradient(X, theta, r, selector, n, A, T, rho):
         XTX = X[:, selector].T.dot(X[:, r])
         EXK = X[:, selector].T.dot(np.exp(X[:, selector].dot(theta)))
-        return -(1/n)*(XTX - EXK)
+        to_add = 0
+        if A is not None:
+            to_add = (rho*T)*(theta - A[r, selector])/n
+        return -(1/n)*(XTX - EXK) + to_add
 
     thetas = [theta]
     checks = []
     for iter_ in range(max_iter):
         theta_old = thetas[-1]
-        grad = gradient(X, theta, ix, selector, n)
+        grad = gradient(X, theta, ix, selector, n, A, T, rho)
         while True:
             theta_new = theta - gamma*grad
             theta = soft_thresholding(theta_new, alpha*gamma)
-
             loss_new = loss_single_variable(X, theta, n, ix, selector)
             loss_old = loss_single_variable(X, theta_old, n,  ix, selector)
             # Line search
@@ -94,109 +83,23 @@ def fit_each_variable(X, ix, alpha=1e-2, gamma=1, tol=1e-3,
             else:
                 break
         thetas.append(theta)
-        print(gamma)
-        check = convergence(iter=iter_,
-                            obj=objective_single_variable(X, theta, n, ix,
-                                                          selector, alpha),
-                            iter_norm=np.linalg.norm(thetas[-2]-thetas[-1]),
-                            iter_r_norm=(np.linalg.norm(thetas[-2] -
-                                                        thetas[-1]) /
-                                         np.linalg.norm(thetas[-2])))
-        checks.append(check)
-        # if adjust_gamma: # TODO multiply or divide
-        if verbose:
-            print('Iter: %d, objective: %.4f, iter_norm %.4f,'
-                  ' iter_norm_normalized: %.4f' %
-                  (check[0], check[1], check[2], check[3]))
-
-        if np.abs(check[2]) < tol:
-            break
-
-    return_list = [thetas[-1]]
-    if return_history:
-        return_list.append(thetas)
-        return_list.append(checks)
-    if return_n_iter:
-        return_list.append(iter_)
-
-    return return_list
-
-
-def _gradient_poisson(X, theta,  n, A=None, rho=1, T=0):
-    n, d = X.shape
-    theta_new = np.zeros_like(theta)
-
-    def gradient(X, theta, r, selector, n, A=None, rho=1, T=0):
-        XTX = X[:, selector].T.dot(X[:, r])
-        EXK = X[:, selector].T.dot(np.exp(X[:, selector].dot(theta)))
-        if A is not None:
-            to_add = (rho*T/n)*(theta - A[r, selector])
-        else:
-            to_add = 0
-        return -(1/n)*(XTX - EXK + to_add)
-
-    for ix in range(theta.shape[0]):
-        selector = [i for i in range(d) if i != ix]
-        theta_new[ix, selector] = gradient(
-                                    X, theta[ix, selector], ix, selector, n,
-                                    A, rho, T)
-    return theta_new
-
-
-def _fit(X, alpha=1e-2, gamma=1, tol=1e-3, max_iter=1000, update_gamma=0.5,
-         verbose=0, return_history=True, compute_objective=True,
-         warm_start=None, return_n_iter=False, adjust_gamma=False, A=None,
-         T=0, rho=1):
-    n, d = X.shape
-    if warm_start is None:
-        theta = np.zeros((d, d))
-        np.fill_diagonal(theta, 0)
-    else:
-        theta = check_array(warm_start)
-
-    thetas = [theta]
-    theta_new = theta.copy()
-    checks = []
-    for iter_ in range(max_iter):
-        theta_old = thetas[-1]
-        grad = _gradient_poisson(X, theta,  n, A, rho, T)
-        while True:
-            theta_new = theta - gamma*grad
-            theta = soft_thresholding(theta_new, alpha*gamma)
-            thetas.append(theta)
-
-            loss_new = loss(X, theta)
-            loss_old = loss(X, theta_old)
-            # Line search
-            diff_theta2 = np.linalg.norm(theta_old - theta)**2
-            grad_diff = np.trace(grad.dot(theta_old - theta))
-            diff = loss_old - grad_diff + (diff_theta2/(2*gamma))
-            if loss_new < diff or np.isinf(loss_new) or np.isnan(loss_new):
-                gamma = update_gamma * gamma
-                theta = theta_old - gamma * grad
-                theta = soft_thresholding(theta, alpha*gamma)
-                loss_new = loss(X, theta)
-                diff = loss_old - grad_diff + (diff_theta2/(2*gamma))
-            else:
-                break
-        theta = (theta_new + theta_new.T)/2
-        thetas.append(theta)
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
+        if iter_ > 0:
             check = convergence(iter=iter_,
-                                obj=objective(X, theta, alpha),
+                                obj=objective_single_variable(X, theta, n, ix,
+                                                              selector, alpha),
                                 iter_norm=np.linalg.norm(thetas[-2]-thetas[-1]),
                                 iter_r_norm=(np.linalg.norm(thetas[-2] -
                                                             thetas[-1]) /
-                                             np.linalg.norm(thetas[-1])))
-        checks.append(check)
-        if verbose:
-            print('Iter: %d, objective: %.4f, iter_norm %.4f' %
-                  (check[0], check[1], check[2]))
+                                             np.linalg.norm(thetas[-2])))
+            checks.append(check)
+            # if adjust_gamma: # TODO multiply or divide
+            if verbose:
+                print('Iter: %d, objective: %.4f, iter_norm %.4f,'
+                      ' iter_norm_normalized: %.4f' %
+                      (check[0], check[1], check[2], check[3]))
 
-        if np.abs(check[2]) < tol:
-            break
+            if np.abs(check[2]) < tol:
+                break
 
     return_list = [thetas[-1]]
     if return_history:
@@ -206,13 +109,118 @@ def _fit(X, alpha=1e-2, gamma=1, tol=1e-3, max_iter=1000, update_gamma=0.5,
         return_list.append(iter_)
 
     return return_list
+
+
+# def _gradient_poisson(X, theta,  n, A=None, rho=1, T=0):
+#     n, d = X.shape
+#     theta_new = np.zeros_like(theta)
+#
+#     def gradient(X, theta, r, selector, n, A=None, rho=1, T=0):
+#         XTX = X[:, selector].T.dot(X[:, r])
+#         EXK = X[:, selector].T.dot(np.exp(X[:, selector].dot(theta)))
+#         return -(1/n)*(XTX - EXK)
+#
+#         # XTX = X[:, selector].T.dot(X[:, r])
+#         # EXK = X[:, selector].T.dot(np.exp(X[:, selector].dot(theta)))
+#         # # if A is not None:
+#         # #     to_add = (rho*T)*(theta - A[r, selector])
+#         # # else:
+#         # #     to_add = 0
+#         # return -(1/n)*(XTX - EXK)# + to_add
+#
+#     for ix in range(theta.shape[0]):
+#         selector = [i for i in range(d) if i != ix]
+#         theta_new[ix, selector] = gradient(
+#                                     X, theta[ix, selector], ix, selector, n,
+#                                     A, rho, T)
+#     np.fill_diagonal(theta_new, 0)
+#     #theta_new = (theta_new + theta_new.T)/2
+#     return theta_new
+#
+#
+# def loss(X, theta):
+#     n, d = X.shape
+#     objective = 0
+#     # if not np.all(theta == theta.T):
+#     #     return np.float('inf')
+#     for r in range(d):
+#         selector = [i for i in range(d) if i != r]
+#         a = loss_single_variable(X, theta[r, selector], n, r, selector)
+#         #print(a)
+#         objective += a
+#     return objective
+#
+#
+# def _fit(X, alpha=1e-2, gamma=1, tol=1e-3, max_iter=1000, update_gamma=0.5,
+#          verbose=0, return_history=True, compute_objective=True,
+#          warm_start=None, return_n_iter=False, adjust_gamma=True, A=None,
+#          T=0, rho=1):
+#     n, d = X.shape
+#     if warm_start is None:
+#         theta = np.zeros((d, d))
+#         np.fill_diagonal(theta, 0)
+#     else:
+#         theta = check_array(warm_start)
+#     thetas = [theta]
+#     theta_new = theta.copy()
+#     checks = []
+#     for iter_ in range(max_iter):
+#         theta_old = thetas[-1]
+#         grad = _gradient_poisson(X, theta,  n, A, rho, T)
+#         if adjust_gamma:
+#             while True:
+#                 theta_new = theta - gamma*grad
+#                 theta = soft_thresholding_od(theta_new, alpha*gamma)
+#                 #print(theta)
+#                 loss_new = loss(X, theta)
+#                 loss_old = loss(X, theta_old)
+#                 # Line search
+#                 diff_theta2 = np.linalg.norm(theta_old - theta)**2
+#                 grad_diff = np.trace(grad.dot(theta_old - theta))
+#                 diff = loss_old - grad_diff + (diff_theta2/(2*gamma))
+#                 if loss_new > diff or np.isinf(loss_new) or np.isnan(loss_new):
+#                     gamma = update_gamma * gamma
+#                     theta = theta_old - gamma * grad
+#                     theta = soft_thresholding_od(theta, alpha*gamma)
+#                     loss_new = loss(X, theta)
+#                     diff = loss_old - grad_diff + (diff_theta2/(2*gamma))
+#                 else:
+#                     break
+#         print(gamma)
+#         theta = (theta_new + theta_new.T)/2
+#         thetas.append(theta)
+#
+#         with warnings.catch_warnings():
+#             warnings.simplefilter("ignore")
+#             check = convergence(iter=iter_,
+#                                 obj=objective(X, theta, alpha),
+#                                 iter_norm=np.linalg.norm(thetas[-2]-thetas[-1]),
+#                                 iter_r_norm=(np.linalg.norm(thetas[-2] -
+#                                                             thetas[-1]) /
+#                                              np.linalg.norm(thetas[-1])))
+#         checks.append(check)
+#         if verbose:
+#             print('Iter: %d, objective: %.4f, iter_norm %.4f' %
+#                   (check[0], check[1], check[2]))
+#
+#         if np.abs(check[2]) < tol:
+#             break
+#
+#     return_list = [thetas[-1]]
+#     if return_history:
+#         return_list.append(thetas)
+#         return_list.append(checks)
+#     if return_n_iter:
+#         return_list.append(iter_)
+#
+#     return return_list
 
 
 class PoissonGraphicalModel(GLM_GM, BaseEstimator):
 
     def __init__(self, alpha=0.01, tol=1e-4, rtol=1e-4, reconstruction='union',
                  mode='coordinate_descent', max_iter=100, gamma=0.1,
-                 intercept=True,
+                 intercept=False,
                  verbose=False, return_history=True, return_n_iter=False,
                  compute_objective=True):
         super(PoissonGraphicalModel, self).__init__(
@@ -246,9 +254,7 @@ class PoissonGraphicalModel(GLM_GM, BaseEstimator):
             thetas_pred = []
             historys = []
             if self.intercept:
-                print(X.shape)
-                print(np.ones((X.shape[0],1)).shape)
-                X = np.hstack((X, np.ones((X.shape[0],1))))
+                X = np.hstack((X, np.ones((X.shape[0], 1))))
             for ix in range(X.shape[1]):
                 verbose = max(0, self.verbose-1)
                 res = fit_each_variable(X, ix, self.alpha, tol=self.tol,
