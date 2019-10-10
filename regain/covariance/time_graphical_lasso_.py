@@ -18,7 +18,7 @@ from regain.covariance.graphical_lasso_ import GraphicalLasso, logl
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
-from regain.utils import convergence, error_norm_time, is_pos_def
+from regain.utils import convergence, error_norm_time
 from regain.validation import check_norm_prox
 
 
@@ -461,7 +461,7 @@ class TimeGraphicalLasso(GraphicalLasso):
             X[y == cl].shape[0] * log_likelihood(S, K) for S, K, cl in zip(
                 test_cov, self.get_observed_precision(), self.classes_))
 
-        return -99999999 if res == -np.inf else res
+        return res
 
     def error_norm(
             self, comp_cov, norm='frobenius', scaling=True, squared=True):
@@ -498,31 +498,3 @@ class TimeGraphicalLasso(GraphicalLasso):
             self.covariance_, comp_cov, norm=norm, scaling=scaling,
             squared=squared)
 
-    def mahalanobis(self, observations):
-        """Computes the squared Mahalanobis distances of given observations.
-
-        Parameters
-        ----------
-        observations : array-like, shape = [n_observations, n_features]
-            The observations, the Mahalanobis distances of the which we
-            compute. Observations are assumed to be drawn from the same
-            distribution than the data used in fit.
-
-        Returns
-        -------
-        mahalanobis_distance : array, shape = [n_observations,]
-            Squared Mahalanobis distances of the observations.
-
-        """
-        if self.time_on_axis == 'last':
-            # put time as first dimension
-            observations = observations.transpose(2, 0, 1)
-        precision = self.get_observed_precision()
-        # compute mahalanobis distances
-        sum_ = 0.
-        for obs, loc in zip(observations, self.location_):
-            centered_obs = observations - self.location_
-            sum_ += np.sum(np.dot(centered_obs, precision) * centered_obs, 1)
-
-        mahalanobis_dist = sum_ / len(observations)
-        return mahalanobis_dist
