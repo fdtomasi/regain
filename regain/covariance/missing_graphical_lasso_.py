@@ -4,18 +4,11 @@ from __future__ import division
 import warnings
 
 import numpy as np
-from scipy import linalg
 from six.moves import range
-from sklearn.covariance import empirical_covariance
-from sklearn.utils.extmath import fast_logdet
-from sklearn.utils.validation import check_array
 
-from regain.norm import l1_od_norm
-from regain.prox import prox_logdet, soft_thresholding_od
-from regain.update_rules import update_rho
-from regain.utils import convergence
-from regain.covariance.graphical_lasso_ import GraphicalLasso, logl, objective
-from regain.covariance.graphical_lasso_ import init_precision, graphical_lasso
+from sklearn.utils.validation import check_X_y
+from regain.covariance.graphical_lasso_ import graphical_lasso
+from regain.covariance.graphical_lasso_ import GraphicalLasso, logl
 
 
 def compute_empirical_covariance(X, K, cs):
@@ -28,11 +21,12 @@ def compute_empirical_covariance(X, K, cs):
                 if np.isnan(X[i, v]) and np.isnan(X[i, s]):
                     nans = np.where(np.isnan(X[i, :]))[0]
                     xxm, yym = np.meshgrid(nans, nans)
-                    inv = np.linalg.pinv(K[xxm, yym])[np.where(nans==v)[0][0], np.where(nans==s)[0][0]]
+                    inv = np.linalg.pinv(K[xxm, yym])[
+                        np.where(nans == v)[0][0], np.where(nans == s)[0][0]]
                     emp_cov[i, v, s] = inv + cs[i, v]*cs[i, s]
                 else:
                     emp_cov[i, v, s] = aux[i, v]*aux[i, s]
-    emp_cov =  np.sum(emp_cov, axis=0)
+    emp_cov = np.sum(emp_cov, axis=0)
     return emp_cov/np.max(emp_cov)
 
 
@@ -45,7 +39,7 @@ def compute_cs(means, K, X):
         xxm1, yyo = np.meshgrid(obs, nans)
         KK = np.linalg.pinv(K[xxm, yym]).dot(K[xxm1, yyo])
         cs[i, nans] = means[nans] - KK.dot(X[i, obs].T - means[obs])
-    return cs/max(np.max(np.abs(cs)),1)
+    return cs/max(np.max(np.abs(cs)), 1)
 
 
 def compute_mean(X, cs):
@@ -120,10 +114,8 @@ def missing_graphical_lasso(
         old_logl = loglik
 
         cs = compute_cs(means, K, X)
-        #print(cs)
         means = compute_mean(X, cs)
         emp_cov = compute_empirical_covariance(X, K, cs)
-        #print(emp_cov)
         K, _ = graphical_lasso(emp_cov, alpha=alpha, rho=rho,
                                over_relax=over_relax, max_iter=max_iter,
                                verbose=max(0, int(verbose-1)),
@@ -237,15 +229,16 @@ class MissingGraphicalLasso(GraphicalLasso):
         y : (ignored)
 
         """
-        # Covariance does not make sense for a single feature
-        # X = check_array(
-        #     X, ensure_min_features=2, ensure_min_samples=2, estimator=self)
+        # X = check_X_y(
+        #     X, ensure_min_features=2, ensure_min_samples=2, estimator=self,
+        #     force_all_finite='allow-nan')
 
         self.precision_, self.covariance_, self.complete_data_matrix_, \
             self.n_iter_ = missing_graphical_lasso(
                 X, alpha=self.alpha, tol=self.tol, rtol=self.rtol,
-                max_iter=self.max_iter, over_relax=self.over_relax, rho=self.rho,
-                verbose=self.verbose, return_n_iter=True, return_history=False,
+                max_iter=self.max_iter, over_relax=self.over_relax,
+                rho=self.rho, verbose=self.verbose, return_n_iter=True,
+                return_history=False,
                 update_rho_options=self.update_rho_options,
                 compute_objective=self.compute_objective, init=self.init)
         return self

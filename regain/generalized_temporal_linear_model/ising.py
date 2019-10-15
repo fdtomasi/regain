@@ -496,6 +496,7 @@ def precision_similarity(precision, psi=None):
     from itertools import combinations
     distances = squareform(
         [l1_od_norm(t1 - t2) for t1, t2 in combinations(precision, 2)])
+    print(distances)
     distances /= np.max(distances)
     return 1 - distances
     #print(precision.shape)

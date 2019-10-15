@@ -60,7 +60,7 @@ def plot_roc_curves(true, preds, ax=None, fontsize=15):
 
 def plot_curve(
         true, predictions, mode='roc', ax=None, filename=None, fontsize=15,
-        colors=None, multiple_true=False):
+        colors=None, multiple=False):
     """Plot a validation curve.
 
     Parameters
@@ -80,7 +80,7 @@ def plot_curve(
     for c, (key, preds) in enumerate(predictions.items()):
         if len(preds) == 1:
             if multiple_true:
-                raise ValueError('Multiple true matrices and only one ''
+                raise ValueError('Multiple true matrices and only one '
                                  'prediction')
             true = (~np.isclose(true, 0, rtol=1e-7)).astype(int).ravel()
             preds_new = []
@@ -94,33 +94,33 @@ def plot_curve(
                 roc_auc = auc(fpr, tpr)
                 ax.plot(
                     fpr, tpr,
-                    label='%s %s (AUC = %0.2f)' % (mode.upper(), str(key), roc_auc),
+                    label='%s %s (AUC = %0.2f)' % (mode.upper(), str(key),
+                                                   roc_auc),
                     **kwargs)
             else:
                 roc_auc = auc(tpr, fpr)
                 ax.plot(
                     tpr, fpr,
-                    label='%s %s (AUC = %0.2f)' % (mode.upper(), str(key), roc_auc),
+                    label='%s %s (AUC = %0.2f)' % (mode.upper(), str(key),
+                                                   roc_auc),
                     **kwargs)
         else:
             tprs = []
             aucs = []
             mean_fpr = np.linspace(0, 1, 100)
 
-            if multiple_true:
+            if multiple:
                 true = [(~np.isclose(t, 0, rtol=1e-7)).astype(int).ravel()
                         for t in true]
             else:
                 true = (~np.isclose(true, 0, rtol=1e-7)).astype(int).ravel()
             preds = [p.ravel() for p in preds]
-_
+
             for i, p in enumerate(preds):
-                if multiple_true:
+                if multiple:
                     t = true[i]
                 else:
                     t = true
-                print(t.shape)
-                print(p.shape)
                 fpr, tpr, thresholds = curve_func(t, p)
                 tprs.append(interp(mean_fpr, fpr, tpr))
                 tprs[-1][0] = int(mode != 'roc')

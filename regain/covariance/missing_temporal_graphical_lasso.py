@@ -7,56 +7,24 @@ from scipy import linalg
 from six.moves import range
 from sklearn.covariance import empirical_covariance
 from sklearn.utils.extmath import fast_logdet
-from sklearn.utils.validation import check_array
+from sklearn.utils.validation import check_X_y
 
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding_od
 from regain.update_rules import update_rho
 from regain.utils import convergence
-from regain.covariance.graphical_lasso_ import GraphicalLasso, logl, objective
-from regain.covariance.graphical_lasso_ import init_precision, graphical_lasso
+from regain.covariance.missing_graphical_lasso_ import \
+        compute_empirical_covariance, compute_cs, compute_mean
+from regain.covariance.kernel_time_graphical_lasso_ import \
+                kernel_time_graphical_lasso, KernelTimeGraphicalLasso
+from regain.covariance.time_graphical_lasso_ import loss
 
 
-def compute_empirical_covariance(X, K, cs):
-    emp_cov = np.zeros((X.shape[0], K.shape[0], K.shape[0]))
-    aux = np.nan_to_num(np.copy(X))
-    aux += cs
-    for i in range(X.shape[0]):
-        for v in range(emp_cov.shape[1]):
-            for s in range(emp_cov.shape[1]):
-                if np.isnan(X[i, v]) and np.isnan(X[i, s]):
-                    nans = np.where(np.isnan(X[i, :]))[0]
-                    xxm, yym = np.meshgrid(nans, nans)
-                    inv = np.linalg.pinv(K[xxm, yym])[np.where(nans==v)[0][0], np.where(nans==s)[0][0]]
-                    emp_cov[i, v, s] = inv + cs[i, v]*cs[i, s]
-                else:
-                    emp_cov[i, v, s] = aux[i, v]*aux[i, s]
-    emp_cov = np.sum(emp_cov, axis=0)
-    return emp_cov/np.max(emp_cov)
-
-
-def compute_cs(means, K, X):
-    cs = np.zeros_like(X)
-    for i in range(X.shape[0]):
-        nans = np.where(np.isnan(X[i, :]))[0]
-        obs = np.where(np.logical_not(np.isnan(X[i, :])))[0]
-        xxm, yym = np.meshgrid(nans, nans)
-        xxm1, yyo = np.meshgrid(obs, nans)
-        KK = np.linalg.pinv(K[xxm, yym]).dot(K[xxm1, yyo])
-        cs[i, nans] = means[nans] - KK.dot(X[i, obs].T - means[obs])
-    return cs/max(np.max(np.abs(cs)), 1)
-
-
-def compute_mean(X, cs):
-    aux = np.nan_to_num(np.copy(X))
-    aux += cs
-    return np.sum(aux, axis=0)
-
-
-def missing_graphical_lasso(
-        X, alpha=0.01, rho=1, over_relax=1, max_iter=100, verbose=False,
+def missing_time_graphical_lasso(
+        X, alpha=0.01, rho=1, beta=1, kernel=None, psi='laplacian',
+        over_relax=1, max_iter=100, verbose=False,
         tol=1e-4, rtol=1e-4, return_history=False, return_n_iter=True,
-        update_rho_options=None, compute_objective=True, init='empirical'):
+        update_rho_options=None, compute_objective=True):
     r"""Missing Graphical lasso solver via EM algorithm.
 
     Solves the following problem:
@@ -110,36 +78,41 @@ def missing_graphical_lasso(
         for the primal and dual residual norms at each iteration.
 
     """
-    K = np.eye(X.shape[1])
-    means = np.zeros(X.shape[1])
+    n_times, n_samples, d = X.shape
+    K = np.zeros((n_times, d, d))
+    means = np.zeros((n_times, d))
 
     loglik = -np.inf
     checks = []
     for iter_ in range(max_iter):
         old_logl = loglik
 
-        cs = compute_cs(means, K, X)
-        #print(cs)
-        means = compute_mean(X, cs)
-        emp_cov = compute_empirical_covariance(X, K, cs)
-        #print(emp_cov)
-        K, _ = graphical_lasso(emp_cov, alpha=alpha, rho=rho,
-                               over_relax=over_relax, max_iter=max_iter,
-                               verbose=max(0, int(verbose-1)),
-                               tol=tol, rtol=rtol, return_history=False,
-                               return_n_iter=False,
-                               update_rho_options=update_rho_options,
-                               compute_objective=compute_objective,
-                               init=K)
-        loglik = logl(emp_cov, K)
+        cs = np.array([compute_cs(means[t, :], K[t, :, :], X[t, :, :])
+                       for t in range(n_times)])
+        means = np.array([compute_mean(X[t, :, :], cs[t, :, :])
+                          for t in range(n_times)])
+        emp_cov = np.array([
+                    compute_empirical_covariance(X[t, :, :], K[t, :, :],
+                                                 cs[t, :, :])
+                    for t in range(n_times)
+                    ])
+        K = kernel_time_graphical_lasso(
+                emp_cov, alpha=alpha, rho=rho, kernel=kernel,
+                max_iter=max_iter, verbose=max(0, verbose-1),
+                psi=psi, tol=tol, rtol=tol,
+                return_history=False, return_n_iter=True, mode='admm',
+                update_rho_options=None, compute_objective=False, stop_at=None,
+                stop_when=1e-4, init='empirical')[0]
+
+        loglik = loss(emp_cov, K)
         diff = old_logl - loglik
         checks.append(dict(iteration=iter_,
-                           log_likelihood=logl,
+                           log_likelihood=loglik,
                            difference=diff))
         if verbose:
             print("Iter %d: log-likelihood %.4f, difference: %.4f" % (
                     iter_, loglik, diff))
-        if np.abs(diff) < tol:
+        if iter_ > 1 and diff < tol:
             break
     else:
         warnings.warn("The Missing Graphical Lasso algorithm did not converge")
@@ -153,7 +126,7 @@ def missing_graphical_lasso(
     return return_list
 
 
-class MissingTimeGraphicalLasso(GraphicalLasso):
+class MissingTimeGraphicalLasso(KernelTimeGraphicalLasso):
     """Time-Varying Graphical Lasso with missing data.
 
     This method allows for graphical model selection in presence of missing
@@ -162,14 +135,20 @@ class MissingTimeGraphicalLasso(GraphicalLasso):
     Parameters
     ----------
     alpha : positive float, default 0.01
-        The regularization parameter: the higher alpha, the more
-        regularization, the sparser the inverse covariance.
+        Regularization parameter for precision matrix. The higher alpha,
+        the more regularization, the sparser the inverse covariance.
+
+    kernel : ndarray, default None
+        Normalised temporal kernel (1 on the diagonal),
+        with dimensions equal to the dimensionality of the data set.
+        If None, it is interpreted as an identity matrix, where there is no
+        constraint on the temporal behaviour of the precision matrices.
+
+    psi : {'laplacian', 'l1', 'l2', 'linf', 'node'}, default 'laplacian'
+        Type of norm to enforce for consecutive precision matrices in time.
 
     rho : positive float, default 1
         Augmented Lagrangian parameter.
-
-    over_relax : positive float, deafult 1
-        Over-relaxation parameter (typically between 1.0 and 1.8).
 
     tol : positive float, default 1e-4
         Absolute tolerance to declare convergence.
@@ -197,16 +176,16 @@ class MissingTimeGraphicalLasso(GraphicalLasso):
         Choose if compute the objective function during iterations
         (only useful if `verbose=True`).
 
-    mode : {'admm'}, default 'admm'
-        Minimisation algorithm. At the moment, only 'admm' is available,
-        so this is ignored.
+    init : {'empirical', 'zeros', ndarray}, default 'empirical'
+        How to initialise the inverse covariance matrix. Default is take
+        the empirical covariance and inverting it.
 
     Attributes
     ----------
-    covariance_ : array-like, shape (n_features, n_features)
+    covariance_ : array-like, shape (n_times, n_features, n_features)
         Estimated covariance matrix
 
-    precision_ : array-like, shape (n_features, n_features)
+    precision_ : array-like, shape (n_times, n_features, n_features)
         Estimated pseudo inverse matrix.
 
     n_iter_ : int
@@ -215,35 +194,43 @@ class MissingTimeGraphicalLasso(GraphicalLasso):
     """
 
     def __init__(
-            self, alpha=0.01, rho=1., over_relax=1., max_iter=100, mode='admm',
-            tol=1e-4, rtol=1e-4, verbose=False, assume_centered=False,
-            update_rho_options=None, compute_objective=True, init='empirical'):
-        super(MissingGraphicalLasso, self).__init__(
+            self, alpha=0.01, beta=1, kernel=None, rho=1., tol=1e-4, rtol=1e-4,
+            psi='laplacian', max_iter=100, verbose=False,
+            return_history=False,
+            update_rho_options=None, compute_objective=True, ker_param=1,
+            max_iter_ext=100):
+        super(MissingTimeGraphicalLasso, self).__init__(
             alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
-            assume_centered=assume_centered, mode=mode, rho=rho,
-            rtol=rtol, over_relax=over_relax,
+            assume_centered=False, rho=rho,
+            rtol=rtol, beta=beta, kernel=kernel, psi=psi,
             update_rho_options=update_rho_options,
-            compute_objective=compute_objective, init=init)
+            compute_objective=compute_objective)
 
-    def fit(self, X, y=None):
-        """Fit the GraphicalLasso model to X.
+    def fit(self, X, y):
+        """Fit the MissingTimeGraphicalLasso model to X.
 
         Parameters
         ----------
         X : ndarray, shape (n_samples, n_features)
             Data from which to compute the covariance estimate
-        y : (ignored)
+        y : ndarray, shape (n_samples, 1)
+            Division in times.
 
         """
-        # Covariance does not make sense for a single feature
-        # X = check_array(
-        #     X, ensure_min_features=2, ensure_min_samples=2, estimator=self)
-
+        # TODO: checks
+        X, y = check_X_y(
+                X, y, accept_sparse=False, dtype=np.float64, order="C",
+                ensure_min_features=2, estimator=self,
+                force_all_finite='allow-nan')
+        self.classes_, n_samples = np.unique(y, return_counts=True)
+        X = np.array([X[y == cl] for cl in self.classes_])
         self.precision_, self.covariance_, self.complete_data_matrix_, \
-            self.n_iter_ = missing_graphical_lasso(
-                X, alpha=self.alpha, tol=self.tol, rtol=self.rtol,
-                max_iter=self.max_iter, over_relax=self.over_relax, rho=self.rho,
-                verbose=self.verbose, return_n_iter=True, return_history=False,
+            self.n_iter_ = missing_time_graphical_lasso(
+                X, alpha=self.alpha, tol=self.tol,
+                max_iter=self.max_iter,
+                verbose=self.verbose, rho=self.rho,
+                rtol=self.rtol, beta=self.beta, kernel=self.kernel,
+                psi=self.psi,
                 update_rho_options=self.update_rho_options,
-                compute_objective=self.compute_objective, init=self.init)
+                compute_objective=self.compute_objective)
         return self

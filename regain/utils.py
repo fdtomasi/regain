@@ -492,7 +492,7 @@ def signed_structure_error(
     return dictionary
 
 
-def mean_structure_error(true, preds):
+def mean_structure_error(true, preds, multiple=True):
     """
     Mean and std error in structure between a precision matrix and more
     predicted matrices.
@@ -516,10 +516,16 @@ def mean_structure_error(true, preds):
         nlr=[], dor=[], mcc=[],
         balanced_accuracy=[],
         average_precision=[])
-    for p in preds:
-        res = structure_error(true, p, no_diagonal=True)
-        for k, v in res.items():
-            dictionary[k].append(v)
+    if multiple:
+        for t, p in zip(true, preds):
+            res = structure_error(t, p, no_diagonal=True)
+            for k, v in res.items():
+                dictionary[k].append(v)
+    else:
+        for p in preds:
+            res = structure_error(true, p, no_diagonal=True)
+            for k, v in res.items():
+                dictionary[k].append(v)
     res = {}
     for k, l in dictionary.items():
         res[k] = str(np.mean(l))+"+/-"+str(np.std(l))

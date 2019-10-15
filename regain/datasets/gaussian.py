@@ -315,7 +315,8 @@ def make_ell(n_dim_obs=100, n_dim_lat=10):
     for i in range(n_dim_lat):
         percentage = int(n_dim_obs * 0.99)
         indices = np.random.randint(0, high=n_dim_obs, size=percentage)
-        K_HO[i, indices] = np.random.rand(percentage) * 0.12
+        K_HO[i, indices] = np.random.rand(percentage) * \
+            (0.98/(n_dim_lat+n_dim_obs)/2)
 
     K_HO /= np.sum(K_HO, axis=1)[:, None] / 2.
     L = K_HO.T.dot(K_HO)

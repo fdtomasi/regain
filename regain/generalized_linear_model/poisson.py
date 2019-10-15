@@ -138,17 +138,17 @@ def fit_each_variable(X, ix, alpha=1e-2, gamma=1, tol=1e-3,
 #     return theta_new
 #
 #
-# def loss(X, theta):
-#     n, d = X.shape
-#     objective = 0
-#     # if not np.all(theta == theta.T):
-#     #     return np.float('inf')
-#     for r in range(d):
-#         selector = [i for i in range(d) if i != r]
-#         a = loss_single_variable(X, theta[r, selector], n, r, selector)
-#         #print(a)
-#         objective += a
-#     return objective
+def loss(X, theta):
+    n, d = X.shape
+    objective = 0
+    # if not np.all(theta == theta.T):
+    #     return np.float('inf')
+    for r in range(d):
+        selector = [i for i in range(d) if i != r]
+        a = loss_single_variable(X, theta[r, selector], n, r, selector)
+        #print(a)
+        objective += a
+    return objective
 #
 #
 # def _fit(X, alpha=1e-2, gamma=1, tol=1e-3, max_iter=1000, update_gamma=0.5,
