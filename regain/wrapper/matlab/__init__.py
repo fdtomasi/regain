@@ -24,20 +24,20 @@ def check_matlab_engine(verbose=False):
     #     close_engine = False
 
 
-def lvglasso(emp_cov, alpha, tau, verbose=False):
+def lvglasso(emp_cov, alpha, tau, rho=1, verbose=False):
     global matlab_engine
     check_matlab_engine(verbose=verbose)
 
     lvglasso_path = os.path.join(
-        os.path.abspath(os.path.dirname(__file__)), 'lvglasso')
+        os.path.abspath(os.path.dirname(__file__)), 'lvglasso_')
     matlab_engine.addpath(lvglasso_path, nargout=0)
 
     if emp_cov.ndim > 2:
         result = matlab_engine.LVGLASSO(
-            matlab.double(emp_cov.tolist()), float(alpha), float(tau))
+            matlab.double(emp_cov.tolist()), float(alpha), float(tau), float(rho))
     else:
         result = matlab_engine.LVGLASSO_single_time(
-            matlab.double(emp_cov.tolist()), float(alpha), float(tau))
+            matlab.double(emp_cov.tolist()), float(alpha), float(tau), float(rho))
     return result
 
 
