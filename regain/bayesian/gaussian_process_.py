@@ -8,9 +8,9 @@ def sample(K, nu=1, p=3):
     ----------
     K : ndarray, shape (n, n)
         Temporal kernel between n time points.
-    nu : type
+    nu : int
         Number of replicates.
-    p : type
+    p : int
         Number of time series to generate.
 
     Returns

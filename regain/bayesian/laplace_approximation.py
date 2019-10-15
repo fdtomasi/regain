@@ -64,11 +64,3 @@ def second_derivative_h_version2(D, K, delta=5):
             H[ei, ej] = H[ej, ei] = (A * B.T).sum()
             # H2[ei, ej] = H2[ej, ei] = (A2 * B2.T).sum()
     return - H * (delta - 2) / 2.
-
-
-# if __name__ == '__main__':
-#     K = make_sparse_spd_matrix(4)
-#     D = make_spd_matrix(4)
-#
-#     assert np.allclose(first_derivative_h(D, K),
-#                        first_derivative_h_version2(D, K))

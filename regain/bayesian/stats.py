@@ -1,6 +1,6 @@
 """Statistical functions."""
 import numpy as np
-from scipy.stats import multivariate_normal, norm
+from scipy.stats import multivariate_normal
 from sklearn.utils.extmath import squared_norm
 
 
