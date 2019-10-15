@@ -7,27 +7,11 @@ from scipy import stats
 from regain.bayesian.stats import lognstat
 
 
-def GWP_construct(umat, L, uut=None):
-    """Build the sample from the GWP.
-
-    Optimised with uut:
-    uut = np.array([u.dot(u.T) for u in umat.T])
-    """
-    if uut is None:
-        v, p, n = umat.shape
-        M = np.zeros((p, p, n))
-        for i in range(n):
-            for j in range(v):
-                Lu = L.dot(umat[j, :, i])
-                LuuL = Lu[:, None].dot(Lu[None, :])
-                M[..., i] += LuuL
-
-    else:
-        M = np.array([np.linalg.multi_dot((L, uu_i, L.T))
-                      for uu_i in uut]).transpose()
-
-    # assert np.allclose(N, M)
-    return M
+def GWP_construct(umat, L):
+    """Build the sample from the GWP."""
+    M = np.matmul(
+        np.matmul(L, np.matmul(umat.T, umat.transpose(2, 0, 1))), L.T)
+    return M.T
 
 
 def elliptical_slice(
@@ -82,7 +66,7 @@ def elliptical_slice(
     if start_logp is None:
         # cur_log_like = log_lik_frob(S, xx.V, variance)
         # cur_log_like = time_multivariate_normal_logpdf(initial_theta, xx.V)
-        start_logp = likelihood(xx.V)
+        start_logp = likelihood(current_state.V)
     current_logp = start_logp
 
     # Set up the ellipse and the slice threshold
@@ -115,15 +99,10 @@ def elliptical_slice(
 
     # Slice sampling loop
     update_state = True
-    # LLt = L.dot(L.T)
     for iteration_ in range(max_iter):
         # Compute xx for proposed angle difference and check if on the slice
         proposal = np.real(initial_theta * np.cos(phi) + nu * np.sin(phi))
-        uut = np.array([u.dot(u.T) for u in proposal.T])
-        V = GWP_construct(proposal, L, uut=uut)
-        # cur_log_like = log_lik_frob(S, V, variance)
-        # cur_log_like = stats.wishart.logpdf(V, nu, LLt)
-        # cur_log_like = time_multivariate_normal_logpdf(xx_proposal, V)
+        V = GWP_construct(proposal, L)
         current_logp = likelihood(V)
 
         if current_logp > hh:
@@ -136,11 +115,8 @@ def elliptical_slice(
         elif phi < 0:
             phi_min = phi
         else:
-            # error = True
-            # break
             raise RuntimeError(
-                'BUG DETECTED: Shrunk to current position '
-                'and still not acceptable.')
+                'BUG: Shrunk to current position and still not acceptable.')
 
         # Propose new angle difference
         phi = np.random.uniform() * (phi_max - phi_min) + phi_min
@@ -149,7 +125,6 @@ def elliptical_slice(
 
     if update_state:
         # update with new point
-        current_state['uut'] = uut
         current_state['xx'] = proposal
         current_state['V'] = V
         current_state['log_likelihood'] = current_logp
@@ -180,8 +155,14 @@ def sample_hyper_kernel(
         proposal, loc=0, s=sigma, scale=np.exp(mu))
 
     # Criterion to choose whether to accept the proposed sample or not
-    logp_post = partial(
-        posterior_iw, ustack=ustack, kern=kern, prior_distr=prior_distr)
+    def logp_post(inverse_width):
+        K = kern(inverse_width=inverse_width)
+        logp = stats.multivariate_normal(
+            ustack.mean(axis=0), cov=K,
+            allow_singular=True).logpdf(ustack).sum()
+        logp_prior = prior_distr.logpdf(inverse_width)
+        return logp + logp_prior
+
     logp_diff = logp_post(proposal) - logp_post(initial_theta)
 
     mu, sigma = lognstat(proposal, var_proposal)
@@ -197,49 +178,7 @@ def sample_hyper_kernel(
     return sample, accept
 
 
-def posterior_iw(inverse_width, ustack, kern, prior_distr):
-    """Posterior probability of inverse_width.
-
-    Parameters
-    ----------
-    inverse_width : float
-        Kernel parameter.
-    ustack : ndarray, shape (v*p, n)
-        Sample tensor.
-    kern : function
-        Function for computing the kernel.
-    prior_distr : rv_frozen
-        Prior for inverse_width.
-
-    Returns
-    -------
-    logprob
-        Posterior probability.
-    """
-    K = kern(inverse_width=inverse_width)
-
-    # k_inverse = linalg.pinvh(K)
-    # v, p, _ = u.shape
-    # F = np.tensordot(u, u, axes=([1, 0], [1, 0]))
-    # logpugl = v * p * fast_logdet(k_inverse) - np.sum(F * k_inverse)
-    # logpugl -= v * p * n * np.log(2 * np.pi)
-    # logpugl /= 2.
-
-    # creates a (vp * n) matrix, then compute centered empirical covariance
-    # ustack = np.vstack(u)
-    # logpugl = ustack.shape[0] * log_likelihood(
-    #     empirical_covariance(ustack), k_inverse)
-    # this is equivalent to
-    logp = stats.multivariate_normal(
-        ustack.mean(axis=0), cov=K, allow_singular=True).logpdf(ustack).sum()
-    # with centering the samples (but there is no need for k_inverse)
-
-    logp_prior = prior_distr.logpdf(inverse_width)
-    return logp + logp_prior
-
-
-def sample_ell(
-        Ltau, var_proposal, umat, prior_distr, uut=None, likelihood=None):
+def sample_ell(Ltau, var_proposal, umat, prior_distr, likelihood=None):
     """Metropolis-Hastings for sampling the posterior of the elements in L.
 
     Use a spherical normal distribution as the proposal.
@@ -256,8 +195,7 @@ def sample_ell(
         v, p, _ = umat.shape
         ell = np.zeros((p, p))
         ell[np.tril_indices_from(ell)] = ell_lower
-        D = GWP_construct(umat, ell, uut=uut)
-        # logpS = log_lik_frob(S, D, var_err)
+        D = GWP_construct(umat, ell)
         logp = likelihood(D)
         return logp
 
@@ -271,11 +209,10 @@ def sample_ell(
 
 
 def _sample_ell_comp(Ltaug, i, sigma_proposal, prior_distr, likelihood=None):
-    """Sample a single element for L."""
-    if likelihood is None:
-        raise ValueError(
-            "`likelihood` parameter is None, should be a "
-            "function to evaluate likelihood")
+    """Sample a single element for L.
+    
+    likelihood: function to compute likelihood of ell.
+    """
     # Propose a sample
     Ltau = Ltaug[i]
     Last = np.random.normal(Ltau, sigma_proposal)
@@ -283,9 +220,9 @@ def _sample_ell_comp(Ltaug, i, sigma_proposal, prior_distr, likelihood=None):
     Lastg[i] = Last
 
     # Criterion to choose whether to accept the proposed sample or not
-    logp_post = partial(
-        logp_ell_posterior, i=i, prior_distr=prior_distr,
-        likelihood=likelihood)
+    def logp_post(ell_lower):
+        prior = prior_distr.logpdf(ell_lower[i])
+        return likelihood(ell_lower) + prior
 
     logp_diff = logp_post(Lastg) - logp_post(Ltaug)
     logq_ast_tau = stats.norm.logpdf(Last, Ltau, sigma_proposal)
@@ -295,36 +232,5 @@ def _sample_ell_comp(Ltaug, i, sigma_proposal, prior_distr, likelihood=None):
     # Now we decide whether to accept zast or use the previous value
     log_acceptance_proba = min(0, logp_diff + logq_diff)
     accept = np.log(np.random.uniform()) < log_acceptance_proba
-
     sample = Last if accept else Ltau
     return sample
-
-
-def logp_ell_posterior(ell_lower, i, prior_distr, likelihood):
-    """Log-probability of the posterior of L.
-
-    Parameters
-    ----------
-    ell_lower : ndarray
-        Lower Cholesky.
-    i : type
-        Index.
-    prior_distr : rv_frozen
-    likelihood : function
-        Likelihood of ell_lower.
-
-    Returns
-    -------
-    type
-        Description of returned object.
-
-    """
-    # v, p, n = u.shape
-    # ell = np.zeros((p, p))
-    # ell[np.tril_indices_from(ell)] = ell_lower
-    # D = GWP_construct(u, ell, uut=uut)
-    # # logpS = log_lik_frob(S, D, var_err)
-    # logp = likelihood(D)
-    logp = likelihood(ell_lower)
-    prior = prior_distr.logpdf(ell_lower[i])
-    return logp + prior

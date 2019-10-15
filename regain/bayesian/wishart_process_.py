@@ -9,6 +9,7 @@ from sklearn.datasets.base import Bunch
 from sklearn.gaussian_process import kernels
 from sklearn.metrics.pairwise import rbf_kernel
 from sklearn.utils.validation import check_X_y
+from tqdm import trange
 
 from regain.bayesian.gaussian_process_ import sample as sample_gp
 from regain.bayesian.sampling import (GWP_construct, elliptical_slice,
@@ -45,14 +46,10 @@ def fit(
         L = np.tril(np.random.randn(p, p))
     else:
         learn_ell = False
+
     # Cholesky factor for the scale matrix V = LL^{\top}
-
-    D = GWP_construct(np.real(umat), L)
-
-    # The current_state is formed for the ESS procedure
-    current_state = Bunch(
-        xx=umat, V=D, L=L, uut=np.array([u.dot(u.T) for u in umat.T]),
-        log_likelihood=likelihood(D))
+    V = GWP_construct(np.real(umat), L)
+    current_state = Bunch(xx=umat, V=V, L=L, log_likelihood=likelihood(V))
 
     samples_u = []  # np.zeros((uvec.size, niters));
     loglikes = np.zeros(n_iter)
@@ -64,10 +61,11 @@ def fit(
         L__[np.tril_indices_from(L__)] = Ltau
         Ls = []
 
-    for i in range(n_iter):
+    pbar = trange(n_iter, disable=not verbose)
+    for i in pbar:
         # We first do ESS to obtain a new sample for u
-        if verbose and i % 10 == 0:
-            print(i, "%.3e" % current_state.log_likelihood, end='\r')
+        pbar.set_description(
+            'loss: {:.3e}'.format(current_state.log_likelihood))
 
         current_state = elliptical_slice(
             current_state, umat, likelihood=likelihood)
@@ -76,15 +74,6 @@ def fit(
         theta, accept = sample_hyper_kernel(
             theta, var_prop, np.vstack(current_state.xx), kern,
             prior_distr=prior_theta_kernel)
-
-        # We now do MH for sampling the elements in the matrix L
-        # spherical normal prior, element uncorrelated
-        if learn_ell:
-            Ltau = sample_ell(
-                Ltau, var_Lprop, current_state.xx, prior_distr=prior_ell,
-                uut=current_state.uut, likelihood=likelihood)
-            L__[np.tril_indices_from(L__)] = Ltau
-            ff['L'] = L__
 
         if accept:
             # new kernel parameter, recompute
@@ -96,7 +85,20 @@ def fit(
                 except Exception:
                     K += 1e-8 * np.eye(K.shape[0])
 
-            uut = np.array([u.dot(u.T) for u in umat.T])
+            current_state['xx'] = umat
+            current_state['log_likelihood'] = likelihood(
+                GWP_construct(umat, current_state['L']))
+
+        # We now do MH for sampling the elements in the matrix L
+        # spherical normal prior, element uncorrelated
+        if learn_ell:
+            Ltau = sample_ell(
+                Ltau, var_Lprop, current_state.xx, prior_distr=prior_ell,
+                likelihood=likelihood)
+            L__[np.tril_indices_from(L__)] = Ltau
+            current_state['L'] = L__
+            current_state['log_likelihood'] = likelihood(
+                GWP_construct(current_state['xx'], current_state['L']))
 
         samples_u.append(current_state.xx)
         loglikes[i] = current_state.log_likelihood
@@ -105,7 +107,7 @@ def fit(
             Ls.append(L__)
     return_list = [samples_u, loglikes, lps]
     if learn_ell:
-        return_list += Ls
+        return_list.append(Ls)
     return return_list
 
 
@@ -249,6 +251,7 @@ class WishartProcess(TimeGraphicalLasso):
             kern=partial(kern, self.classes_[:, None]), nu=self.nu_,
             p=n_dimensions, n_iter=self.n_iter, verbose=self.verbose,
             likelihood=self.likelihood, L=L)
+
         if self.learn_ell:
             samples_u, loglikes, lps, Ls = out
         else:
