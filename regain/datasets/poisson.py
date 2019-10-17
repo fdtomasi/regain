@@ -33,12 +33,8 @@ def poisson_theta_generator(n_dim_obs=10, T=1, mode='l1',
     else:
         graph = nx.random_graphs.gnm_random_graph(n=n_dim_obs, m=degree)
     graph = nx.adjacency_matrix(graph).todense()
-    print(graph)
     weights = np.ones((n_dim_obs, n_dim_obs))#np.random.normal(0.1, 0.01, size=(n_dim_obs, n_dim_obs))
-    print(graph.shape)
-    print(weights.shape)
     graphs = [np.multiply(graph, weights)]
-    print(graphs[-1])
     for t in range(1, T):
         if mode == 'l2':
             raise ValueError("Still not implemented")
@@ -73,13 +69,9 @@ def poisson_sampler(theta, variances=None, n_samples=100, _type='LPGM',
         sigma = _lambda * theta
         ltri_sigma = sigma[np.tril_indices(sigma.shape[0], -1)]
         aux = np.array([_lambda]*sigma.shape[0]).reshape(sigma.shape[0])
-        print()
-        print(aux.shape)
         Y_lambda = np.array(list(aux) + ltri_sigma.ravel().tolist()[0])
-        print(Y_lambda.shape)
 
         Y = np.array([np.random.poisson(l, n_samples) for l in Y_lambda]).T
-        print(Y.shape)
         X = Y.dot(A.T)
 
         # add noise
