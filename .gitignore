@@ -111,3 +111,5 @@ ENV/
 \.DS_Store
 
 notebooks/graph-clustering/temp-plot\.html
+
+notebooks/octave-workspace

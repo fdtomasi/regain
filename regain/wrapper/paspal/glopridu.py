@@ -1,4 +1,9 @@
-"""PASPAL implementation (in Python, based on the original MATLAB)."""
+"""PASPAL implementation (in Python, based on the original MATLAB).
+
+Copyright 2009-2010 Sofia Mosci and Lorenzo Rosasco (Matlab implementation)
+Copyright 2018 Federico Tomasi (Python implementation)
+
+"""
 from __future__ import print_function, division
 
 from itertools import combinations
@@ -7,13 +12,13 @@ import numpy as np
 from scipy import linalg
 
 
-def glo_prox(w0, tau, blocks, weights, lamda0, tol, max_iter, verbose=0):
+def glo_prox(
+        w0, tau, blocks, weights, lamda0, tol, max_iter, verbose=0, beta=0.5,
+        sigma=0.1, s_beta=1, epsilon=1e-3):
     """Proximity operator of the group lasso with overlap penalty.
 
     First, identifies "active" blocks, then apply Bersekas's
     projected Newton method on the dual space.
-
-    Copyright 2009-2010 Sofia Mosci and Lorenzo Rosasco
 
     """
     d = w0.size
@@ -26,16 +31,11 @@ def glo_prox(w0, tau, blocks, weights, lamda0, tol, max_iter, verbose=0):
     #     weights(g) = tau^2; %not weighted
     # end
     # ------------NEW
-    weights = (weights * tau) ** 2
+    weights = (weights * tau)**2
 
     # if lamda is not initialized, then initialize it to 0
-    if lamda0 == []:
+    if not lamda0:
         lamda0 = np.zeros(B)
-
-    beta = .5
-    sigma = .1
-    s_beta = 1
-    epsilon = 0.001
 
     lamda_tot = np.zeros(B)
 
@@ -61,6 +61,7 @@ def glo_prox(w0, tau, blocks, weights, lamda0, tol, max_iter, verbose=0):
 
     # Bersekas constrained Newton method
     i_null = 0
+    iteration_ = 0
     for iteration_ in range(max_iter):
         if verbose > 1:
             print(".... interior, it %d out of %d" % (iteration_, max_iter))
@@ -68,7 +69,8 @@ def glo_prox(w0, tau, blocks, weights, lamda0, tol, max_iter, verbose=0):
         s = I.dot(lamda_prev)
         denominator = 1. / (1 + s)
         grad = weights - I.T.dot((w0 * denominator)**2)
-        epsk = min(epsilon, np.linalg.norm(lamda - np.maximum(0, lamda - grad)))
+        epsk = min(
+            epsilon, np.linalg.norm(lamda - np.maximum(0, lamda - grad)))
         tmp = 2 * w0**2 * denominator**3
 
         I_inactive = np.where(np.logical_or(grad <= 0, lamda > epsk))[0]
@@ -87,10 +89,11 @@ def glo_prox(w0, tau, blocks, weights, lamda0, tol, max_iter, verbose=0):
         blocks_inactive_set = [set(blocks[c]) for c in I_inactive]
         B_inactive[np.triu_indices_from(B_inactive, 1)] = [
             tmp[list(x.intersection(y))].sum()
-            for x, y in combinations(blocks_inactive_set, 2)]
+            for x, y in combinations(blocks_inactive_set, 2)
+        ]
         B_inactive += B_inactive.T
-        B_inactive.flat[::n_inactive + 1] = [
-            tmp[list(x)].sum() for x in blocks_inactive_set]
+        B_inactive.flat[::n_inactive +
+                        1] = [tmp[list(x)].sum() for x in blocks_inactive_set]
 
         # print("time 1: ", time.time() - tic)
         # tic = time.time()
@@ -138,7 +141,8 @@ def glo_prox(w0, tau, blocks, weights, lamda0, tol, max_iter, verbose=0):
             s_m = I.dot(lamda_m)
             fdiff = (w0**2).T.dot(I.dot(lamda_m - lamda) / ((1+s_m)*(1+s))) \
                 + np.sum(weights * (lamda - lamda_m))
-            x_active = grad[I_active].T.dot(lamda[I_active]-lamda_m[I_active])
+            x_active = grad[I_active].T.dot(
+                lamda[I_active] - lamda_m[I_active])
             test = fdiff < sigma * (step * x_inactive + x_active)
 
         lamda = lamda_m.copy()
@@ -149,15 +153,15 @@ def glo_prox(w0, tau, blocks, weights, lamda0, tol, max_iter, verbose=0):
     s = I.dot(lamda)
     w = w0 * (1 - 1. / (1 + s))
     lamda_tot[to_be_projected] = lamda
-
+    
     return w, iteration_, lamda_tot
 
 
 def glopridu_algorithm(
-    X, Y, blocks, tau, weights=None, smooth_par=0, beta0=None, lamda0=None,
-    sigma0=None, max_iter_ext=1e4, max_iter_int=100, tol_ext=1e-6,
+        X, Y, blocks, tau, weights=None, smooth_par=0, beta0=None, lamda0=None,
+        sigma0=None, max_iter_ext=1e4, max_iter_int=100, tol_ext=1e-6,
         tol_int=1e-4, verbose=0):
-    """Blabla."""
+    """Add Doc."""
     n, d = X.shape
     blocks = np.array(blocks)
 
@@ -169,7 +173,7 @@ def glopridu_algorithm(
 
     # if sigma is not specified in input, set  it to as a/n
     if not sigma0:
-        sigma0 = np.linalg.norm(X, 2) ** 2 / n  # step size for smooth_par=0
+        sigma0 = np.linalg.norm(X, 2)**2 / n  # step size for smooth_par=0
 
     # if weights are not specified in input, set them to 1
     if not weights:
@@ -189,18 +193,22 @@ def glopridu_algorithm(
     if not beta0:
         beta0 = np.zeros(d)
 
-    beta = beta0.copy()  # initialization for iterate n_iter-1
-    h = beta0.copy()  # initialization for combination of the previous 2 iterates (iteratations n_iter_1 and n_iter-2)
-    t = 1  # initialization for the adaptive parameter used to combine the previous 2 iterates when building h
+    # initialization for iterate n_iter-1
+    beta = beta0.copy()
+    # initialization for combination of the previous 2 iterates
+    # (iteratations n_iter_1 and n_iter-2)
+    h = beta0.copy()
+    # initialization for the adaptive parameter used to combine
+    # the previous 2 iterates when building h
+    t = 1
     # precomputes X*beta and X*h to avoid computing them twice
     Xb = X.dot(beta)
     Xh = Xb.copy()
-    if lamda0 is None:
-        lamda0 = np.zeros(len(blocks))
+    lamda = np.zeros(len(blocks)) if lamda0 is None else lamda0
 
     # initialization for the dual vector in computing the projection
-    lamda_prev = lamda0.copy()
-
+    # lamda_prev = lamda.copy()
+    n_iter = 0
     for n_iter in range(1, int(max_iter_ext) + 1):
         if verbose > 0:
             print("Iteration %d/%d" % (n_iter - 1, max_iter_ext))
@@ -209,17 +217,17 @@ def glopridu_algorithm(
         Xb_prev = Xb.copy()
 
         # computes the gradient step
-        #beta_noproj = h.*(1-mu_s) + XT*(Y-Xh);
+        # beta_noproj = h.*(1-mu_s) + XT*(Y-Xh);
 
         # compute the proximity operator with tolerance depending on k
-        beta, q, lamda = glo_prox(
-            h * (1. - mu_s) + XT.dot(Y - Xh), tau_s, blocks, weights,
-            lamda_prev, tol_int * n_iter**(-3. / 2), max_iter_int,
+        w0 = h * (1. - mu_s) + XT.dot(Y - Xh)
+        beta, _, lamda = glo_prox(
+            w0=w0, tau=tau_s, blocks=blocks, weights=weights, lamda0=lamda,
+            tol=tol_int * n_iter**(-3. / 2), max_iter=max_iter_int,
             verbose=verbose)
 
-        lamda_prev = lamda.copy()
+        # lamda_prev = lamda.copy()
         Xb = X.dot(beta)
-
         t_new = .5 * (1 + np.sqrt(1 + 4 * t * t))
 
         # combination of the 2 previous iterates
