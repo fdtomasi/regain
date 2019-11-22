@@ -130,7 +130,6 @@ def _fit_time_poisson_model(X, alpha=0.01, rho=1, kernel=None,
     ]
     for iteration_ in range(max_iter):
         # update K
-        print('ci sono')
         A = np.zeros_like(K)
         for m in range(1, n_times):
             A[:-m] += Z_M[m][0] - U_M[m][0]

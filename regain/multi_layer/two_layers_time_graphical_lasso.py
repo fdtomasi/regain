@@ -136,8 +136,10 @@ def two_layers_time_graphical_lasso(
                 break
     else:
         warnings.warn("The optimization of EM did not converged.")
-
-    return Ks, likelihoods
+    returns = [Ks, likelihoods]
+    if return_n_iter:
+        returns.append(iter_)
+    return returns
 
 
 class TwoLayersTimeGraphicalLasso(TwoLayersGraphicalLasso,
@@ -195,7 +197,7 @@ class TwoLayersTimeGraphicalLasso(TwoLayersGraphicalLasso,
                             for cl in self.classes_])
                             # self.covariance_, self.n_latent_, self.objective_, \
                             #     self.history_, self.iters_
-        self.precision_, _ = two_layers_time_graphical_lasso(
+        self.precision_, _, self.n_iter_ = two_layers_time_graphical_lasso(
                 emp_cov, h=self.h, alpha=self.alpha, M=self.mask, mu=self.mu,
                 eta=self.eta, beta=self.beta, psi=self.psi, kernel=self.kernel,
                 # n_samples=self.n_samples,

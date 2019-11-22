@@ -230,7 +230,7 @@ class MissingTimeGraphicalLasso(KernelTimeGraphicalLasso):
                 max_iter=self.max_iter,
                 verbose=self.verbose, rho=self.rho,
                 rtol=self.rtol, beta=self.beta, kernel=self.kernel,
-                psi=self.psi,
+                psi=self.psi, return_n_iter=True,
                 update_rho_options=self.update_rho_options,
                 compute_objective=self.compute_objective)
         return self
