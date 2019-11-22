@@ -112,6 +112,4 @@ ENV/
 
 notebooks/graph-clustering/temp-plot\.html
 
-*.ipynb
-
-notebooks/
+notebooks/octave-workspace
