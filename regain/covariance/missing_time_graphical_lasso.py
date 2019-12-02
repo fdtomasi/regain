@@ -3,25 +3,19 @@ from __future__ import division
 import warnings
 
 import numpy as np
-from scipy import linalg
 from six.moves import range
-from sklearn.covariance import empirical_covariance
-from sklearn.utils.extmath import fast_logdet
+
 from sklearn.utils.validation import check_X_y
 
-from regain.norm import l1_od_norm
-from regain.prox import prox_logdet, soft_thresholding_od
-from regain.update_rules import update_rho
-from regain.utils import convergence
 from regain.covariance.missing_graphical_lasso_ import \
-        compute_empirical_covariance, compute_cs, compute_mean
+        _compute_empirical_covariance, _compute_cs, _compute_mean
 from regain.covariance.kernel_time_graphical_lasso_ import \
                 kernel_time_graphical_lasso, KernelTimeGraphicalLasso
 from regain.covariance.time_graphical_lasso_ import loss
 
 
 def missing_time_graphical_lasso(
-        X, alpha=0.01, rho=1, beta=1, kernel=None, psi='laplacian',
+        X, alpha=0.01, rho=1,  kernel=None, psi='laplacian',
         over_relax=1, max_iter=100, verbose=False,
         tol=1e-4, rtol=1e-4, return_history=False, return_n_iter=True,
         update_rho_options=None, compute_objective=True):
@@ -41,6 +35,11 @@ def missing_time_graphical_lasso(
         Regularisation parameter.
     rho : float, optional
         Augmented Lagrangian parameter.
+    kernel: array-like shape(n_times, n_times)
+        The kernel to use to enforce similatiries among times.
+    psi: string, defulat='laplacian'
+        Type of consistency between networks. Option are "l1", "l2", "linf",
+        "laplacian", "l12"
     over_relax : float, optional
         Over-relaxation parameter (typically between 1.0 and 1.8).
     max_iter : int, optional
@@ -60,9 +59,6 @@ def missing_time_graphical_lasso(
         See regain.update_rules.update_rho function for more information.
     compute_objective : bool, default True
         Choose to compute the objective value.
-    init : {'empirical', 'zeros', ndarray}, default 'empirical'
-        How to initialise the inverse covariance matrix. Default is take
-        the empirical covariance and inverting it.
 
     Returns
     -------
@@ -87,15 +83,16 @@ def missing_time_graphical_lasso(
     for iter_ in range(max_iter):
         old_logl = loglik
 
-        cs = np.array([compute_cs(means[t, :], K[t, :, :], X[t, :, :])
+        cs = np.array([_compute_cs(means[t, :], K[t, :, :], X[t, :, :])
                        for t in range(n_times)])
-        means = np.array([compute_mean(X[t, :, :], cs[t, :, :])
+        means = np.array([_compute_mean(X[t, :, :], cs[t, :, :])
                           for t in range(n_times)])
         emp_cov = np.array([
-                    compute_empirical_covariance(X[t, :, :], K[t, :, :],
-                                                 cs[t, :, :])
+                    _compute_empirical_covariance(X[t, :, :], K[t, :, :],
+                                                  cs[t, :, :])
                     for t in range(n_times)
                     ])
+        print(emp_cov)
         K = kernel_time_graphical_lasso(
                 emp_cov, alpha=alpha, rho=rho, kernel=kernel,
                 max_iter=max_iter, verbose=max(0, verbose-1),
@@ -163,22 +160,12 @@ class MissingTimeGraphicalLasso(KernelTimeGraphicalLasso):
         If verbose is True, the objective function, rnorm and snorm are
         printed at each iteration.
 
-    assume_centered : boolean, default False
-        If True, data are not centered before computation.
-        Useful when working with data whose mean is almost, but not exactly
-        zero.
-        If False, data are centered before computation.
-
     update_rho_options : dict, default None
         Options for the update of rho. See `update_rho` function for details.
 
     compute_objective : boolean, default True
         Choose if compute the objective function during iterations
         (only useful if `verbose=True`).
-
-    init : {'empirical', 'zeros', ndarray}, default 'empirical'
-        How to initialise the inverse covariance matrix. Default is take
-        the empirical covariance and inverting it.
 
     Attributes
     ----------
@@ -194,7 +181,7 @@ class MissingTimeGraphicalLasso(KernelTimeGraphicalLasso):
     """
 
     def __init__(
-            self, alpha=0.01, beta=1, kernel=None, rho=1., tol=1e-4, rtol=1e-4,
+            self, alpha=0.01, kernel=None, rho=1., tol=1e-4, rtol=1e-4,
             psi='laplacian', max_iter=100, verbose=False,
             return_history=False,
             update_rho_options=None, compute_objective=True, ker_param=1,
@@ -202,7 +189,7 @@ class MissingTimeGraphicalLasso(KernelTimeGraphicalLasso):
         super(MissingTimeGraphicalLasso, self).__init__(
             alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
             assume_centered=False, rho=rho,
-            rtol=rtol, beta=beta, kernel=kernel, psi=psi,
+            rtol=rtol, kernel=kernel, psi=psi,
             update_rho_options=update_rho_options,
             compute_objective=compute_objective)
 
@@ -217,7 +204,6 @@ class MissingTimeGraphicalLasso(KernelTimeGraphicalLasso):
             Division in times.
 
         """
-        # TODO: checks
         X, y = check_X_y(
                 X, y, accept_sparse=False, dtype=np.float64, order="C",
                 ensure_min_features=2, estimator=self,

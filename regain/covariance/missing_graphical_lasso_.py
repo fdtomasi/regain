@@ -6,12 +6,13 @@ import warnings
 import numpy as np
 from six.moves import range
 
-from sklearn.utils.validation import check_X_y
+from sklearn.utils.validation import check_X
+
 from regain.covariance.graphical_lasso_ import graphical_lasso
 from regain.covariance.graphical_lasso_ import GraphicalLasso, logl
 
 
-def compute_empirical_covariance(X, K, cs):
+def _compute_empirical_covariance(X, K, cs):
     emp_cov = np.zeros((X.shape[0], K.shape[0], K.shape[0]))
     aux = np.nan_to_num(np.copy(X))
     aux += cs
@@ -30,7 +31,7 @@ def compute_empirical_covariance(X, K, cs):
     return emp_cov/np.max(emp_cov)
 
 
-def compute_cs(means, K, X):
+def _compute_cs(means, K, X):
     cs = np.zeros_like(X)
     for i in range(X.shape[0]):
         nans = np.where(np.isnan(X[i, :]))[0]
@@ -42,7 +43,7 @@ def compute_cs(means, K, X):
     return cs/max(np.max(np.abs(cs)), 1)
 
 
-def compute_mean(X, cs):
+def _compute_mean(X, cs):
     aux = np.nan_to_num(np.copy(X))
     aux += cs
     return np.sum(aux, axis=0)
@@ -105,7 +106,7 @@ def missing_graphical_lasso(
         for the primal and dual residual norms at each iteration.
 
     """
-    K = np.eye(X.shape[1])
+    K = np.zeros((X.shape[1], X.shape[1]))
     means = np.zeros(X.shape[1])
 
     loglik = -np.inf
@@ -113,13 +114,13 @@ def missing_graphical_lasso(
     for iter_ in range(max_iter):
         old_logl = loglik
 
-        cs = compute_cs(means, K, X)
-        means = compute_mean(X, cs)
-        emp_cov = compute_empirical_covariance(X, K, cs)
+        cs = _compute_cs(means, K, X)
+        means = _compute_mean(X, cs)
+        emp_cov = _compute_empirical_covariance(X, K, cs)
         K, _ = graphical_lasso(emp_cov, alpha=alpha, rho=rho,
                                over_relax=over_relax, max_iter=max_iter,
                                verbose=max(0, int(verbose-1)),
-                               tol=tol, rtol=rtol, return_history=False,
+                               tol=tol*10, rtol=rtol*10, return_history=False,
                                return_n_iter=False,
                                update_rho_options=update_rho_options,
                                compute_objective=compute_objective,
@@ -191,10 +192,6 @@ class MissingGraphicalLasso(GraphicalLasso):
         Choose if compute the objective function during iterations
         (only useful if `verbose=True`).
 
-    mode : {'admm'}, default 'admm'
-        Minimisation algorithm. At the moment, only 'admm' is available,
-        so this is ignored.
-
     Attributes
     ----------
     covariance_ : array-like, shape (n_features, n_features)
@@ -209,12 +206,12 @@ class MissingGraphicalLasso(GraphicalLasso):
     """
 
     def __init__(
-            self, alpha=0.01, rho=1., over_relax=1., max_iter=100, mode='admm',
+            self, alpha=0.01, rho=1., over_relax=1., max_iter=100,
             tol=1e-4, rtol=1e-4, verbose=False, assume_centered=False,
             update_rho_options=None, compute_objective=True, init='empirical'):
         super(MissingGraphicalLasso, self).__init__(
             alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
-            assume_centered=assume_centered, mode=mode, rho=rho,
+            assume_centered=assume_centered, mode='admm', rho=rho,
             rtol=rtol, over_relax=over_relax,
             update_rho_options=update_rho_options,
             compute_objective=compute_objective, init=init)
@@ -229,10 +226,10 @@ class MissingGraphicalLasso(GraphicalLasso):
         y : (ignored)
 
         """
-        # X = check_X_y(
-        #     X, ensure_min_features=2, ensure_min_samples=2, estimator=self,
-        #     force_all_finite='allow-nan')
-
+        X, y = check_X(
+                X, y, accept_sparse=False, dtype=np.float64, order="C",
+                ensure_min_features=2, estimator=self,
+                force_all_finite='allow-nan')
         self.precision_, self.covariance_, self.complete_data_matrix_, \
             self.n_iter_ = missing_graphical_lasso(
                 X, alpha=self.alpha, tol=self.tol, rtol=self.rtol,
