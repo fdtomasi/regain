@@ -52,16 +52,6 @@ def _gaussian_case(
         normalize_starting_matrices=False, degree=2, epsilon=1e-2,
         keep_sparsity=False, proportional=False, **kwargs):
     modes = dict(
-        # evolving=make_l2l2,
-        # fixed=make_l2,
-        # fixedl2=make_l2,
-        # fixedl1=make_l1,
-        # yuan=generate_dataset_yuan,
-        # l1l2=generate_dataset_l1l2,
-        # norm=make_l2l2_norm,
-        # l1l1=generate_dataset_l1l1,
-
-        # the previous are deprecated
         my=data_Meinshausen_Yuan,
         mys=data_Meinshausen_Yuan_sparse_latent,
         sin=make_sin,

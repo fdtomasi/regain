@@ -227,7 +227,8 @@ class GraphicalModelStabilitySelection(GridSearchCV):
         estimator = self.estimator
 
         if self.sampling_size is None:
-            self.sampling_size = min(10*np.sqrt(X.shape[0]), X.shape[0]-10)
+            self.sampling_size = int(min(10*np.sqrt(X.shape[0]),
+                                         X.shape[0]-10))
             self.cv = StratifiedShuffleSplit(train_size=self.sampling_size,
                                              n_splits=self.n_repetitions)
         if y is not None:
@@ -342,6 +343,7 @@ class GraphicalModelStabilitySelection(GridSearchCV):
             else:
                 self.best_index_ = results["rank_test_%s" %
                                            refit_metric].argmin()
+                print(self.best_index_)
                 self.best_score_ = results["mean_test_%s" %
                                            refit_metric][self.best_index_]
             self.best_params_ = results["params"][self.best_index_]

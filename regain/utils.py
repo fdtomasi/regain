@@ -452,9 +452,7 @@ def structure_error(
     true[true != 0] = 1
     pred[pred != 0] = 2
     res = true + pred
-    # from collections import Counter
-    # c = Counter(res.flat)
-    # tn, fn, fp, tp = c[0], c[1], c[2], c[3]
+
     TN = np.count_nonzero((res == 0).astype(float)) - tn_to_remove
     FN = np.count_nonzero((res == 1).astype(float))
     FP = np.count_nonzero((res == 2).astype(float))
@@ -524,8 +522,10 @@ def signed_structure_error(
     true = true.copy()
     pred = pred.copy()
     if true.ndim > 2:
-        y_true = np.sign(np.array(flatten([squareform(x, checks=None) for x in true])))
-        y_pred = np.sign(np.array(flatten([squareform(x, checks=None) for x in pred])))
+        y_true = np.sign(np.array(flatten([squareform(x, checks=None)
+                                           for x in true])))
+        y_pred = np.sign(np.array(flatten([squareform(x, checks=None)
+                                           for x in pred])))
     else:
         y_true = np.sign(squareform(true, checks=None))
         y_pred = np.sign(squareform(pred, checks=None))
@@ -545,7 +545,7 @@ def signed_structure_error(
 
     dictionary = dict(
         precision=precision, recall=recall, f1=f1,
-        balanced_accuracy=balanced_accuracy,mcc=mcc)
+        balanced_accuracy=balanced_accuracy, mcc=mcc)
     return dictionary
 
 
@@ -566,7 +566,6 @@ def mean_structure_error(true, preds, multiple=True):
     """
     dictionary = dict(
         tp=[], tn=[], fp=[], fn=[], precision=[], recall=[], f1=[],
-<<<<<<< HEAD
         accuracy=[], false_omission_rate=[],
         fdr=[], npv=[],
         prevalence=[], miss_rate=[], fall_out=[],
@@ -584,15 +583,6 @@ def mean_structure_error(true, preds, multiple=True):
             res = structure_error(true, p, no_diagonal=True)
             for k, v in res.items():
                 dictionary[k].append(v)
-=======
-        accuracy=[], false_omission_rate=[], fdr=[], npv=[], prevalence=[],
-        miss_rate=[], fall_out=[], specificity=[], plr=[], nlr=[], dor=[],
-        balanced_accuracy=[], average_precision=[])
-    for p in preds:
-        res = structure_error(true, p, no_diagonal=True)
-        for k, v in res.items():
-            dictionary[k].append(v)
->>>>>>> develop
     res = {}
     for k, l in dictionary.items():
         res[k] = str(np.mean(l)) + "+/-" + str(np.std(l))
