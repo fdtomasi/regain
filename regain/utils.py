@@ -1,3 +1,33 @@
+# BSD 3-Clause License
+
+# Copyright (c) 2017, Federico T.
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+
+# * Neither the name of the copyright holder nor the names of its
+#   contributors may be used to endorse or promote products derived from
+#   this software without specific prior written permission.
+
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 """Utils for REGAIN package."""
 from __future__ import division
 
@@ -7,7 +37,6 @@ import logging
 import os
 import sys
 import warnings
-# from collections import namedtuple
 from contextlib import contextmanager
 
 import numpy as np
@@ -17,6 +46,35 @@ from scipy import stats
 from scipy.spatial.distance import squareform
 from six.moves import cPickle as pkl
 from sklearn.metrics import average_precision_score, matthews_corrcoef
+
+
+def display_topics(
+        H, W, feature_names, documents, n_top_words, n_top_documents,
+        print_docs=True):
+    """Display topics of LDA."""
+    topics = []
+    for topic_idx, topic in enumerate(H):
+        topics.append(
+            " ".join(
+                [
+                    feature_names[i] + " (%.3f)" % topic[i]
+                    for i in topic.argsort()[:-n_top_words - 1:-1]
+                ]))
+
+        print("Topic %d: %s" % (topic_idx, topics[-1]))
+        top_doc_indices = np.argsort(W[:, topic_idx])[::-1][:n_top_documents]
+        if print_docs:
+            for i, doc_index in enumerate(top_doc_indices):
+                print("doc %d: %s" % (doc_index, documents[doc_index]))
+    return topics
+
+
+def logentropy_normalize(X):
+    """Log-entropy normalisation."""
+    P = X / X.values.sum(axis=0, keepdims=True)
+    E = 1 + (P * np.log(P)).fillna(0).values.sum(
+        axis=0, keepdims=True) / np.log1p(X.shape[0])
+    return E * np.log1p(X)
 
 
 def top_n_indexes(arr, n):
@@ -197,7 +255,6 @@ def upper_to_full(a):
 
 def compose(*functions):
     """Compose two or more functions."""
-
     def compose2(f, g):
         return lambda x: f(g(x))
 
@@ -509,6 +566,7 @@ def mean_structure_error(true, preds, multiple=True):
     """
     dictionary = dict(
         tp=[], tn=[], fp=[], fn=[], precision=[], recall=[], f1=[],
+<<<<<<< HEAD
         accuracy=[], false_omission_rate=[],
         fdr=[], npv=[],
         prevalence=[], miss_rate=[], fall_out=[],
@@ -526,9 +584,18 @@ def mean_structure_error(true, preds, multiple=True):
             res = structure_error(true, p, no_diagonal=True)
             for k, v in res.items():
                 dictionary[k].append(v)
+=======
+        accuracy=[], false_omission_rate=[], fdr=[], npv=[], prevalence=[],
+        miss_rate=[], fall_out=[], specificity=[], plr=[], nlr=[], dor=[],
+        balanced_accuracy=[], average_precision=[])
+    for p in preds:
+        res = structure_error(true, p, no_diagonal=True)
+        for k, v in res.items():
+            dictionary[k].append(v)
+>>>>>>> develop
     res = {}
     for k, l in dictionary.items():
-        res[k] = str(np.mean(l))+"+/-"+str(np.std(l))
+        res[k] = str(np.mean(l)) + "+/-" + str(np.std(l))
     return res
 
 
