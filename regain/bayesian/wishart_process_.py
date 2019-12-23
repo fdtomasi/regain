@@ -187,7 +187,7 @@ def predict(t_test, t_train, u_map, L_map, kern, inverse_width_map):
     return GWP_construct(u_test, L_map)
 
 
-def kernel(X, Y=None, var=None, inverse_width=None, normalised=False):
+def _rbf_kernel(X, Y=None, var=None, inverse_width=None, normalised=False):
     gamma = 0.5 * inverse_width
     k = var * rbf_kernel(X, Y=Y, gamma=gamma)
     if normalised:
@@ -195,7 +195,7 @@ def kernel(X, Y=None, var=None, inverse_width=None, normalised=False):
     return k
 
 
-def periodic_kernel(X, Y=None, inverse_width=1):
+def _periodic_kernel(X, Y=None, inverse_width=1):
     return kernels.ExpSineSquared(length_scale=inverse_width)(X, Y=Y)
 
 
@@ -258,9 +258,9 @@ class WishartProcess(TimeGraphicalLasso):
             for i, cl in enumerate(self.classes_)
         ]
         if self.kernel is None or self.kernel.lower() == 'rbf':
-            kern = partial(kernel, var=1)
+            kern = partial(_rbf_kernel, var=1)
         else:
-            kern = periodic_kernel
+            kern = _periodic_kernel
 
         self.likelihood = partial(t_mvn_logpdf, X_center)
         self.nu_ = 1

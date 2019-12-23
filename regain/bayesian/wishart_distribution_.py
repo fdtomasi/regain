@@ -27,7 +27,6 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-from __future__ import division
 
 import numpy as np
 from scipy import linalg, stats
@@ -41,7 +40,6 @@ import statsmodels.sandbox.distributions.mv_normal as mvd
 
 class WishartDistribution(BaseEstimator):
     """Wishart distribution."""
-
     def __init__(self, nu, S):
         self.nu = nu
         self.S = S
@@ -86,7 +84,6 @@ class WishartDistribution(BaseEstimator):
 
 class InverseWishartDistribution(WishartDistribution):
     """Inverse Wishart (IW) distribution."""
-
     def __init__(self, nu, S):
         super(InverseWishartDistribution, self).__init__(nu=nu, S=S)
 
@@ -144,7 +141,6 @@ class NormalInverseWishartDistribution(InverseWishartDistribution):
     ----------
     Murphy's "A probabilistic approach", pag 133.
     """
-
     def __init__(self, mu, kappa, nu, S):
         super(NormalInverseWishartDistribution, self).__init__(nu=nu, S=S)
         self.mu = mu
@@ -156,13 +152,18 @@ class NormalInverseWishartDistribution(InverseWishartDistribution):
         Sigma is a sample from the InverseWishartDistribution.
         mu is a sample from the multivariate_normal.
         """
-        iw_samples = super(NormalInverseWishartDistribution, self).sample(
-            n_samples=n_samples)
+        iw_samples = super(NormalInverseWishartDistribution,
+                           self).sample(n_samples=n_samples)
         if n_samples == 1:
-            mu = np.random.multivariate_normal(self.mu, iw_samples / self.kappa)
+            mu = np.random.multivariate_normal(
+                self.mu, iw_samples / self.kappa)
             return (mu, iw_samples)
-        return [(np.random.multivariate_normal(self.mu, Sigma / self.kappa),
-                 Sigma) for Sigma in iw_samples]
+        return [
+            (
+                np.random.multivariate_normal(self.mu,
+                                              Sigma / self.kappa), Sigma)
+            for Sigma in iw_samples
+        ]
 
     def log_likelihood(self, mu, X):
         """Equivalent to likelihood of Normal times InverseWishart."""
@@ -200,8 +201,7 @@ class NormalInverseWishartDistribution(InverseWishartDistribution):
         # marginal_mu = stats.t(
         #     df=df, loc=self.mu, scale=self.S / (self.kappa * df))
         marginal_mu = mvd.MVT(
-            df=df, mean=self.mu.ravel(),
-            sigma=self.S / (self.kappa * df))
+            df=df, mean=self.mu.ravel(), sigma=self.S / (self.kappa * df))
         marginal_sigma = InverseWishartDistribution(nu=self.nu, S=self.S)
         return (marginal_mu, marginal_sigma)
 
@@ -259,11 +259,11 @@ def main():
 
     z = prior.posterior(X)
 
-    print x
-    print z
-    print np.linalg.norm(z.mode[1] - Sigma)
-    print np.linalg.norm(z.marginal_mode - Sigma)
-    print np.linalg.norm(z.marginal_mean - Sigma)
+    print(x)
+    print(z)
+    print(np.linalg.norm(z.mode[1] - Sigma))
+    print(np.linalg.norm(z.marginal_mode - Sigma))
+    print(np.linalg.norm(z.marginal_mean - Sigma))
 
 
 if __name__ == '__main__':
