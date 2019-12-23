@@ -37,6 +37,7 @@ from sklearn.utils.deprecation import deprecated
 
 
 def plot_roc_curves(true, preds, ax=None, fontsize=15):
+    """Plot ROC curves using true and pred arrays."""
     matplotlib.rcParams.update({'font.size': fontsize})
     tprs = []
     aucs = []

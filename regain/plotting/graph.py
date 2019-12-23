@@ -62,6 +62,7 @@ def plot_graph_with_latent_variables(
 
 
 def plot_meinshausen_yuan(locations, theta, figsize=(10, 10), file=None):
+    """Plot graph with latent variables."""
     plt.figure(figsize=figsize)
     plt.plot(np.array(locations)[:, 0], np.array(locations)[:, 1], 'ro')
     nz = np.nonzero(theta)

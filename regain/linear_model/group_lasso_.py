@@ -140,12 +140,10 @@ def group_lasso(
         if history[1] < history[3] and history[2] < history[4]:
             break
 
-    return z, history if return_history else z
+    return z, hist if return_history else z
 
 
 def objective(A, b, alpha, groups, x, z):
-    # obj = 0
-    # for i, group in enumerate(p):
-    #     obj = obj + np.linalg.norm(z[group])
-    penalty = np.sum([np.linalg.norm(z[g]) for g in groups])
+    """Group lasso objective function."""
+    penalty = sum(np.linalg.norm(z[g]) for g in groups)
     return .5 * np.sum((A.dot(x) - b)**2) + alpha * penalty
