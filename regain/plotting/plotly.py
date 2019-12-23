@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 =======
 # BSD 3-Clause License
 
-# Copyright (c) 2017, Federico T.
+# Copyright (c) 2019, regain authors
 # All rights reserved.
 
 # Redistribution and use in source and binary forms, with or without

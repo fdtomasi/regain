@@ -1,3 +1,32 @@
+# BSD 3-Clause License
+
+# Copyright (c) 2019, regain authors
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+
+# * Neither the name of the copyright holder nor the names of its
+#   contributors may be used to endorse or promote products derived from
+#   this software without specific prior written permission.
+
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import warnings
 import time
 import matplotlib
@@ -56,42 +85,42 @@ def global_instability(estimators):
 
 
 def graphlet_instability(estimators):
-        from netanalytics.graphlets import GCD, graphlet_degree_vectors
-        import networkx as nx
-        n = len(estimators)
-        precisions = [estimator.get_precision() for estimator in estimators]
+    from netanalytics.graphlets import GCD, graphlet_degree_vectors
+    import networkx as nx
+    n = len(estimators)
+    precisions = [estimator.get_precision() for estimator in estimators]
 
-        if precisions[0].ndim == 2:
-            gdvs = []
-            for p in precisions:
-                g = nx.from_numpy_array(p-np.diag(np.diag(p)))
-                gdvs.append(graphlet_degree_vectors(list(g.nodes),
-                                                    list(g.edges),
-                                                    graphlet_size=4))
-            distances = []
-            for i in range(len(gdvs)):
-                for j in range(i+1, len(gdvs)):
-                    distances.append(GCD(gdvs[i], gdvs[j])[1])
-        else:
-            n_times = precisions[0].shape[0]
-            gdvs = []
-            for p in precisions:
-                times = []
+    if precisions[0].ndim == 2:
+        gdvs = []
+        for p in precisions:
+            g = nx.from_numpy_array(p-np.diag(np.diag(p)))
+            gdvs.append(graphlet_degree_vectors(list(g.nodes),
+                                                list(g.edges),
+                                                graphlet_size=4))
+        distances = []
+        for i in range(len(gdvs)):
+            for j in range(i+1, len(gdvs)):
+                distances.append(GCD(gdvs[i], gdvs[j])[1])
+    else:
+        n_times = precisions[0].shape[0]
+        gdvs = []
+        for p in precisions:
+            times = []
+            for t in range(n_times):
+                g = nx.from_numpy_array(p[t]-np.diag(np.diag(p[t])))
+                times.append(graphlet_degree_vectors(list(g.nodes),
+                                                     list(g.edges),
+                                                     graphlet_size=4))
+            gdvs.append(times)
+
+        distances = []
+        for i in range(len(gdvs)):
+            for j in range(i+1, len(gdvs)):
+                distance = 0
                 for t in range(n_times):
-                    g = nx.from_numpy_array(p[t]-np.diag(np.diag(p[t])))
-                    times.append(graphlet_degree_vectors(list(g.nodes),
-                                                         list(g.edges),
-                                                         graphlet_size=4))
-                gdvs.append(times)
-
-            distances = []
-            for i in range(len(gdvs)):
-                for j in range(i+1, len(gdvs)):
-                    distance = 0
-                    for t in range(n_times):
-                        distance += GCD(gdvs[i][t], gdvs[j][t])[1]
-                    distances.append(distance/n_times)
-        return 2/(n*(n-1))*np.sum(distances)
+                    distance += GCD(gdvs[i][t], gdvs[j][t])[1]
+                distances.append(distance/n_times)
+    return 2/(n*(n-1))*np.sum(distances)
 
 
 def upper_bound(estimators):

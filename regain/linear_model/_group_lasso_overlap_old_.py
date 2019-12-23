@@ -1,4 +1,36 @@
+# BSD 3-Clause License
+
+# Copyright (c) 2019, regain authors
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+
+# * Neither the name of the copyright holder nor the names of its
+#   contributors may be used to endorse or promote products derived from
+#   this software without specific prior written permission.
+
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import numpy as np
+
+from .group_lasso_overlap_ import objective
+
 
 def group_lasso_feat_split(A, b, lamda=1.0, ni=2, rho=1.0, alpha=1.0):
     # % group_lasso_feat_split  Solve group lasso problem via ADMM feature splitting
@@ -33,10 +65,10 @@ def group_lasso_feat_split(A, b, lamda=1.0, ni=2, rho=1.0, alpha=1.0):
     # t_start = tic;
     # Global constants and defaults
     #
-    QUIET    = 0;
-    MAX_ITER = 100;
-    RELTOL  = 1e-2;
-    ABSTOL   = 1e-4;
+    QUIET = 0
+    MAX_ITER = 100
+    RELTOL = 1e-2
+    ABSTOL = 1e-4
 
     m, n = A.shape
 
@@ -73,7 +105,8 @@ def group_lasso_feat_split(A, b, lamda=1.0, ni=2, rho=1.0, alpha=1.0):
         # % x-update (to be done in parallel)
         for i in range(N):
             Ai = A[:, i * ni:(i + 1) * ni]
-            xx = x_update(Ai, Aixi[:, i] + z - Axbar - u, lamda / rho, Vis[i], Dis[i])
+            xx = x_update(
+                Ai, Aixi[:, i] + z - Axbar - u, lamda / rho, Vis[i], Dis[i])
             x[:, i] = xx
             Aixi[:, i] = Ai.dot(x[:, i])
 
@@ -82,7 +115,7 @@ def group_lasso_feat_split(A, b, lamda=1.0, ni=2, rho=1.0, alpha=1.0):
         Axbar = 1. / N * A.dot(x.ravel())
 
         Axbar_hat = alpha * Axbar + (1 - alpha) * zold
-        z = (b + rho*(Axbar_hat + u))/(N+rho);
+        z = (b + rho * (Axbar_hat + u)) / (N + rho)
 
         # % u-update
         u = u + Axbar_hat - z
@@ -91,22 +124,25 @@ def group_lasso_feat_split(A, b, lamda=1.0, ni=2, rho=1.0, alpha=1.0):
         s = 0
         q = 0
         zsold = zs
-        zs = z.reshape(-1,1).dot(np.ones((1, N)))
-        zs += Aixi - Axbar.reshape(-1,1).dot(np.ones((1, N)))
+        zs = z.reshape(-1, 1).dot(np.ones((1, N)))
+        zs += Aixi - Axbar.reshape(-1, 1).dot(np.ones((1, N)))
         for i in range(N):
             # % dual residual norm square
-            s = s + np.linalg.norm(-rho * Ats[i].dot((zs[:,i] - zsold[:,i])))**2
+            s = s + np.linalg.norm(
+                -rho * Ats[i].dot((zs[:, i] - zsold[:, i])))**2
             # % dual residual epsilon
-            q = q + np.linalg.norm(rho*Ats[i].dot(u))**2;
+            q = q + np.linalg.norm(rho * Ats[i].dot(u))**2
 
         # % diagnostics, reporting, termination checks
         history = []
-        history.append(objective(A, b, lamda, N, x, z))
-        history.append(np.sqrt(N)*np.linalg.norm(z - Axbar))
+        history.append(objective(A, b, lamda, x, z))
+        history.append(np.sqrt(N) * np.linalg.norm(z - Axbar))
         history.append(np.sqrt(s))
 
-        history.append(np.sqrt(n)*ABSTOL + RELTOL*max(np.linalg.norm(Aixi,'fro'), np.linalg.norm(-zs, 'fro')))
-        history.append(np.sqrt(n)*ABSTOL + RELTOL*np.sqrt(q))
+        history.append(
+            np.sqrt(n) * ABSTOL + RELTOL *
+            max(np.linalg.norm(Aixi, 'fro'), np.linalg.norm(-zs, 'fro')))
+        history.append(np.sqrt(n) * ABSTOL + RELTOL * np.sqrt(q))
 
         hist.append(history)
         if history[1] < history[3] and history[2] < history[4]:
@@ -114,20 +150,17 @@ def group_lasso_feat_split(A, b, lamda=1.0, ni=2, rho=1.0, alpha=1.0):
 
     return x
 
-def objective(A, b, alpha, N, x, z):
-    return .5 * np.sum((N * z - b)**2) + alpha * np.sum(np.linalg.norm(x))
 
 def x_update(A, b, kappa, V, D):
-    m, n = A.shape
+    _, n = A.shape
     q = A.T.dot(b)
 
-    if (np.linalg.norm(q) <= kappa):
-        x = np.zeros(n)
-    else:
-        # % bisection on t
+    x = np.zeros(n)
+    if np.linalg.norm(q) > kappa:
+        # bisection on t
         lower = 0
         upper = 1e10
-        for i in range(100):
+        for _ in range(100):
             t = (upper + lower) / 2.
 
             x = V.dot(V.T.dot(q) / (D + t))
@@ -135,6 +168,6 @@ def x_update(A, b, kappa, V, D):
                 upper = t
             else:
                 lower = t
-            if (upper - lower <= 1e-6):
+            if upper - lower <= 1e-6:
                 break
     return x
