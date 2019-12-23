@@ -161,7 +161,7 @@ def genRandInv(size, low=0.3, upper=0.6, portion=0.2):
     return S
 
 
-def _make_ticc(
+def make_ticc(
         num_blocks=5, n_dim_obs=5, n_dim_lat=0, sparsity_inv_matrix=0.5,
         rand_seed=None, **kwargs):
     if n_dim_lat != 0:
@@ -242,7 +242,7 @@ def make_ticc_dataset(
     precisions = {}
     covs = {}
     for i, cluster in enumerate(clusters):
-        precisions[cluster] = _make_ticc(
+        precisions[cluster] = make_ticc(
             rand_seed=i, num_blocks=w_size, n_dim_obs=n_dim,
             n_dim_lat=n_dim_lat, sparsity_inv_matrix=sparsity_inv_matrix,
             **kwargs)
