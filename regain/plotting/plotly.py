@@ -1,8 +1,40 @@
+<<<<<<< HEAD
 import matplotlib.pyplot as plt
+=======
+# BSD 3-Clause License
+
+# Copyright (c) 2017, Federico T.
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+
+# * Neither the name of the copyright holder nor the names of its
+#   contributors may be used to endorse or promote products derived from
+#   this software without specific prior written permission.
+
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+>>>>>>> develop
 import networkx as nx
 import numpy as np
 import plotly.graph_objs as go
-import plotly.offline as py
 import seaborn as sns
 
 
@@ -12,7 +44,7 @@ def _set_ref(x, xref, yref):
     return x
 
 
-def get_idx_interv(d, D):
+def _get_idx_interv(d, D):
     k = 0
     while k < len(D) - 1 and d > D[k]:
         k += 1
@@ -57,7 +89,7 @@ def lines_chord(G, pos, labels, Weights, cmap='Blues'):
         A = np.array(pos[e[0]])
         B = np.array(pos[e[1]])
         d = dist(A, B)
-        K = get_idx_interv(d, Dist)
+        K = _get_idx_interv(d, Dist)
         b = [A, A / params[K], B / params[K], B]
         color = edge_colors[K]
         pts = BezierCv(b, nr=5)
