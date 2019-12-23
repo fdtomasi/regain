@@ -42,13 +42,16 @@ from sklearn.model_selection._split import check_cv
 from sklearn.model_selection._search import BaseSearchCV
 from sklearn.utils import deprecated
 
-import GPyOpt
-from GPyOpt.core.task.objective import SingleObjective
-from GPyOpt.core.task.cost import CostModel
-from GPyOpt.core.task.space import Design_space
-from GPyOpt.util.arguments_manager import ArgumentsManager
-from GPyOpt.optimization.acquisition_optimizer import AcquisitionOptimizer
-
+try:
+    import GPyOpt
+    from GPyOpt.core.task.objective import SingleObjective
+    from GPyOpt.core.task.cost import CostModel
+    from GPyOpt.core.task.space import Design_space
+    from GPyOpt.util.arguments_manager import ArgumentsManager
+    from GPyOpt.optimization.acquisition_optimizer import AcquisitionOptimizer
+except ImportError:
+    raise ImportError(
+        "Module GPyOpt is missing. Cannot use bayesian optimization")
 
 @deprecated()
 class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):

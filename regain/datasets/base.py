@@ -35,15 +35,13 @@ from functools import partial
 import numpy as np
 from sklearn.datasets.base import Bunch
 
-
-from .gaussian import (data_Meinshausen_Yuan,
-                       data_Meinshausen_Yuan_sparse_latent, make_fede,
-                       make_fixed_sparsity, make_ma_xue_zou,
-                       make_ma_xue_zou_rand_k, make_sin, make_sin_cos,
-                       make_sparse_low_rank, make_covariance)
-from .ising import ising_theta_generator,  ising_sampler
-from .poisson import poisson_theta_generator, poisson_sampler
+from .gaussian import (
+    data_Meinshausen_Yuan, data_Meinshausen_Yuan_sparse_latent,
+    make_covariance, make_fede, make_fixed_sparsity, make_ma_xue_zou,
+    make_ma_xue_zou_rand_k, make_sin, make_sin_cos, make_sparse_low_rank)
+from .ising import ising_sampler, ising_theta_generator
 from .kernels import make_exp_sine_squared, make_ticc
+from .poisson import poisson_sampler, poisson_theta_generator
 
 
 def _gaussian_case(
@@ -75,11 +73,11 @@ def _gaussian_case(
             degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity,
             proportional=proportional)
     else:
-        func = partial(make_covariance,
-                       update_ell=update_ell, update_theta=update_theta,
-                       normalize_starting_matrices=normalize_starting_matrices,
-                       degree=degree, epsilon=epsilon,
-                       keep_sparsity=keep_sparsity, proportional=proportional)
+        func = partial(
+            make_covariance, update_ell=update_ell, update_theta=update_theta,
+            normalize_starting_matrices=normalize_starting_matrices,
+            degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity,
+            proportional=proportional)
     #     func = partial(
     #         _gaussian_case, mode='ma',
     #         update_ell=update_ell, update_theta=update_theta,
@@ -121,13 +119,15 @@ def _ising_case(
     return data, thetas
 
 
-def _poisson_case(n_samples=100, n_dim_obs=100, T=10,
-                  time_on_axis='first', update_theta='l1',
-                  **kwargs):
-    thetas = poisson_theta_generator(n_dim_obs=n_dim_obs, T=T,
-                                     mode=update_theta, **kwargs)
-    samples = [poisson_sampler(t, variances=np.zeros(n_dim_obs),
-                               n_samples=n_samples) for t in thetas]
+def _poisson_case(
+        n_samples=100, n_dim_obs=100, T=10, time_on_axis='first',
+        update_theta='l1', **kwargs):
+    thetas = poisson_theta_generator(
+        n_dim_obs=n_dim_obs, T=T, mode=update_theta, **kwargs)
+    samples = [
+        poisson_sampler(t, variances=np.zeros(n_dim_obs), n_samples=n_samples)
+        for t in thetas
+    ]
     data = np.array(samples)
     if time_on_axis == "last":
         data = data.transpose(1, 2, 0)

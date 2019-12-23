@@ -37,18 +37,11 @@ from scipy.spatial.distance import squareform
 from scipy.stats import norm
 from sklearn.utils import check_random_state
 
-from regain.utils import ensure_posdef, is_pos_def, is_pos_semidef
+from regain.utils import (
+    ensure_posdef, is_pos_def, is_pos_semidef, normalize_matrix)
 
 
-def normalize_matrix(x):
-    """Normalize a matrix so to have 1 on the diagonal, in-place."""
-    d = np.diag(x).reshape(1, x.shape[0])
-    d = 1. / np.sqrt(d)
-    x *= d
-    x *= d.T
-
-
-def compute_probabilities(locations, random_state, mask=None):
+def _compute_probabilities(locations, random_state, mask=None):
     p = len(locations)
     if mask is None:
         mask = np.zeros((p, p))
@@ -56,14 +49,14 @@ def compute_probabilities(locations, random_state, mask=None):
     for i in range(p):
         for j in range(p):
             d = np.linalg.norm(np.array(locations[i]) - np.array(locations[j]))
-            d = d / 10 if mask[i, j] else d
+            d = d / 10. if mask[i, j] else d
             probabilities[i, j] = 2 * norm.pdf(d * np.sqrt(p), scale=1)
     thresholds = random_state.uniform(low=0, high=1, size=(p, p))
     probabilities[np.where(thresholds > probabilities)] = 0
     return probabilities
 
 
-def permute_locations(locations, random_state):
+def _permute_locations(locations, random_state):
     new_locations = []
     for l in locations:
         perm = random_state.uniform(low=-0.03, high=0.03, size=(1, 2))
@@ -72,13 +65,13 @@ def permute_locations(locations, random_state):
     return new_locations
 
 
-def data_Meinshausen_Yuan(p=198, h=2, n=200, T=10, random_state=None,
-                          **kwargs):
+def data_Meinshausen_Yuan(
+        p=198, h=2, n=200, T=10, random_state=None, **kwargs):
     random_state = check_random_state(random_state)
     nodes_locations = []
     for i in range(p):
         nodes_locations.append(list(random_state.uniform(size=2)))
-    probs = compute_probabilities(nodes_locations, random_state)
+    probs = _compute_probabilities(nodes_locations, random_state)
     theta = np.zeros((p, p))
     for i in range(p):
         ix = np.argsort(probs[i, :])[::-1]
@@ -126,10 +119,10 @@ def data_Meinshausen_Yuan(p=198, h=2, n=200, T=10, random_state=None,
     for t in range(T - 1):
         theta_prev = thetas[t]
         locs_prev = locations[t]
-        locs = permute_locations(locs_prev, random_state)
+        locs = _permute_locations(locs_prev, random_state)
 
         locations.append(locs)
-        probs = compute_probabilities(locs, random_state, theta_prev != 0)
+        probs = _compute_probabilities(locs, random_state, theta_prev != 0)
 
         theta = np.zeros((p, p))
         for i in range(p):
@@ -173,10 +166,10 @@ def data_Meinshausen_Yuan(p=198, h=2, n=200, T=10, random_state=None,
 def data_Meinshausen_Yuan_sparse_latent(
         p=198, h=2, n=200, T=10, random_state=None):
     random_state = check_random_state(random_state)
-    nodes_locations = []
-    for i in range(p + h):
-        nodes_locations.append(list(random_state.uniform(size=2)))
-    probs = compute_probabilities(nodes_locations, random_state)
+    nodes_locations = [
+        list(random_state.uniform(size=2)) for i in range(p + h)
+    ]
+    probs = _compute_probabilities(nodes_locations, random_state)
     theta = np.zeros((p, p))
     for i in range(p):
         ix = np.argsort(probs[i, :-h])[::-1]
@@ -191,8 +184,7 @@ def data_Meinshausen_Yuan_sparse_latent(
             ixs.append(ix[j])
             sel += 1
             j += 1
-        theta[i, ixs] = 0.245
-        theta[ixs, i] = 0.245
+        theta[ixs, i] = theta[i, ixs] = 0.245
     to_remove = np.where(np.sum((theta != 0).astype(int), axis=1) > 4)[0]
     for t in to_remove:
         edges = np.nonzero(theta[t, :])[0]
@@ -258,12 +250,12 @@ def data_Meinshausen_Yuan_sparse_latent(
         theta_prev = thetas_O[t]
         lat_prev = thetas_H[t]
         locs_prev = locations[t]
-        locs = permute_locations(locs_prev, random_state)
+        locs = _permute_locations(locs_prev, random_state)
 
         locations.append(locs)
-        probs_theta = compute_probabilities(
+        probs_theta = _compute_probabilities(
             locs[:p], random_state, theta_prev != 0)
-        probs_lat = compute_probabilities(
+        probs_lat = _compute_probabilities(
             locs[-h:], random_state, lat_prev != 0)
 
         theta = np.zeros((p, p))
@@ -339,7 +331,7 @@ def data_Meinshausen_Yuan_sparse_latent(
         sampless)
 
 
-def make_ell(n_dim_obs=100, n_dim_lat=10):
+def _make_ell(n_dim_obs=100, n_dim_lat=10):
     """Doc."""
     K_HO = np.zeros((n_dim_lat, n_dim_obs))
     for i in range(n_dim_lat):
@@ -362,7 +354,7 @@ def make_ell(n_dim_obs=100, n_dim_lat=10):
 
 def make_starting(n_dim_obs=100, n_dim_lat=10, degree=2, normalize=False):
     """Generate starting theta, theta_observed, L, K_HO."""
-    L, K_HO = make_ell(n_dim_obs, n_dim_lat)
+    L, K_HO = _make_ell(n_dim_obs, n_dim_lat)
 
     if normalize:
         theta = np.zeros((n_dim_obs, n_dim_obs))
@@ -402,7 +394,7 @@ def make_starting(n_dim_obs=100, n_dim_lat=10, degree=2, normalize=False):
     return theta, theta_observed, L, K_HO
 
 
-def update_theta_l2(
+def _update_theta_l2(
         theta_old, n_dim_obs, degree, epsilon, keep_sparsity=False,
         indices=None):
     addition = np.zeros_like(theta_old)
@@ -421,7 +413,7 @@ def update_theta_l2(
     return theta
 
 
-def update_theta_l1(theta_init, no, n_dim_obs):
+def _update_theta_l1(theta_init, no, n_dim_obs):
     theta = theta_init.copy()
     rows = np.zeros(no)
     cols = np.zeros(no)
@@ -437,7 +429,7 @@ def update_theta_l1(theta_init, no, n_dim_obs):
     return theta
 
 
-def update_ell_l2(K_HO_old, epsilon, n_dim_obs):
+def _update_ell_l2(K_HO_old, epsilon, n_dim_obs):
     K_HO = K_HO_old.copy()
     addition = np.random.rand(*K_HO.shape)
     addition *= epsilon / np.linalg.norm(addition)
@@ -452,6 +444,7 @@ def make_covariance(
         n_dim_obs=100, n_dim_lat=10, T=10, update_ell='l1', update_theta='l1',
         normalize_starting_matrices=True, degree=2, epsilon=1e-2,
         keep_sparsity=False, proportional=False):
+    """Generate a list of T covariances and sparse precisions."""
     no = int(np.ceil(n_dim_obs / 20)) if proportional else 1
 
     theta, theta_observed, L, K_HO = make_starting(
@@ -469,9 +462,9 @@ def make_covariance(
                 warnings.warn(
                     "keep_sparsity is specified but is not "
                     "implemented with l1.")
-            theta = update_theta_l1(thetas[-1], no, n_dim_obs)
+            theta = _update_theta_l1(thetas[-1], no, n_dim_obs)
         elif update_theta == 'l2':
-            theta = update_theta_l2(
+            theta = _update_theta_l2(
                 thetas[-1], n_dim_obs, degree, epsilon,
                 keep_sparsity=keep_sparsity, indices=idx)
         else:
@@ -488,7 +481,7 @@ def make_covariance(
             K_HO = np.reshape(K_HO, (n_dim_lat, n_dim_obs))
             L = K_HO.T.dot(K_HO)
         elif update_ell == 'l2':
-            L, K_HO = update_ell_l2(K_HOs[-1], epsilon, n_dim_obs)
+            L, K_HO = _update_ell_l2(K_HOs[-1], epsilon, n_dim_obs)
         elif update_ell == 'yuan':
             K_HO = K_HOs[-1].copy()
             c = np.random.randint(0, n_dim_obs, 1)
@@ -549,6 +542,7 @@ def make_fixed_sparsity(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
 def make_sin(
         n_dim_obs, n_dim_lat, T, shape='smooth', closeness=1, normalize=False,
         **kwargs):
+    """Generate list of sparse precision matrices that change periodically."""
     upper_idx = np.triu_indices(n_dim_obs, 1)
     n_interactions = len(upper_idx[0])
     x = np.tile(np.linspace(0, (T - 1.) / closeness, T), (n_interactions, 1))
@@ -582,7 +576,7 @@ def make_sin_cos(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """Variables follow sin and cos evolution. L is fixed."""
     degree = kwargs.get('degree', 2)
     eps = kwargs.get('epsilon', 1e-2)
-    L, K_HO = make_ell(n_dim_obs, n_dim_lat)
+    L, K_HO = _make_ell(n_dim_obs, n_dim_lat)
 
     phase = np.random.randn(n_dim_obs, n_dim_obs) * np.pi
     upper_idx_diag = np.triu_indices(n_dim_obs)

@@ -32,7 +32,7 @@
 
 import numpy as np
 from scipy import linalg
-from six.moves import xrange
+from six.moves import range
 from sklearn.base import BaseEstimator
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.utils import check_array, check_X_y, deprecated
@@ -117,9 +117,8 @@ class DiscriminantAnalysis(QuadraticDiscriminantAnalysis):
             self.priors_ = np.bincount(y) / float(n_samples)
         else:
             self.priors_ = self.priors
-        means = []
-        data = []
-        for ind in xrange(n_classes):
+        # means = []
+        for ind in range(n_classes):
             Xg = X[y == ind, :]
             meang = Xg.mean(0)
             means.append(meang)

@@ -52,10 +52,11 @@ def _get_idx_interv(d, D):
 
 
 def dist(A, B):
+    """Euclidean distance between A and B."""
     return np.linalg.norm(np.array(A) - np.array(B))
 
 
-def deCasteljau(b, t):
+def _deCasteljau(b, t):
     N = len(b)
     if N < 2:
         raise ValueError("The  control polygon must have at least two points")
@@ -65,12 +66,13 @@ def deCasteljau(b, t):
     return a[0, :]
 
 
-def BezierCv(b, nr=5):
+def _BezierCv(b, nr=5):
     t = np.linspace(0, 1, nr)
-    return np.array([deCasteljau(b, t[k]) for k in range(nr)])
+    return np.array([_deCasteljau(b, t[k]) for k in range(nr)])
 
 
 def lines_chord(G, pos, labels, Weights, cmap='Blues'):
+    """Create scatter curvy lines based on G."""
     lines = []  # the list of dicts defining   edge  Plotly attributes
     edge_info = [
     ]  # the list of points on edges where  the information is placed
@@ -92,10 +94,10 @@ def lines_chord(G, pos, labels, Weights, cmap='Blues'):
         K = _get_idx_interv(d, Dist)
         b = [A, A / params[K], B / params[K], B]
         color = edge_colors[K]
-        pts = BezierCv(b, nr=5)
+        pts = _BezierCv(b, nr=5)
         text = "{} to {} ({:.2f})".format(
             labels[e[0]], labels[e[1]], Weights[j])
-        mark = deCasteljau(b, 0.9)
+        mark = _deCasteljau(b, 0.9)
         edge_info.append(
             go.Scatter(
                 x=[mark[0]], y=[mark[1]], mode='markers',
@@ -111,6 +113,7 @@ def lines_chord(G, pos, labels, Weights, cmap='Blues'):
 
 
 def lines_straight(G, pos, labels=None, Weights=None, dim=2, **line_params):
+    """Create scatter straight lines based on G."""
     # XXX very slow with Weight not None.
     # Waiting for a PR to deal with array of widths
     # https://github.com/plotly/plotly.js/issues/147

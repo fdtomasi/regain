@@ -49,7 +49,7 @@ from regain.covariance.graphical_lasso_ import GraphicalLasso, graphical_lasso
 
 
 def mk_all_ugs(n_dim):
-    """Utility for generating all possible """
+    """Utility for generating all possible graphs."""
     nedges = int(comb(n_dim, 2))
     m = 2**nedges
 
@@ -119,7 +119,7 @@ def score_blankets(blankets, X, alphas=(0.01, 0.5, 1)):
     return normalized_scores
 
 
-def get_graphs(blankets, scores, n_dim, n_resampling=200):
+def _get_graphs(blankets, scores, n_dim, n_resampling=200):
     idx = np.array(
         [
             np.random.choice(scores.shape[1], p=scores[i], size=n_resampling)
@@ -157,7 +157,7 @@ def covsel(x, p, nonZero, C):
 
 
 def precision_selection(G, n_dim, C):
-    """Need to specify G"""
+    """MLE of precision matrix given non-zero entries in G."""
     function = partial(covsel, p=n_dim, nonZero=G, C=C)
 
     x0 = np.eye(n_dim)
@@ -171,6 +171,7 @@ def precision_selection(G, n_dim, C):
 
 
 def GWishartFit(X, G, GWprior, mode='covsel'):
+    """Fit G-Wishart distribution."""
     n_samples, n_dim = X.shape
 
     d0 = GWprior.d0
@@ -203,6 +204,7 @@ def GWishartFit(X, G, GWprior, mode='covsel'):
 
 
 def compute_score(X, G, P, S, GWprior=None, score_method='bic'):
+    """Compute score function of P."""
     n_samples, n_dim = X.shape
 
     d0 = GWprior.d0
@@ -318,6 +320,7 @@ def compute_score(X, G, P, S, GWprior=None, score_method='bic'):
 
 
 def GWishartScore(X, G, d0=3, S0=None, score_method='bic', mode='covsel'):
+    """Compute score of G-Wishart distribution."""
     # %Initialize GW prior structure
     n_samples, n_dim = X.shape
     if S0 is None:
@@ -361,7 +364,7 @@ def bayesian_graphical_lasso(
 
     normalized_scores = score_blankets(mblankets, X=X, alphas=[0.01, 0.5, 1])
 
-    graphs = get_graphs(
+    graphs = _get_graphs(
         mblankets, normalized_scores, n_dim=n_dim, n_resampling=n_resampling)
 
     nonzeros_all = [np.triu(g, 1) + np.eye(n_dim, dtype=bool) for g in graphs]

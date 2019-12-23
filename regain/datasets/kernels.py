@@ -44,6 +44,7 @@ from .gaussian import make_ell
 
 
 def make_exp_sine_squared(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
+    """Make precision matrices using a temporal sine kernel."""
     from regain.bayesian.gaussian_process_ import sample as samplegp
     from sklearn.gaussian_process import kernels
 
@@ -79,6 +80,7 @@ def make_exp_sine_squared(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
 
 
 def make_RBF(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
+    """Make precision matrices using a temporal RBF kernel."""
     from regain.bayesian.gaussian_process_ import sample as samplegp
     from sklearn.gaussian_process import kernels
 
@@ -131,6 +133,7 @@ def make_RBF(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
 
 
 def genInvCov(size, low=0.3, upper=0.6, portion=0.2, symmetric=True):
+    """Generate sparse inverse covariance matrix."""
     import networkx as nx
     portion = portion / 2
     S = np.zeros((size, size))
@@ -147,6 +150,7 @@ def genInvCov(size, low=0.3, upper=0.6, portion=0.2, symmetric=True):
 
 
 def genRandInv(size, low=0.3, upper=0.6, portion=0.2):
+    """Generate inverse covariance matrix."""
     S = np.zeros((size, size))
     for i in range(size):
         for j in range(size):
@@ -157,7 +161,7 @@ def genRandInv(size, low=0.3, upper=0.6, portion=0.2):
     return S
 
 
-def make_ticc(
+def _make_ticc(
         num_blocks=5, n_dim_obs=5, n_dim_lat=0, sparsity_inv_matrix=0.5,
         rand_seed=None, **kwargs):
     if n_dim_lat != 0:
@@ -204,7 +208,7 @@ def make_ticc(
     return inv_matrix
 
 
-def block_matrix(matrix, r, c):
+def _block_matrix(matrix, r, c):
     S11 = matrix[:r, :c]
     S22 = matrix[r:, c:]
     S21 = matrix[r:, :c]
@@ -238,7 +242,7 @@ def make_ticc_dataset(
     precisions = {}
     covs = {}
     for i, cluster in enumerate(clusters):
-        precisions[cluster] = make_ticc(
+        precisions[cluster] = _make_ticc(
             rand_seed=i, num_blocks=w_size, n_dim_obs=n_dim,
             n_dim_lat=n_dim_lat, sparsity_inv_matrix=sparsity_inv_matrix,
             **kwargs)
@@ -257,7 +261,7 @@ def make_ticc_dataset(
 
         elif i < w_size:
             cov = covs[label][:(i + 1) * n, :(i + 1) * n]
-            Sig11, Sig22, Sig21, Sig12 = block_matrix(cov, i * n, i * n)
+            Sig11, Sig22, Sig21, Sig12 = _block_matrix(cov, i * n, i * n)
             Sig21Theta11 = Sig21.dot(linalg.pinvh(Sig11))
             cov_tom = Sig22 - Sig21Theta11.dot(Sig12)  # sigma2|1
 
@@ -266,7 +270,7 @@ def make_ticc_dataset(
 
         else:
             cov = covs[label][:w_size * n, :w_size * n]
-            Sig11, Sig22, Sig21, Sig12 = block_matrix(
+            Sig11, Sig22, Sig21, Sig12 = _block_matrix(
                 cov, (w_size - 1) * n, (w_size - 1) * n)
             Sig21Theta11 = Sig21.dot(linalg.pinvh(Sig11))
             cov_tom = Sig22 - Sig21Theta11.dot(Sig12)  # sigma2|1
@@ -376,11 +380,11 @@ def make_ticc_dataset_new(
                 max(i - w_size, 0) * n_dim:(i + 1) * n_dim]
 
         # conditional covariance and mean
-        Sig11, Sig22, Sig21, Sig12 = block_matrix(
+        Sig11, Sig22, Sig21, Sig12 = _block_matrix(
             cov,
             min(i, w_size) * n_dim,
             min(i, w_size) * n_dim)
-        T11, T22, T21, T12 = block_matrix(
+        T11, T22, T21, T12 = _block_matrix(
             inv[max(i - w_size, 0) * n_dim:(i + 1) * n_dim,
                 max(i - w_size, 0) * n_dim:(i + 1) * n_dim],
             min(i, w_size) * n_dim,
@@ -499,11 +503,11 @@ def make_ticc_dataset_v3(
                 max(i - w_size, 0) * n_dim:(i + 1) * n_dim]
 
         # conditional covariance and mean
-        Sig11, Sig22, Sig21, Sig12 = block_matrix(
+        Sig11, Sig22, Sig21, Sig12 = _block_matrix(
             cov,
             min(i, w_size) * n_dim,
             min(i, w_size) * n_dim)
-        _, T22, _, _ = block_matrix(
+        _, T22, _, _ = _block_matrix(
             inv[max(i - w_size, 0) * n_dim:(i + 1) * n_dim,
                 max(i - w_size, 0) * n_dim:(i + 1) * n_dim],
             min(i, w_size) * n_dim,
@@ -534,8 +538,8 @@ def make_ticc_dataset_v3(
 
 
 def make_cluster_representative(
-        n_dim=10, degree=2, n_clusters=3, T=15, n_samples=100, repetitions=False,
-        cluster_series=None, shuffle=False):
+        n_dim=10, degree=2, n_clusters=3, T=15, n_samples=100,
+        repetitions=False, cluster_series=None, shuffle=False):
     """Based on the cluster representative, generate similar graphs."""
     import networkx as nx
     cluster_reps = []
@@ -555,7 +559,8 @@ def make_cluster_representative(
     pos = list(pos) + [T - 1]
 
     if cluster_series is None:
-        cluster_series = np.tile(range(n_clusters), (len(pos) // n_clusters) + 1)[:len(pos)]
+        cluster_series = np.tile(
+            range(n_clusters), (len(pos) // n_clusters) + 1)[:len(pos)]
         if shuffle:
             np.random.shuffle(cluster_series)
         # print(pos)
@@ -581,7 +586,7 @@ def make_cluster_representative(
             diff = np.where(diffs != 0)
             if diff == ():
                 break
-            if (i == 0):
+            if i == 0:
                 edges_per_change = int(
                     (np.nonzero(diffs)[0].shape[0] / 2) // (how_many + 1))
                 if edges_per_change == 0:
