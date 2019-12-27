@@ -44,9 +44,10 @@ from regain.covariance.time_graphical_lasso_ import (
 from regain.covariance.time_graphical_lasso_ import loss as loss_tgl
 from regain.norm import l1_od_norm, vector_p_norm
 from regain.prox import prox_FL, soft_thresholding_od
-from regain.utils import convergence, positive_definite
+from regain.utils import convergence
 
-from .forward_backward import choose_gamma, choose_lamda, _scalar_product, upper_diag_3d
+from .forward_backward import (
+    _scalar_product, choose_gamma, choose_lamda, upper_diag_3d)
 
 
 def loss(S, K, n_samples=None, vareps=0):
@@ -93,7 +94,7 @@ def objective(n_samples, emp_cov, precision, alpha, beta, psi, vareps=0):
 
 
 def loss_laplacian(S, K, beta=0, n_samples=None, vareps=0):
-    """Loss function for time-varying graphical lasso."""
+    """Loss function for TGL with laplacian penalty."""
     loss_ = loss(S, K, n_samples=n_samples, vareps=vareps)
     loss_ += beta * squared_norm(K[1:] - K[:-1])
     return loss_
@@ -101,7 +102,7 @@ def loss_laplacian(S, K, beta=0, n_samples=None, vareps=0):
 
 def grad_loss_laplacian(
         x, emp_cov, beta=0, n_samples=None, x_inv=None, vareps=0):
-    """Gradient of the loss function for the time-varying graphical lasso."""
+    """Gradient of the loss function for TGL with laplacian penalty."""
     grad = grad_loss(x, emp_cov, n_samples, x_inv, vareps)
 
     aux = np.empty_like(x)
@@ -116,7 +117,7 @@ def grad_loss_laplacian(
 
 
 def penalty_laplacian(precision, alpha):
-    """Penalty for time-varying graphical lasso."""
+    """Laplacian penalty for time-varying graphical lasso."""
     if isinstance(alpha, np.ndarray):
         obj = sum(
             a[0][0] * m for a, m in zip(alpha, map(l1_od_norm, precision)))
@@ -127,7 +128,7 @@ def penalty_laplacian(precision, alpha):
 
 
 def objective_laplacian(n_samples, emp_cov, precision, alpha, beta, vareps=0):
-    """Objective function for time-varying graphical lasso."""
+    """Objective function for TGL with Laplacian penalty."""
     obj = loss_laplacian(
         emp_cov, precision, beta=beta, n_samples=n_samples, vareps=vareps)
     obj += penalty_laplacian(precision, alpha)
@@ -136,51 +137,73 @@ def objective_laplacian(n_samples, emp_cov, precision, alpha, beta, vareps=0):
 
 def _J(x, beta, alpha, gamma, lamda, S, n_samples, p=1, x_inv=None, grad=None):
     """Grad + prox + line search for the new point."""
-    # if grad is None:
-    #     grad = grad_loss(x, S, n_samples, x_inv=x_inv)
     prox = prox_FL(
         x - gamma * grad, beta * gamma, alpha * gamma, p=p, symmetric=True)
     return x + lamda * (prox - x)
 
 
 def tgl_forward_backward(
-        emp_cov, n_samples, alpha=0.01, beta=1., max_iter=100, verbose=False,
-        tol=1e-4, delta=1e-4, gamma=1., lamda=1., eps=0.5, debug=False,
-        return_history=False, return_n_iter=True, choose='gamma',
-        lamda_criterion='b', time_norm=1, compute_objective=True,
-        return_n_linesearch=False, vareps=1e-5, stop_at=None, stop_when=1e-4,
-        laplacian_penalty=False, init='empirical'):
-    """Time-varying graphical lasso solver.
+    emp_cov, alpha=0.01, beta=1., max_iter=100, n_samples=None, verbose=False,
+    tol=1e-4, delta=1e-4, gamma=1., lamda=1., eps=0.5, debug=False,
+    return_history=False, return_n_iter=True, choose='gamma',
+    lamda_criterion='b', time_norm=1, compute_objective=True,
+    return_n_linesearch=False, vareps=1e-5, stop_at=None, stop_when=1e-4,
+    laplacian_penalty=False, init='empirical'):
+    """Time-varying graphical lasso solver with forward-backward splitting.
 
-    Solves the following problem via ADMM:
-        minimize  trace(S*X) - log det X + lambda*||X||_1
+    Solves the following problem via FBS:
+        min sum_{i=1}^T -n_i log_likelihood(S_i, K_i) + alpha*||K_i||_{od,1}
+            + beta sum_{i=2}^T Psi(K_i - K_{i-1})
 
-    where S is the empirical covariance of the data
-    matrix D (training observations by features).
+    where S_i = (1/n_i) X_i^T \times X_i is the empirical covariance of data
+    matrix X (training observations by features).
 
     Parameters
     ----------
-    data_list : list of 2-dimensional matrices.
-        Input matrices.
-    lamda : float, optional
-        Regularisation parameter.
-    rho : float, optional
-        Augmented Lagrangian parameter.
-    alpha : float, optional
-        Over-relaxation parameter (typically between 1.0 and 1.8).
+    emp_cov : ndarray, shape (n_times, n_features, n_features)
+        Empirical covariance of data.
+    alpha, beta : float, optional
+        Regularisation parameters.
     max_iter : int, optional
         Maximum number of iterations.
+    n_samples : ndarray
+        Number of samples available for each time point.
+    verbose : bool, default False
+        Print info at each iteration.
     tol : float, optional
         Absolute tolerance for convergence.
-    rtol : float, optional
-        Relative tolerance for convergence.
+    delta, gamma, lamda, eps : float, optional
+        FBS parameters.
+    debug : bool, default False
+        Run in debug mode.
     return_history : bool, optional
         Return the history of computed values.
+    return_n_iter : bool, optional
+        Return the number of iteration before convergence.
+    choose : ('gamma', 'lambda', 'fixed', 'both)
+        Search iteratively gamma / lambda / none / both.
+    lamda_criterion : ('a', 'b', 'c')
+        Criterion to choose lamda. See ref for details.
+    time_norm : float, optional
+        Choose the temporal norm between points.
+    compute_objective : bool, default True
+        Choose to compute the objective value.
+    return_n_linesearch : bool, optional
+        Return the number of line-search iterations before convergence.
+    vareps : float, optional
+        Jitter for the loss.
+    stop_at, stop_when : float, optional
+        Other convergence criteria, as used in the paper.
+    laplacian_penalty : bool, default False
+        Use Laplacian penalty.
+    init : {'empirical', 'zero', ndarray}
+        Choose how to initialize the precision matrix, with the inverse
+        empirical covariance, zero matrix or precomputed.
 
     Returns
     -------
-    X : numpy.array, 2-dimensional
-        Solution to the problem.
+    K, covariance : numpy.array, 3-dimensional (T x d x d)
+        Solution to the problem for each time t=1...T .
     history : list
         If return_history, then also a structure that contains the
         objective value, the primal and dual residual norms, and tolerances
@@ -205,8 +228,7 @@ def tgl_forward_backward(
         gradient_f = partial(
             grad_loss_laplacian, emp_cov=emp_cov, beta=beta,
             n_samples=n_samples, vareps=vareps)
-        function_g = partial(
-            penalty_laplacian, alpha=alpha)
+        function_g = partial(penalty_laplacian, alpha=alpha)
     else:
         psi = partial(vector_p_norm, p=time_norm)
         obj_partial = partial(
@@ -243,8 +265,7 @@ def tgl_forward_backward(
                     x_hat, beta * gamma, alpha * gamma, p=time_norm,
                     symmetric=True)
 
-        if choose in ['lamda', 'both']:
-            # min_eigen_x=np.min(eigens)
+        if choose in ('lamda', 'both'):
             lamda, n_ls = choose_lamda(
                 min(lamda / eps if iteration_ > 0 else lamda,
                     1), K, function_f=function_f, objective_f=obj_partial,
@@ -326,58 +347,61 @@ class TimeGraphicalLassoForwardBackward(TimeGraphicalLasso):
 
     Parameters
     ----------
-    alpha : positive float, default 0.01
-        Regularization parameter for precision matrix. The higher alpha,
-        the more regularization, the sparser the inverse covariance.
+    alpha, beta : float, optional
+        Regularisation parameters.
 
-    beta : positive float, default 1
-        Regularization parameter to constrain precision matrices in time.
-        The higher beta, the more regularization,
-        and consecutive precision matrices in time are more similar.
+    max_iter : int, optional
+        Maximum number of iterations.
 
-    psi : {'laplacian', 'l1', 'l2', 'linf', 'node'}, default 'laplacian'
-        Type of norm to enforce for consecutive precision matrices in time.
+    n_samples : ndarray
+        Number of samples available for each time point.
 
-    rho : positive float, default 1
-        Augmented Lagrangian parameter.
+    verbose : bool, default False
+        Print info at each iteration.
 
-    over_relax : positive float, deafult 1
-        Over-relaxation parameter (typically between 1.0 and 1.8).
+    tol : float, optional
+        Absolute tolerance for convergence.
 
-    tol : positive float, default 1e-4
-        Absolute tolerance to declare convergence.
+    delta, gamma, lamda, eps : float, optional
+        FBS parameters.
 
-    rtol : positive float, default 1e-4
-        Relative tolerance to declare convergence.
+    debug : bool, default False
+        Run in debug mode.
 
-    max_iter : integer, default 100
-        The maximum number of iterations.
+    return_history : bool, optional
+        Return the history of computed values.
 
-    verbose : boolean, default False
-        If verbose is True, the objective function, rnorm and snorm are
-        printed at each iteration.
+    return_n_iter : bool, optional
+        Return the number of iteration before convergence.
 
-    assume_centered : boolean, default False
-        If True, data are not centered before computation.
-        Useful when working with data whose mean is almost, but not exactly
-        zero.
-        If False, data are centered before computation.
+    choose : ('gamma', 'lambda', 'fixed', 'both)
+        Search iteratively gamma / lambda / none / both.
 
-    time_on_axis : {'first', 'last'}, default 'first'
-        If data have time as the last dimension, set this to 'last'.
-        Useful to use scikit-learn functions as train_test_split.
+    lamda_criterion : ('a', 'b', 'c')
+        Criterion to choose lamda. See ref for details.
 
-    update_rho_options : dict, default None
-        Options for the update of rho. See `update_rho` function for details.
+    time_norm : float, optional
+        Choose the temporal norm between points.
 
-    compute_objective : boolean, default True
-        Choose if compute the objective function during iterations
-        (only useful if `verbose=True`).
+    compute_objective : bool, default True
+        Choose to compute the objective value.
 
-    mode : {'admm'}, default 'admm'
-        Minimisation algorithm. At the moment, only 'admm' is available,
-        so this is ignored.
+    return_n_linesearch : bool, optional
+        Return the number of line-search iterations before convergence.
 
+    vareps : float, optional
+        Jitter for the loss.
+
+    stop_at, stop_when : float, optional
+        Set a budget for the iterations.
+
+    laplacian_penalty : bool, default False
+        Use Laplacian penalty.
+
+    init : {'empirical', 'zero', ndarray}
+        Choose how to initialize the precision matrix, with the inverse
+        empirical covariance, zero matrix or precomputed.
+        
     Attributes
     ----------
     covariance_ : array-like, shape (n_times, n_features, n_features)
@@ -391,12 +415,12 @@ class TimeGraphicalLassoForwardBackward(TimeGraphicalLasso):
 
     """
     def __init__(
-            self, alpha=0.01, beta=1., tol=1e-4, max_iter=100, verbose=False,
-            assume_centered=False, compute_objective=True, eps=0.5,
-            choose='gamma', lamda=1, delta=1e-4, gamma=1., lamda_criterion='b',
-            time_norm=1, return_history=False, debug=False,
-            return_n_linesearch=False, vareps=1e-5, stop_at=None,
-            stop_when=1e-4, init='empirical', laplacian_penalty=False):
+        self, alpha=0.01, beta=1., tol=1e-4, max_iter=100, verbose=False,
+        assume_centered=False, compute_objective=True, eps=0.5, choose='gamma',
+        lamda=1, delta=1e-4, gamma=1., lamda_criterion='b', time_norm=1,
+        return_history=False, debug=False, return_n_linesearch=False,
+        vareps=1e-5, stop_at=None, stop_when=1e-4, init='empirical',
+            laplacian_penalty=False):
         super(TimeGraphicalLassoForwardBackward, self).__init__(
             alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
             assume_centered=assume_centered,
@@ -451,28 +475,3 @@ class TimeGraphicalLassoForwardBackward(TimeGraphicalLasso):
             else:
                 self.precision_, self.covariance_, self.n_iter_ = out
         return self
-
-
-def get_lipschitz(data):
-    """Get the Lipschitz constant for a specific loss function.
-
-    Only square loss implemented.
-
-    Parameters
-    ----------
-    data : (n, d) float ndarray
-        data matrix
-    loss : string
-        the selected loss function in {'square', 'logit'}
-    Returns
-    ----------
-    L : float
-        the Lipschitz constant
-    """
-    n, p = data.shape
-
-    if p > n:
-        tmp = np.dot(data, data.T)
-    else:
-        tmp = np.dot(data.T, data)
-    return np.linalg.norm(tmp, 2)
