@@ -331,7 +331,7 @@ def data_Meinshausen_Yuan_sparse_latent(
         sampless)
 
 
-def _make_ell(n_dim_obs=100, n_dim_lat=10):
+def make_ell(n_dim_obs=100, n_dim_lat=10):
     """Doc."""
     K_HO = np.zeros((n_dim_lat, n_dim_obs))
     for i in range(n_dim_lat):
@@ -354,7 +354,7 @@ def _make_ell(n_dim_obs=100, n_dim_lat=10):
 
 def make_starting(n_dim_obs=100, n_dim_lat=10, degree=2, normalize=False):
     """Generate starting theta, theta_observed, L, K_HO."""
-    L, K_HO = _make_ell(n_dim_obs, n_dim_lat)
+    L, K_HO = make_ell(n_dim_obs, n_dim_lat)
 
     if normalize:
         theta = np.zeros((n_dim_obs, n_dim_obs))
@@ -576,7 +576,7 @@ def make_sin_cos(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     """Variables follow sin and cos evolution. L is fixed."""
     degree = kwargs.get('degree', 2)
     eps = kwargs.get('epsilon', 1e-2)
-    L, K_HO = _make_ell(n_dim_obs, n_dim_lat)
+    L, K_HO = make_ell(n_dim_obs, n_dim_lat)
 
     phase = np.random.randn(n_dim_obs, n_dim_obs) * np.pi
     upper_idx_diag = np.triu_indices(n_dim_obs)
