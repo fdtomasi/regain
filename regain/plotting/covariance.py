@@ -61,7 +61,7 @@ def plot_cov_2d(means, cov, sdwidth=1.0, npts=50, ax=None, c=None):
     bp = (v.dot(np.diag(d)).dot(ap)) + means.ravel()[:, None]
     plot = plt.plot if ax is None else ax.plot
     plot(bp[0], bp[1], c=c)
-    return cov[0, 1]  # return their correlation
+    return cov[0, 1] # return their correlation
 
 
 def plot_cov_ellipse(pos, cov, nstd=2, ax=None, **kwargs):

@@ -92,6 +92,11 @@ def kernel_time_graphical_lasso(
         Empirical covariance of data.
     alpha, beta : float, optional
         Regularisation parameter.
+    kernel : ndarray, default None
+        Normalised temporal kernel (1 on the diagonal),
+        with dimensions equal to the dimensionality of the data set.
+        If None, it is interpreted as an identity matrix, where there is no
+        constraint on the temporal behaviour of the precision matrices.
     rho : float, optional
         Augmented Lagrangian parameter.
     max_iter : int, optional

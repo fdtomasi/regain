@@ -50,16 +50,6 @@ def _gaussian_case(
         normalize_starting_matrices=False, degree=2, epsilon=1e-2,
         keep_sparsity=False, proportional=False, **kwargs):
     modes = dict(
-        # evolving=make_l2l2,
-        # fixed=make_l2,
-        # fixedl2=make_l2,
-        # fixedl1=make_l1,
-        # yuan=generate_dataset_yuan,
-        # l1l2=generate_dataset_l1l2,
-        # norm=make_l2l2_norm,
-        # l1l1=generate_dataset_l1l1,
-
-        # the previous are deprecated
         my=data_Meinshausen_Yuan,
         mys=data_Meinshausen_Yuan_sparse_latent,
         sin=make_sin,
@@ -118,7 +108,7 @@ def _ising_case(
         n_samples=100, n_dim_obs=100, T=10, time_on_axis='first',
         update_theta='l2', responses=[-1, 1], **kwargs):
     thetas = ising_theta_generator(
-        p=n_dim_obs, n=n_samples, T=T, mode=update_theta, **kwargs)
+        n_dim_obs=n_dim_obs, n=n_samples, T=T, mode=update_theta, **kwargs)
     samples = [
         ising_sampler(t, np.zeros(n_dim_obs), n=n_samples, responses=[-1, 1])
         for t in thetas
@@ -199,14 +189,13 @@ def make_dataset(
             proportional=proportional, **kwargs)
 
     elif distribution.lower() == 'ising':
-        print(update_theta)
         return _ising_case(
             n_samples=n_samples, n_dim_obs=n_dim_obs, T=T,
             time_on_axis=time_on_axis, update_theta=update_theta,
-            responses=[-1, 1])
+            responses=[-1, 1], **kwargs)
     elif distribution.lower() == 'poisson':
         return _poisson_case(
             n_samples=n_samples, n_dim_obs=n_dim_obs, T=T,
-            time_on_axis=time_on_axis, update_theta=update_theta)
+            time_on_axis=time_on_axis, update_theta=update_theta, **kwargs)
     else:
         raise ValueError('distribution `%s` undefined' % distribution)

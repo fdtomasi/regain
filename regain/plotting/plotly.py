@@ -91,19 +91,24 @@ def lines_chord(G, pos, labels, Weights, cmap='Blues'):
         b = [A, A / params[K], B / params[K], B]
         color = edge_colors[K]
         pts = _BezierCv(b, nr=5)
-        text = "{} to {} ({:.2f})".format(
-            labels[e[0]], labels[e[1]], Weights[j])
+        text = "{} to {} ({:.2f})".format(labels[e[0]], labels[e[1]],
+                                          Weights[j])
         mark = _deCasteljau(b, 0.9)
         edge_info.append(
-            go.Scatter(
-                x=[mark[0]], y=[mark[1]], mode='markers',
-                marker=dict(size=0.5,
-                            color=edge_colors), text=text, hoverinfo='text'))
+            go.Scatter(x=[mark[0]],
+                       y=[mark[1]],
+                       mode='markers',
+                       marker=dict(size=0.5, color=edge_colors),
+                       text=text,
+                       hoverinfo='text'))
         lines.append(
-            go.Scatter(
-                x=pts[:, 0], y=pts[:, 1], mode='lines',
-                line=dict(color=color, shape='spline',
-                          width=Weights[j] / 5.), hoverinfo='none'))
+            go.Scatter(x=pts[:, 0],
+                       y=pts[:, 1],
+                       mode='lines',
+                       line=dict(color=color,
+                                 shape='spline',
+                                 width=Weights[j] / 5.),
+                       hoverinfo='none'))
 
     return lines + edge_info
 
@@ -114,9 +119,11 @@ def lines_straight(G, pos, labels=None, Weights=None, dim=2, **line_params):
     # Waiting for a PR to deal with array of widths
     # https://github.com/plotly/plotly.js/issues/147
     traces = []
-    line_pars = dict(
-        x=[], y=[], line=dict(width=0.5, color='#888'), hoverinfo='none',
-        mode='lines')
+    line_pars = dict(x=[],
+                     y=[],
+                     line=dict(width=0.5, color='#888'),
+                     hoverinfo='none',
+                     mode='lines')
     line_pars.update(**line_params)
 
     if Weights is None:
@@ -164,10 +171,12 @@ def lines_straight(G, pos, labels=None, Weights=None, dim=2, **line_params):
             if dim == 3:
                 Ze = [z0, z1, None]
 
-            scatter_lines = dict(
-                x=Xe, y=Ye, mode='lines',
-                line=dict(color='rgb(125,125,125)',
-                          width=2 * Weights[j]), hoverinfo='none')
+            scatter_lines = dict(x=Xe,
+                                 y=Ye,
+                                 mode='lines',
+                                 line=dict(color='rgb(125,125,125)',
+                                           width=2 * Weights[j]),
+                                 hoverinfo='none')
             trace = go.Scatter3d(z=Ze, **
                                  scatter_lines) if dim == 3 else go.Scatter(
                                      **scatter_lines)
@@ -175,8 +184,12 @@ def lines_straight(G, pos, labels=None, Weights=None, dim=2, **line_params):
     return traces
 
 
-def plot_circular(
-        G, labels=None, dist_text=1.2, cmap='Blues', color_nodes=(), title=''):
+def plot_circular(G,
+                  labels=None,
+                  dist_text=1.2,
+                  cmap='Blues',
+                  color_nodes=(),
+                  title=''):
     """Plot G as a circular graph.
 
     Usage
@@ -203,11 +216,9 @@ def plot_circular(
 
     pos_array = np.array(list(pos.values()))  # python 3 compatibility
 
-    center = np.array(
-        [
-            (np.min(pos_array[:, 0]) + np.max(pos_array[:, 0])) / 2,
-            (np.min(pos_array[:, 1]) + np.max(pos_array[:, 1])) / 2
-        ])
+    center = np.array([(np.min(pos_array[:, 0]) + np.max(pos_array[:, 0])) / 2,
+                       (np.min(pos_array[:, 1]) + np.max(pos_array[:, 1])) / 2
+                       ])
 
     # radius = np.linalg.norm(pos_array - center)
     pos_text = center + dist_text * (pos_array - center)  # text position
@@ -238,13 +249,15 @@ def plot_circular(
     # textangle=angles[k] is the angle with horizontal line through (x,y)
     # in degrees
     # + =clockwise, -=anti-clockwise
-    layout['annotations'] += tuple(
-        [
-            go.layout.Annotation(
-                x=pos_text[k][0], y=pos_text[k][1], text=labels[k],
-                textangle=angles[k], font=dict(size=20, color='rgb(0,0,0)'),
-                showarrow=False) for k in range(pos_array.shape[0])
-        ])
+    layout['annotations'] += tuple([
+        go.layout.Annotation(x=pos_text[k][0],
+                             y=pos_text[k][1],
+                             text=labels[k],
+                             textangle=angles[k],
+                             font=dict(size=20, color='rgb(0,0,0)'),
+                             showarrow=False)
+        for k in range(pos_array.shape[0])
+    ])
 
     # V = list(G.nodes())
 
@@ -252,12 +265,21 @@ def plot_circular(
     Weights = [edge['weight'] for edge in Es.values()]
 
     edge_trace = lines_chord(G, pos, labels, Weights, cmap=cmap)
-    node_trace = go.Scatter(
-        x=[], y=[], text=[], mode='markers', hoverinfo='text', marker=dict(
-            showscale=False, colorscale=cmap, reversescale=True,
-            color=color_nodes, size=20, colorbar=dict(
-                thickness=15, title='Node Connections', xanchor='left',
-                titleside='right'), line=dict(width=2)))
+    node_trace = go.Scatter(x=[],
+                            y=[],
+                            text=[],
+                            mode='markers',
+                            hoverinfo='text',
+                            marker=dict(showscale=False,
+                                        colorscale=cmap,
+                                        reversescale=True,
+                                        color=color_nodes,
+                                        size=20,
+                                        colorbar=dict(thickness=15,
+                                                      title='Node Connections',
+                                                      xanchor='left',
+                                                      titleside='right'),
+                                        line=dict(width=2)))
 
     for node in G.nodes():
         x, y = pos[node]
@@ -273,9 +295,13 @@ def plot_circular(
     return go.Figure(data=data, layout=layout)
 
 
-def plot_network(
-        G, labels, with_weights=True, dim=2, title=None, cmap="Blues",
-        **line_params):
+def plot_network(G,
+                 labels,
+                 with_weights=True,
+                 dim=2,
+                 title=None,
+                 cmap="Blues",
+                 **line_params):
     """Plot network with plotly."""
     pos = nx.fruchterman_reingold_layout(G, dim=dim)
     pos_vals = np.array([pos[k] for k in pos]).T
@@ -284,66 +310,81 @@ def plot_network(
     elif dim == 3:
         Xn, Yn, Zn = pos_vals
 
-    weights = [
-        edge['weight'] for edge in G.edges.values()
-    ] if with_weights else None
+    weights = [edge['weight']
+               for edge in G.edges.values()] if with_weights else None
     degrees = np.array(G.degree)[:, 1]
     traces = lines_straight(G, pos, Weights=weights, dim=dim, **line_params)
-    marker = dict(
-        showscale=False, colorscale=cmap, reversescale=True, color=degrees,
-        size=2, colorbar=dict(
-            thickness=15, title='Node Connections', xanchor='left',
-            titleside='right'), line=dict(width=1))
+    marker = dict(showscale=False,
+                  colorscale=cmap,
+                  reversescale=True,
+                  color=degrees,
+                  size=2,
+                  colorbar=dict(thickness=15,
+                                title='Node Connections',
+                                xanchor='left',
+                                titleside='right'),
+                  line=dict(width=1))
 
     text_node = [
         "{}<br># of connections: {}".format(lbl, info)
         for lbl, info in zip(labels, degrees)
     ]
-    node_trace_params = dict(
-        x=Xn, y=Yn, mode='markers', marker=marker, text=text_node,
-        hoverinfo='text')
+    node_trace_params = dict(x=Xn,
+                             y=Yn,
+                             mode='markers',
+                             marker=marker,
+                             text=text_node,
+                             hoverinfo='text')
     if dim == 3:
         # fix problem with 3D plot hover
         # see https://github.com/plotly/plotly.py/issues/952
         node_traces = [
-            go.Scatter3d(
-                x=[0], y=[0], z=[0], marker={
-                    'color': 'rgb(0, 0, 0)',
-                    'opacity': 1,
-                    'size': 0.1
-                }, showlegend=False)
+            go.Scatter3d(x=[0],
+                         y=[0],
+                         z=[0],
+                         marker={
+                             'color': 'rgb(0, 0, 0)',
+                             'opacity': 1,
+                             'size': 0.1
+                         },
+                         showlegend=False)
         ]
 
         node_traces += [go.Scatter3d(z=Zn, **node_trace_params)]
     else:
         node_traces = [
-            go.Scatter(
-                **dict(
-                    node_trace_params,
-                    marker=dict(marker, symbol='circle-dot'),
-                ))
+            go.Scatter(**dict(
+                node_trace_params,
+                marker=dict(marker, symbol='circle-dot'),
+            ))
         ]
 
-    axis = dict(
-        showline=False, zeroline=False, showgrid=False, showticklabels=False,
-        title='')
+    axis = dict(showline=False,
+                zeroline=False,
+                showgrid=False,
+                showticklabels=False,
+                title='')
 
-    lay = dict(
-        title=title, width=500, height=500, showlegend=False,
-        margin=dict(t=100), hovermode='closest')
+    lay = dict(title=title,
+               width=500,
+               height=500,
+               showlegend=False,
+               margin=dict(t=100),
+               hovermode='closest')
     if dim == 2:
-        layout = go.Layout(
-            **dict(
-                lay, scene=dict(
-                    xaxis=dict(axis), yaxis=dict(axis), zaxis=dict(axis)),
-                xaxis=dict(axis), yaxis=dict(axis)))
+        layout = go.Layout(**dict(
+            lay,
+            scene=dict(xaxis=dict(axis), yaxis=dict(axis), zaxis=dict(axis)),
+            xaxis=dict(axis),
+            yaxis=dict(axis)))
     else:
-        layout = go.Layout(
-            **dict(
-                lay, scene=dict(
-                    xaxis=dict(axis, showbackground=False),
-                    yaxis=dict(axis, showbackground=False),
-                    zaxis=dict(axis, showbackground=False),
-                ), xaxis=dict(axis), yaxis=dict(axis)))
+        layout = go.Layout(**dict(lay,
+                                  scene=dict(
+                                      xaxis=dict(axis, showbackground=False),
+                                      yaxis=dict(axis, showbackground=False),
+                                      zaxis=dict(axis, showbackground=False),
+                                  ),
+                                  xaxis=dict(axis),
+                                  yaxis=dict(axis)))
 
     return go.Figure(data=node_traces + traces, layout=layout)

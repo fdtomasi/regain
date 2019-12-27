@@ -32,8 +32,10 @@ import warnings
 
 import numpy as np
 
+from sklearn.clusters import AgglomerativeClustering
 
-def get_representative(graphs):
+
+def _get_representative(graphs):
     bin_graphs = []
     for g in graphs:
         g_bin = (g.copy() != 0).astype(int)
@@ -44,7 +46,7 @@ def get_representative(graphs):
     return (sum_graph == len(graphs)).astype(int)
 
 
-def compute_distances(graphs, reps):
+def _compute_distances(graphs, reps):
     distances = np.zeros((len(graphs), len(reps)))
 
     for i, g in enumerate(graphs):
@@ -59,22 +61,50 @@ def compute_distances(graphs, reps):
 
 
 def graph_k_means(graphs, k, max_iter=10):
+    """
+    Clustering of graphs based on their structural distance.
+
+    Parameters
+    ----------
+    graphs: list of array-like graphs
+        List of adjacency matrices.
+
+    k: int,
+        Number of clusters to infer.
+
+    max_iter: int, optional default=10
+        Maximum number of iterations to perform.
+
+
+    Return
+    ------
+    labels: array-like, shape=(n_graphs,)
+        Cluster labels for each graph.
+
+    labels_agglomerative: array-like, shape=(n_graphs,)
+        Cluster labels for each graph obtained with AgglomerativeClustering.
+
+    kernel: array-like, shape(n_graphs, n_graphs)
+        Similarity kernel obtained through the procedure.
+    """
     ixs = np.arange(0, len(graphs))
     np.random.shuffle(ixs)
     repres = np.array(graphs)[np.array(ixs[:k])]
 
     labels_prev = [-1]*len(graphs)
     for iter_ in range(max_iter):
-        distances = compute_distances(graphs, repres)
-        normalized_distances = distances/np.max(distances, axis=1)[:, np.newaxis]
+        distances = _compute_distances(graphs, repres)
+        normalized_distances = distances/np.max(distances, axis=1)[:,
+                                                                   np.newaxis]
         similarities = 1 - normalized_distances
         kernel = similarities.dot(similarities.T)
         labels = np.argmin(distances, axis=1)
-        repres = [get_representative(np.array(graphs)[np.where(labels == v)])
+        repres = [_get_representative(np.array(graphs)[np.where(labels == v)])
                   for v in np.unique(labels)]
         if np.all(labels == labels_prev):
             break
         labels_prev = labels.copy()
     else:
         warnings.warn("The algorithm did not converge.")
-    return kernel
+    return labels, AgglomerativeClustering(
+            n_clusters=k, affinity='linkage').fit(kernel).labels_, kernel

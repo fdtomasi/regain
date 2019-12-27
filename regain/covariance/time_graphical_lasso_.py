@@ -153,7 +153,6 @@ def time_graphical_lasso(
     """
     psi, prox_psi, psi_node_penalty = check_norm_prox(psi)
 
-
     Z_0 = init_precision(emp_cov, mode=init)
     Z_1 = Z_0.copy()[:-1]  # np.zeros_like(emp_cov)[:-1]
     Z_2 = Z_0.copy()[1:]  # np.zeros_like(emp_cov)[1:]
@@ -279,7 +278,7 @@ def time_graphical_lasso(
         U_2 *= rho / rho_new
         rho = rho_new
 
-        #assert is_pos_def(Z_0)
+        # assert is_pos_def(Z_0)
     else:
         warnings.warn("Objective did not converge.")
 
@@ -410,7 +409,8 @@ class TimeGraphicalLasso(GraphicalLasso):
             compute_objective=self.compute_objective, stop_at=self.stop_at,
             stop_when=self.stop_when, init=self.init)
         if self.return_history:
-            self.precision_, self.covariance_, self.history_, self.n_iter_ = out
+            self.precision_, self.covariance_, self.history_, self.n_iter_ = \
+                out
         else:
             self.precision_, self.covariance_, self.n_iter_ = out
         return self
