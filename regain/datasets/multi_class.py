@@ -142,9 +142,10 @@ def generate_multiple_class_dataset(n_dim_obs=10, n_edges=2, probability=0.2,
     for i in range(n_classes-1):
         K_new = binaries[0].copy()
         _to_add = np.random.choice(np.arange(zeros[0].shape[0]), to_add,
-                                  replace=False)
-        _to_remove = np.random.choice(np.arange(nonzero[0].shape[0]), to_remove,
-                                     replace=False)
+                                   replace=False)
+        _to_remove = np.random.choice(np.arange(nonzero[0].shape[0]),
+                                      to_remove,
+                                      replace=False)
         for ta in _to_add:
             a = np.random.choice([0, 1], p=[0.2, 0.8])
             K_new[zeros[0][i], zeros[1][i]] = a

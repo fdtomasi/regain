@@ -1,13 +1,40 @@
-import warnings
+# BSD 3-Clause License
+
+# Copyright (c) 2019, regain authors
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+
+# * Neither the name of the copyright holder nor the names of its
+#   contributors may be used to endorse or promote products derived from
+#   this software without specific prior written permission.
+
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import numpy as np
 from sklearn.utils import check_array
-from sklearn.utils.extmath import squared_norm
 from sklearn.base import BaseEstimator
 
 from regain.generalized_linear_model.base import GLM_GM, convergence
 from regain.generalized_linear_model.base import build_adjacency_matrix
-from regain.prox import soft_thresholding, soft_thresholding_od
+from regain.prox import soft_thresholding
 from regain.norm import l1_od_norm
 
 
@@ -72,8 +99,7 @@ def fit_each_variable(X, ix, alpha=1e-2, gamma=1, tol=1e-3,
             diff_theta2 = np.linalg.norm(theta_old - theta)**2
             grad_diff = grad.dot(theta_old - theta)
             diff = loss_old - grad_diff + (diff_theta2/(2*gamma))
-            #print(loss_new)
-            #print(diff)
+
             if loss_new > diff or np.isinf(loss_new) or np.isnan(loss_new):
                 gamma = update_gamma * gamma
                 theta = theta_old - gamma * grad
@@ -111,113 +137,69 @@ def fit_each_variable(X, ix, alpha=1e-2, gamma=1, tol=1e-3,
     return return_list
 
 
-# def _gradient_poisson(X, theta,  n, A=None, rho=1, T=0):
-#     n, d = X.shape
-#     theta_new = np.zeros_like(theta)
-#
-#     def gradient(X, theta, r, selector, n, A=None, rho=1, T=0):
-#         XTX = X[:, selector].T.dot(X[:, r])
-#         EXK = X[:, selector].T.dot(np.exp(X[:, selector].dot(theta)))
-#         return -(1/n)*(XTX - EXK)
-#
-#         # XTX = X[:, selector].T.dot(X[:, r])
-#         # EXK = X[:, selector].T.dot(np.exp(X[:, selector].dot(theta)))
-#         # # if A is not None:
-#         # #     to_add = (rho*T)*(theta - A[r, selector])
-#         # # else:
-#         # #     to_add = 0
-#         # return -(1/n)*(XTX - EXK)# + to_add
-#
-#     for ix in range(theta.shape[0]):
-#         selector = [i for i in range(d) if i != ix]
-#         theta_new[ix, selector] = gradient(
-#                                     X, theta[ix, selector], ix, selector, n,
-#                                     A, rho, T)
-#     np.fill_diagonal(theta_new, 0)
-#     #theta_new = (theta_new + theta_new.T)/2
-#     return theta_new
-#
-#
 def loss(X, theta):
     n, d = X.shape
     objective = 0
-    # if not np.all(theta == theta.T):
-    #     return np.float('inf')
     for r in range(d):
         selector = [i for i in range(d) if i != r]
         a = loss_single_variable(X, theta[r, selector], n, r, selector)
-        #print(a)
         objective += a
     return objective
-#
-#
-# def _fit(X, alpha=1e-2, gamma=1, tol=1e-3, max_iter=1000, update_gamma=0.5,
-#          verbose=0, return_history=True, compute_objective=True,
-#          warm_start=None, return_n_iter=False, adjust_gamma=True, A=None,
-#          T=0, rho=1):
-#     n, d = X.shape
-#     if warm_start is None:
-#         theta = np.zeros((d, d))
-#         np.fill_diagonal(theta, 0)
-#     else:
-#         theta = check_array(warm_start)
-#     thetas = [theta]
-#     theta_new = theta.copy()
-#     checks = []
-#     for iter_ in range(max_iter):
-#         theta_old = thetas[-1]
-#         grad = _gradient_poisson(X, theta,  n, A, rho, T)
-#         if adjust_gamma:
-#             while True:
-#                 theta_new = theta - gamma*grad
-#                 theta = soft_thresholding_od(theta_new, alpha*gamma)
-#                 #print(theta)
-#                 loss_new = loss(X, theta)
-#                 loss_old = loss(X, theta_old)
-#                 # Line search
-#                 diff_theta2 = np.linalg.norm(theta_old - theta)**2
-#                 grad_diff = np.trace(grad.dot(theta_old - theta))
-#                 diff = loss_old - grad_diff + (diff_theta2/(2*gamma))
-#                 if loss_new > diff or np.isinf(loss_new) or np.isnan(loss_new):
-#                     gamma = update_gamma * gamma
-#                     theta = theta_old - gamma * grad
-#                     theta = soft_thresholding_od(theta, alpha*gamma)
-#                     loss_new = loss(X, theta)
-#                     diff = loss_old - grad_diff + (diff_theta2/(2*gamma))
-#                 else:
-#                     break
-#         print(gamma)
-#         theta = (theta_new + theta_new.T)/2
-#         thetas.append(theta)
-#
-#         with warnings.catch_warnings():
-#             warnings.simplefilter("ignore")
-#             check = convergence(iter=iter_,
-#                                 obj=objective(X, theta, alpha),
-#                                 iter_norm=np.linalg.norm(thetas[-2]-thetas[-1]),
-#                                 iter_r_norm=(np.linalg.norm(thetas[-2] -
-#                                                             thetas[-1]) /
-#                                              np.linalg.norm(thetas[-1])))
-#         checks.append(check)
-#         if verbose:
-#             print('Iter: %d, objective: %.4f, iter_norm %.4f' %
-#                   (check[0], check[1], check[2]))
-#
-#         if np.abs(check[2]) < tol:
-#             break
-#
-#     return_list = [thetas[-1]]
-#     if return_history:
-#         return_list.append(thetas)
-#         return_list.append(checks)
-#     if return_n_iter:
-#         return_list.append(iter_)
-#
-#     return return_list
 
 
 class PoissonGraphicalModel(GLM_GM, BaseEstimator):
+    """Graphical model inference with local Poisson distribution.
 
+    Parameters
+    ----------
+    alpha : positive float, default 0.01
+        Regularization parameter for precision matrix. The higher alpha,
+        the more regularization, the sparser the inverse covariance.
+
+    kernel : ndarray, default None
+        Normalised temporal kernel (1 on the diagonal),
+        with dimensions equal to the dimensionality of the data set.
+        If None, it is interpreted as an identity matrix, where there is no
+        constraint on the temporal behaviour of the precision matrices.
+
+    psi : {'laplacian', 'l1', 'l2', 'linf', 'node'}, default 'laplacian'
+        Type of norm to enforce for consecutive precision matrices in time.
+
+    rho : positive float, default 1
+        Augmented Lagrangian parameter.
+
+    tol : positive float, default 1e-4
+        Absolute tolerance to declare convergence.
+
+    rtol : positive float, default 1e-4
+        Relative tolerance to declare convergence.
+
+    max_iter : integer, default 100
+        The maximum number of iterations.
+
+    verbose : boolean, default False
+        If verbose is True, the objective function, rnorm and snorm are
+        printed at each iteration.
+
+    compute_objective : boolean, default True
+        Choose if compute the objective function during iterations
+        (only useful if `verbose=True`).
+
+    n_cores: int, default -1
+         Number of cores to use in parallel execution.
+
+    Attributes
+    ----------
+    covariance_ : array-like, shape (n_times, n_features, n_features)
+        Estimated covariance matrix
+
+    precision_ : array-like, shape (n_times, n_features, n_features)
+        Estimated pseudo inverse matrix.
+
+    n_iter_ : int
+        Number of iterations run.
+
+    """
     def __init__(self, alpha=0.01, tol=1e-4, rtol=1e-4, reconstruction='union',
                  mode='coordinate_descent', max_iter=100, gamma=0.1,
                  intercept=False,
@@ -244,11 +226,8 @@ class PoissonGraphicalModel(GLM_GM, BaseEstimator):
         """
         X = check_array(X)
         if self.mode.lower() == 'symmetric_fbs':
-            res = _fit(X, self.alpha, tol=self.tol, gamma=self.gamma,
-                       max_iter=self.max_iter,
-                       verbose=self.verbose)
-            self.precision_ = res[0]
-            self.history = res[1:]
+            raise ValueError('Not implemented.')
+
         elif self.mode.lower() == 'coordinate_descent':
             print('sono qui')
             thetas_pred = []

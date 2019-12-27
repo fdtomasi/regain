@@ -1,11 +1,38 @@
+# BSD 3-Clause License
+
+# Copyright (c) 2019, regain authors
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+
+# * Neither the name of the copyright holder nor the names of its
+#   contributors may be used to endorse or promote products derived from
+#   this software without specific prior written permission.
+
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 import warnings
 
 import numpy as np
 
 from six.moves import map, range, zip
-from joblib import Parallel, delayed
-import multiprocessing
-from functools import partial
 
 from sklearn.base import BaseEstimator
 from sklearn.utils.extmath import squared_norm
@@ -142,28 +169,12 @@ def _fit_time_ising_model(X, alpha=0.01, rho=1, kernel=None,
 
         for t in range(n_times):
             K[t, :, :] = _fit(X=X[t, :, :], A=A[t, :, :],
-                        alpha=alpha, gamma=gamma,
-                          tol=tol,
-                          max_iter=max_iter, verbose=max(0, verbose-1),
-                          compute_objective=True,
-                          warm_start=None, rho=rho, T=n_times,
-                          return_history=False, return_n_iter=False)[0]
-
-        # fit_partial = partial(_fit,  alpha=alpha, gamma=gamma,
-        #                       tol=tol,
-        #                       max_iter=max_iter, verbose=0,
-        #                       compute_objective=True,
-        #                       warm_start=None, rho=rho, T=n_times,
-        #                       return_history=False, return_n_iter=False)
-        # if n_cores == -1:
-        #     n_cores = multiprocessing.cpu_count()
-        #
-        # results = Parallel(n_jobs=n_cores)(
-        #             delayed(fit_partial)(X=X[t, :, :], A=A[t, :, :])
-        #             for t in range(n_times))
-        #
-        # K = np.array([r[0] for r in results])
-        # print(K.shape)
+                              alpha=alpha, gamma=gamma,
+                              tol=tol,
+                              max_iter=max_iter, verbose=max(0, verbose-1),
+                              compute_objective=True,
+                              warm_start=None, rho=rho, T=n_times,
+                              return_history=False, return_n_iter=False)[0]
 
         # other Zs
         for m in range(1, n_times):
@@ -273,12 +284,6 @@ class TemporalIsingModel(BaseEstimator):
 
     Parameters
     ----------
-    distribution: string, default='ising'
-        The type of distribution to use for the inference of the graph.
-        Options are 'ising', 'poisson', 'exponential', 'gaussian'.
-        For the gaussian case you may want to check the
-        TimeVaryingGraphicalLasso.
-
     alpha : positive float, default 0.01
         Regularization parameter for precision matrix. The higher alpha,
         the more regularization, the sparser the inverse covariance.
@@ -314,16 +319,9 @@ class TemporalIsingModel(BaseEstimator):
         zero.
         If False, data are centered before computation.
 
-    update_rho_options : dict, default None
-        Options for the update of rho. See `update_rho` function for details.
-
     compute_objective : boolean, default True
         Choose if compute the objective function during iterations
         (only useful if `verbose=True`).
-
-    init : {'empirical', 'zeros', ndarray}, default 'empirical'
-        How to initialise the inverse covariance matrix. Default is take
-        the empirical covariance and inverting it.
 
     Attributes
     ----------
@@ -343,8 +341,8 @@ class TemporalIsingModel(BaseEstimator):
             tol=1e-4, rtol=1e-4,
             psi='laplacian', max_iter=100, verbose=False,
             assume_centered=False, return_history=False,
-            update_rho_options=None, compute_objective=True, ker_param=1,
-            max_iter_ext=100, init='empirical', n_cores=-1):
+            compute_objective=True, ker_param=1,
+            max_iter_ext=100, n_cores=-1):
         self.alpha = alpha
         self.kernel = kernel
         self.rho = rho
@@ -355,11 +353,9 @@ class TemporalIsingModel(BaseEstimator):
         self.verbose = verbose
         self.assume_centered = assume_centered
         self.return_history = return_history
-        self.update_rho_options = update_rho_options
         self.compute_objective = compute_objective
         self.ker_param = ker_param
         self.max_iter_ext = max_iter_ext
-        self.init = init
         self.distribution = distribution
         self.n_cores = n_cores
 
@@ -419,9 +415,8 @@ class TemporalIsingModel(BaseEstimator):
                     tol=self.tol, rtol=self.rtol,
                     psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
                     return_n_iter=True, return_history=self.return_history,
-                    update_rho_options=self.update_rho_options,
                     compute_objective=self.compute_objective,
-                    init=self.precision_, n_cores=self.n_cores)
+                    n_cores=self.n_cores)
                 if self.return_history:
                     self.precision_,  self.history_, self.n_iter_ = out
                 else:
@@ -453,9 +448,8 @@ class TemporalIsingModel(BaseEstimator):
                 tol=self.tol, rtol=self.rtol,
                 psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
                 return_n_iter=True, return_history=self.return_history,
-                update_rho_options=self.update_rho_options,
                 compute_objective=self.compute_objective,
-                init=self.init)
+                )
             if self.return_history:
                 self.precision_,  self.history_, self.n_iter_ = out
             else:
@@ -499,27 +493,6 @@ def precision_similarity(precision, psi=None):
     print(distances)
     distances /= np.max(distances)
     return 1 - distances
-    #print(precision.shape)
-    # n_times, _, _ = precision.shape
-    # kernel = np.zeros((n_times, n_times))
-    # precisions_c = precision.copy()
-    # precisions_c = np.array([np.abs(t) for t in precisions_c])
-    #
-    # #print(precisions_c)
-    # for m in range(1, n_times):
-    #     # all possible markovians jumps
-    #     dist = list(map(l1_od_norm,
-    #                     precisions_c[m:] - precisions_c[:-m]))
-    #     np.fill_diagonal(kernel[m:], dist)
-    #     np.fill_diagonal(kernel[:, m:], dist)
-    #
-    # kernel -= np.min(kernel)
-    # if np.max(kernel) == 0:
-    #     print('porca paletta')
-    # kernel /= np.max(kernel)
-    # # kernel *= -1
-    # # kernel += 1
-    # return 1 - kernel  # 1.
 
 
 class SimilarityTemporalIsingModel(TemporalIsingModel):
@@ -562,16 +535,9 @@ class SimilarityTemporalIsingModel(TemporalIsingModel):
         zero.
         If False, data are centered before computation.
 
-    update_rho_options : dict, default None
-        Options for the update of rho. See `update_rho` function for details.
-
     compute_objective : boolean, default True
         Choose if compute the objective function during iterations
         (only useful if `verbose=True`).
-
-    init : {'empirical', 'zeros', ndarray}, default 'empirical'
-        How to initialise the inverse covariance matrix. Default is take
-        the empirical covariance and inverting it.
 
     Attributes
     ----------
@@ -590,15 +556,14 @@ class SimilarityTemporalIsingModel(TemporalIsingModel):
             self, alpha=0.01, beta=1, kernel=None, rho=1., tol=1e-4, rtol=1e-4,
             psi='laplacian', max_iter=100, verbose=False,
             assume_centered=False, return_history=False,
-            update_rho_options=None, compute_objective=True, ker_param=1,
-            max_iter_ext=100, init='empirical', eps=1e-6, n_clusters=None):
+            compute_objective=True, ker_param=1,
+            max_iter_ext=100, eps=1e-6, n_clusters=None):
         super(SimilarityTemporalIsingModel, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol,
             max_iter=max_iter, verbose=verbose,
             assume_centered=assume_centered,
-            update_rho_options=update_rho_options,
             compute_objective=compute_objective, return_history=return_history,
-            psi=psi, init=init)
+            psi=psi)
         # in this class, `kernel` is either a matrix TxT or None
         # if None, automatically learn all the weights
         self.beta = beta
@@ -626,7 +591,6 @@ class SimilarityTemporalIsingModel(TemporalIsingModel):
             self.precision_ = np.random.rand(self.classes_.shape[0],
                                              X.shape[1], X.shape[1])
             n_times = self.precision_.shape[0]
-            theta_old = np.zeros(n_times * (n_times - 1) // 2)
             kernel = np.eye(n_times)
 
             psi, _, _ = check_norm_prox(self.psi)
@@ -639,9 +603,8 @@ class SimilarityTemporalIsingModel(TemporalIsingModel):
                     tol=self.tol, rtol=self.rtol,
                     psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
                     return_n_iter=True, return_history=self.return_history,
-                    update_rho_options=self.update_rho_options,
                     compute_objective=self.compute_objective,
-                    init=self.precision_)
+                    )
                 if self.return_history:
                     (
                         self.precision_,  self.history_,
@@ -680,9 +643,8 @@ class SimilarityTemporalIsingModel(TemporalIsingModel):
                 tol=self.tol, rtol=self.rtol,
                 psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
                 return_n_iter=True, return_history=self.return_history,
-                update_rho_options=self.update_rho_options,
                 compute_objective=self.compute_objective,
-                init=self.precision_)
+                )
             if self.return_history:
                 (
                     self.precision_, self.history_,

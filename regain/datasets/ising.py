@@ -36,11 +36,9 @@ import numpy as np
 import networkx as nx
 import warnings
 
-# TODO UPDATE ISING DIFFUSION PROCESSES
-# TODO update with switch of an edge
-
 
 def update_ising_l1(theta_init, no, n_dim_obs, responses=[-1, 1]):
+    """Generates temporal matrices using l1 update."""
     theta = theta_init.copy()
     rows = np.zeros(no)
     cols = np.zeros(no)
@@ -50,7 +48,7 @@ def update_ising_l1(theta_init, no, n_dim_obs, responses=[-1, 1]):
         for r, c in zip(rows, cols):
             theta[r, c] = np.random.choice(responses) \
                           if theta[r, c] == 0 \
-                          else np.random.choice([theta[r, c], 0])  # np.random.rand(1) * .35
+                          else np.random.choice([theta[r, c], 0])
             theta[c, r] = theta[r, c]
     assert (np.all(theta == theta.T))
     return theta
@@ -60,7 +58,43 @@ def ising_theta_generator(
         n_dim_obs=10, n=100, T=10, mode='l1', time_on_axis='first', change=1,
         responses=[-1, 1], random_graph='scale-free', probability=0.3,
         degree=2):
+    """Generates adjacency matix for Ising graphical model.
 
+    Parameters
+    ----------
+    n_dim_obs: int optional default 10
+        Number of variables.
+
+    n: int, optional default=100
+        Number of samples.
+
+    T: int, optional default=10
+        Number of times.
+
+    mode: string optional default 'l1'
+        Type of temporal updates. For now no other choices are provided.
+
+    change: int, optional default 1
+        How many edges to change at each time.
+
+    responses: list, optional default [-1,1]
+        Possibilities are [-1, 1] or [0,1]
+
+    random_graph: string, optional default 'scale-free'
+        Initial adjacency matrix graph type. Options 'scale-free',
+        'erdos-renyi'
+
+    probability: float, optional default 0.3
+        Paramter for Erdos-Renyi random graph.
+
+    degree: int, optional default 2
+        Parameter for the scale free random graph.
+
+    Returns
+    --------
+    list:
+        List of adjaceny matrix of length T.
+    """
     if random_graph.lower() == 'erdos-renyi':
         graph = nx.random_graphs.fast_gnp_random_graph(n=n_dim_obs,
                                                        p=probability)
@@ -73,8 +107,8 @@ def ising_theta_generator(
                                                       p=probability)
         graph = nx.adjacency_matrix(graph).todense()
     else:
-        graph = np.random.choice(
-            np.array([-0.5, 0, 0.5]), size=(p, p), replace=True)
+        graph = np.random.choice(np.array([-0.5, 0, 0.5]),
+                                 size=(n_dim_obs, n_dim_obs), replace=True)
         graph += graph.T
         np.fill_diagonal(graph, 0)
         graph[np.where(graph > 0)] = 1
@@ -93,31 +127,6 @@ def ising_theta_generator(
             theta_t = update_ising_l1(thetas[-1], change, thetas[-1].shape[0])
         thetas.append(theta_t)
     return thetas
-
-# def gibbs_sampling_ising(lattice, n_samples=100, burn_in=1000,
-#                          sample_step=100):
-#     x = random_ising_state(lattice.shape[0])
-#
-#     def sampler(lattice, x, i):
-#         p = ising_probability(lattice, x, i)
-#         val = np.random.binomial(1, p, 1)
-#         return val if (val==1) else -1
-#
-#     samples = []
-#     for iter_ in range(burn_in):
-#         for i in range(lattice.shape[0]):
-#             x[i] = sampler(lattice, x, i)
-#
-#     samples.append(x.copy())
-#     n=0
-#     while n< n_samples:
-#         for iter_ in range(sample_step):
-#             for i in range(lattice.shape[0]):
-#                 x[i] = sampler(lattice, x, i)
-#         if not np.sum(x) == lattice.shape[0]:
-#             samples.append(x.copy())
-#             n +=1
-#     return samples
 
 
 def hamiltonian(theta, state, thresholds):
@@ -271,9 +280,27 @@ def ising_metropolis_hastings(graph, thresholds, beta, max_iter, responses,
 def ising_sampler(theta, thresholds, n=1000, beta=1, max_iter=100,
                   responses=[0, 1], method='MH', CFTP_retry=10,
                   constraints=None):
-    """
-    method= 'MH', 'CFTP', 'direct'
-    responses = [0,1] or [-1, 1]
+    """Given an adjacency matrix samples form the related distribution.
+
+    Parameters
+    ----------
+    theta: array-like, (n_dim_obs, n_dim_obs)
+        Number of variables.
+
+    n: int, optional default=100
+        Number of samples.
+
+    method: string optional default 'MH'
+        Type of sampling. Options are 'MH', 'CFTP', 'direct'
+
+    responses: list, optional default [-1,1]
+        Possibilities are [-1, 1] or [0,1]
+
+
+    Returns
+    --------
+    array-like:
+        Matrix of shape (n, n_dim_obs)
     """
 
     assert np.all(theta == theta.T), "The input graph must be symmetric"

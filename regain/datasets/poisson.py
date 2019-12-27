@@ -33,6 +33,8 @@ import networkx as nx
 
 
 def update_l1(G, how_many, n_dim_obs):
+    """Generates temporal matrices using l1 update."""
+
     G = G.copy()
     rows = np.zeros(how_many)
     cols = np.zeros(how_many)
@@ -46,9 +48,40 @@ def update_l1(G, how_many, n_dim_obs):
     return G
 
 
-def poisson_theta_generator(n_dim_obs=10, T=1, mode='l1',
+def poisson_theta_generator(n_dim_obs=10, T=10, mode='l1',
                             random_graph='erdos-renyi', probability=0.2,
                             degree=3, n_to_change=3, **kwargs):
+    """Generates adjacency matix for Ising graphical model.
+
+    Parameters
+    ----------
+    n_dim_obs: int optional default 10
+        Number of variables.
+
+    T: int, optional default=10
+        Number of times.
+
+    mode: string optional default 'l1'
+        Type of temporal updates. For now no other choices are provided.
+
+    n_to_change: int, optional default 1
+        How many edges to change at each time.
+
+    random_graph: string, optional default 'scale-free'
+        Initial adjacency matrix graph type. Options 'scale-free',
+        'erdos-renyi'
+
+    probability: float, optional default 0.3
+        Paramter for Erdos-Renyi random graph.
+
+    degree: int, optional default 2
+        Parameter for the scale free random graph.
+
+    Returns
+    --------
+    list:
+        List of adjaceny matrix of length T.
+    """
     if random_graph.lower() == 'erdos-renyi':
         graph = nx.random_graphs.fast_gnp_random_graph(n=n_dim_obs,
                                                        p=probability)
@@ -73,7 +106,6 @@ def poisson_theta_generator(n_dim_obs=10, T=1, mode='l1',
         np.fill_diagonal(graph_t, 0)
         graphs.append(graph_t)
 
-
     return graphs
 
 
@@ -91,6 +123,40 @@ def _adjacency_to_A(graph, typ='full'):
 def poisson_sampler(theta, variances=None, n_samples=100, _type='LPGM',
                     random_graph='scale-free',
                     _lambda=1, _lambda_noise=0.5, max_iter=200):
+    """Given an adjacency matrix samples form the related distribution.
+
+    Parameters
+    ----------
+    theta: array-like, (n_dim_obs, n_dim_obs)
+        Number of variables.
+
+    variances: list, optional default None
+        List of length n_dim_obs with the variance of each variable.
+
+    n_samples: int, optional default=100
+        Number of samples.
+
+    _type: string, optional default='LPGM'
+        Type if local poisson or poisson.
+
+    random_graph: string, optional default 'scale-free'
+        Initial adjacency matrix graph type. Options 'scale-free',
+        'erdos-renyi'
+
+    _lambda: float, optional default 1
+        Parameter of the conditional poisson distribution of each variable.
+
+    _lambda_noise: float, optional default 0.5
+        Parameter of the noise poisson distribution.
+
+    max_iter: int, optional defatul 200
+        Maximum iteration for Gibbs sampling procedure.
+
+    Returns
+    --------
+    array-like:
+        Matrix of shape (n, n_dim_obs)
+    """
     n_dim_obs = theta.shape[0]
     if _type == 'LPGM':
         A = _adjacency_to_A(theta, typ='scale-free')
