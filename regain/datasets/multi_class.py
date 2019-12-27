@@ -1,3 +1,33 @@
+# BSD 3-Clause License
+
+# Copyright (c) 2019, regain authors
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+
+# * Neither the name of the copyright holder nor the names of its
+#   contributors may be used to endorse or promote products derived from
+#   this software without specific prior written permission.
+
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 import numpy as np
 import networkx as nx
 
@@ -59,8 +89,7 @@ def make_multiclass_dataset(
         n_classes=n_classes, _type=_type, distribution=distribution,
         random_state=random_state)
     return sample(n_dim_obs=n_dim_obs, n_classes=n_classes,
-                  n_samples=n_samples, networks=res,
-                  time_on_axis='first'), res['binary']
+                  n_samples=n_samples, networks=res), res['binary']
 
 
 def generate_multiple_class_dataset(n_dim_obs=10, n_edges=2, probability=0.2,
@@ -112,15 +141,15 @@ def generate_multiple_class_dataset(n_dim_obs=10, n_edges=2, probability=0.2,
     to_remove = int(0.1*nonzero[0].shape[0])
     for i in range(n_classes-1):
         K_new = binaries[0].copy()
-        to_add = np.random.choice(np.arange(zeros[0].shape[0]), to_add,
+        _to_add = np.random.choice(np.arange(zeros[0].shape[0]), to_add,
                                   replace=False)
-        to_remove = np.random.choice(np.arange(nonzero[0].shape[0]), to_add,
+        _to_remove = np.random.choice(np.arange(nonzero[0].shape[0]), to_remove,
                                      replace=False)
-        for ta in to_add:
+        for ta in _to_add:
             a = np.random.choice([0, 1], p=[0.2, 0.8])
             K_new[zeros[0][i], zeros[1][i]] = a
             K_new[zeros[1][i], zeros[0][i]] = a
-        for ta in to_remove:
+        for ta in _to_remove:
             a = np.random.choice([0, 1], p=[0.8, 0.2])
             K_new[nonzero[0][i], nonzero[1][i]] = a
             K_new[nonzero[1][i], nonzero[0][i]] = a
@@ -218,6 +247,8 @@ def sample(n_dim_obs=10, n_classes=5, n_samples=100, networks=dict()):
 
     res = {}
     for k in networks.keys():
+        if k == 'binary':
+            continue
         res[k] = generation[k](networks[k])
 
     return res

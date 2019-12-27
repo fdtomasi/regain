@@ -44,7 +44,7 @@ from regain.covariance.missing_graphical_lasso_ import \
 from regain.covariance.kernel_time_graphical_lasso_ import \
                 kernel_time_graphical_lasso, KernelTimeGraphicalLasso
 from regain.covariance.time_graphical_lasso_ import loss
-from regain.covariance.missing_graphical_lasso import \
+from regain.covariance.missing_graphical_lasso_ import \
                                         LatentMissingGraphicalLasso
 from regain.scores import log_likelihood_t, BIC_t, EBIC_t, EBIC_m_t
 from regain.validation import check_norm_prox
