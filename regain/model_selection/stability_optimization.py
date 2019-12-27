@@ -57,6 +57,23 @@ warnings.simplefilter('ignore')
 
 
 def global_instability(estimators):
+    """
+    Computes instability of the graphs inferred from estimators.
+
+    Parameters
+    ----------
+
+    estimators: list of fitted graphical models estimator
+        Each estimator contains the inferred adjacency matrix that is taken
+        to compute the global instability of the list of estimator.
+
+
+    Returns
+    -------
+    float:
+        Instability value.
+    """
+
     precisions = [estimator.get_precision() for estimator in estimators]
 
     if precisions[0].ndim == 2:
@@ -85,6 +102,23 @@ def global_instability(estimators):
 
 
 def graphlet_instability(estimators):
+    """
+    Computes graphlet instability of the graphs inferred from estimators.
+
+    Parameters
+    ----------
+
+    estimators: list of fitted graphical models estimator
+        Each estimator contains the inferred adjacency matrix that is taken
+        to compute the global instability of the list of estimator.
+
+
+    Returns
+    -------
+    float:
+        Graphlet instability value.
+    """
+
     from netanalytics.graphlets import GCD, graphlet_degree_vectors
     import networkx as nx
     n = len(estimators)
@@ -132,7 +166,7 @@ def upper_bound(estimators):
         for c in precisions:
             mean_connectivity += (c[triu_idx].copy() != 0).astype(int)
     else:
-        # for tri dimensional matrices
+        # for tri-dimensional matrices
         n_times = precisions[0].shape[0]
         triu_idx = np.triu_indices_from(precisions[0][0], 1)
         mean_connectivity = np.array(
@@ -170,25 +204,75 @@ def _check_param_order(param_grid):
     return dict(pg)
 
 
-# def _change_parameters(param_grid):
-#     if hasattr(param_grid, 'items'):
-#         param_grid = [param_grid]
-#
-#     pg = []
-#     for p in param_grid:
-#         for name, v in p.items():
-#             pg.append((name, 1/v))
-#
-#     return dict(pg)
-
-
 class GraphicalModelStabilitySelection(GridSearchCV):
-    """
+    """ Stability based search over specified parameter values for an estimator.
+
+    It implements a "fit" and a "score" method.
+
     Parameters
     ----------
+    estimator : estimator object.
+        This is assumed to implement the scikit-learn estimator interface.
+        Either estimator needs to provide a ``score`` function,
+        or ``scoring`` must be passed.
+    param_grid : dict or list of dictionaries
+        Dictionary with parameters names (string) as keys and lists of
+        parameter settings to try as values, or a list of such
+        dictionaries, in which case the grids spanned by each dictionary
+        in the list are explored. This enables searching over any sequence
+        of parameter settings.
+    scoring : string, callable, list/tuple, dict or None, default: None
+        Not used.
+
+    n_jobs : int or None, optional (default=None)
+        Number of jobs to run in parallel.
+        ``None`` means 1 unless in a :obj:`joblib.parallel_backend` context.
+        ``-1`` means using all processors. See :term:`Glossary <n_jobs>`
+        for more details.
+
+    cv : int, cross-validation generator or an iterable, optional
+        Not used.
+
+    refit : boolean, string, or callable, default=True
+        Refit an estimator using the best found parameters on the whole
+        dataset.
+        For multiple metric evaluation, this needs to be a string denoting the
+        scorer that would be used to find the best parameters for refitting
+        the estimator at the end.
+        Where there are considerations other than maximum score in
+        choosing a best estimator, ``refit`` can be set to a function which
+        returns the selected ``best_index_`` given ``cv_results_``. In that
+        case, the ``best_estimator_`` and ``best_parameters_`` will be set
+        according to the returned ``best_index_`` while the ``best_score_``
+        attribute will not be available.
+        The refitted estimator is made available at the ``best_estimator_``
+        attribute.
+
+    verbose : integer
+        Controls the verbosity: the higher, the more messages.
+    error_score : 'raise' or numeric
+        Value to assign to the score if an error occurs in estimator fitting.
+        If set to 'raise', the error is raised. If a numeric value is given,
+        FitFailedWarning is raised. This parameter does not affect the refit
+        step, which will always raise the error. Default is ``np.nan``.
+    return_train_score : boolean, default=False
+        If ``False``, the ``cv_results_`` attribute will not include training
+        scores.
+        Computing training scores is used to get insights on how different
+        parameter settings impact the overfitting/underfitting trade-off.
+        However computing the scores on the training set can be computationally
+        expensive and is not strictly required to select the parameters that
+        yield the best generalization performance.
 
     mode: string, optional default='stars'
-    The alternative option is gstars.
+        The alternative option is gstars.
+        If set to stars computes only the single edge stability. If gstars is
+        passed it computes graphlet stability.
+
+    sampling_size: int, optional default None
+        The sample size to each repetition of the stability procedure. If None
+        value is taken as ` int(min(10*np.sqrt(X.shape[0]), X.shape[0]-10))`
+
     """
     def __init__(
             self, estimator, param_grid, scoring=None, n_jobs=None,
@@ -473,7 +557,8 @@ class GraphicalModelStabilitySelection(GridSearchCV):
                                             for e_split in estimators])
             self.graphlets_instabilities = np.copy(graphlets_stability)
 
-            upper_bounds = np.array([upper_bound(e_split) for e_split in estimators])
+            upper_bounds = np.array([upper_bound(e_split)
+                                     for e_split in estimators])
             upper_bounds = [upper_bounds[0]] + [
                 np.max(upper_bounds[:i]) for i in range(1, upper_bounds.size)
             ]
@@ -507,20 +592,27 @@ class GraphicalModelStabilitySelection(GridSearchCV):
         return results
 
     def plot(self, axis=None, figsize=(15, 10), filename="", fontsize=15):
+        """
+        Function that plots the instability curves obtained on data.
+        """
         matplotlib.rcParams.update({'font.size': fontsize})
         if self.mode.lower() == 'gstars':
             if axis is None:
                 fig, axis = plt.subplots(2, figsize=figsize)
             axis[0].plot(self.monotonized_instabilities, label='Instabilities')
-            axis[0].plot(np.array(self.upper_bounds), label='Upper bound instabilities')
+            axis[0].plot(np.array(self.upper_bounds),
+                         label='Upper bound instabilities')
             axis[0].axhline(0.05, color='red')
-            axis[0].axvline(self.lower_bound, color='violet', label='Lower bound')
-            axis[0].axvline(self.upper_bound, color='green', label='Upper bound')
+            axis[0].axvline(self.lower_bound, color='violet',
+                            label='Lower bound')
+            axis[0].axvline(self.upper_bound, color='green',
+                            label='Upper bound')
             axis[0].grid()
             axis[0].legend()
             axis[0].set_xticks(np.arange(len(self.monotonized_instabilities)))
             axis[0].set_xticklabels(self.results['params'])
-            axis[1].plot(self.graphlets_instabilities, label='Graphlet instabilities')
+            axis[1].plot(self.graphlets_instabilities,
+                         label='Graphlet instabilities')
             axis[1].axvline(self.lower_bound, color='violet')
             axis[1].axvline(self.upper_bound, color='green')
             axis[1].grid()
@@ -539,7 +631,7 @@ class GraphicalModelStabilitySelection(GridSearchCV):
             plt.show()
         else:
             if axis is None:
-                fig, axis = plt.subplots( figsize=figsize)
+                fig, axis = plt.subplots(figsize=figsize)
             axis.set_title('Monotonized instabilities')
             axis.plot(self.monotonized_instabilities)
             axis.axhline(0.05, color='red')
