@@ -28,8 +28,9 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import warnings
-import numpy as np
+
 import networkx as nx
+import numpy as np
 
 
 def update_l1(G, how_many, n_dim_obs):
@@ -48,9 +49,14 @@ def update_l1(G, how_many, n_dim_obs):
     return G
 
 
-def poisson_theta_generator(n_dim_obs=10, T=10, mode='l1',
-                            random_graph='erdos-renyi', probability=0.2,
-                            degree=3, n_to_change=3, **kwargs):
+def poisson_theta_generator(n_dim_obs=10,
+                            T=10,
+                            mode='l1',
+                            random_graph='erdos-renyi',
+                            probability=0.2,
+                            degree=3,
+                            n_to_change=3,
+                            **kwargs):
     """Generates adjacency matix for Ising graphical model.
 
     Parameters
@@ -88,7 +94,8 @@ def poisson_theta_generator(n_dim_obs=10, T=10, mode='l1',
     elif random_graph.lower() == 'scale-free':
         graph = nx.random_graphs.barabasi_albert_graph(n=n_dim_obs, m=degree)
     elif random_graph.lower() == 'small-world':
-        graph = nx.random_graphs.watts_strogatz_graph(n=n_dim_obs, k=degree,
+        graph = nx.random_graphs.watts_strogatz_graph(n=n_dim_obs,
+                                                      k=degree,
                                                       p=probability)
     else:
         graph = nx.random_graphs.gnm_random_graph(n=n_dim_obs, m=degree)
@@ -111,8 +118,8 @@ def poisson_theta_generator(n_dim_obs=10, T=10, mode='l1',
 
 def _adjacency_to_A(graph, typ='full'):
     A = np.eye(graph.shape[0])
-    for i in range(graph.shape[0]-1):
-        for j in range(i+1, graph.shape[0]):
+    for i in range(graph.shape[0] - 1):
+        for j in range(i + 1, graph.shape[0]):
             if typ == "full" or graph[i, j] == 1:
                 tmp = np.zeros((graph.shape[0], 1))
                 tmp[np.array([i, j]), 0] = 1
@@ -120,9 +127,14 @@ def _adjacency_to_A(graph, typ='full'):
     return A
 
 
-def poisson_sampler(theta, variances=None, n_samples=100, _type='LPGM',
+def poisson_sampler(theta,
+                    variances=None,
+                    n_samples=100,
+                    _type='LPGM',
                     random_graph='scale-free',
-                    _lambda=1, _lambda_noise=0.5, max_iter=200):
+                    _lambda=1,
+                    _lambda_noise=0.5,
+                    max_iter=200):
     """Given an adjacency matrix samples form the related distribution.
 
     Parameters
@@ -163,7 +175,7 @@ def poisson_sampler(theta, variances=None, n_samples=100, _type='LPGM',
         sigma = _lambda * theta
         ltri_sigma = sigma[np.tril_indices(sigma.shape[0], k=-1)]
         nonzero_sigma = ltri_sigma[np.where(ltri_sigma != 0)]
-        aux = [_lambda]*theta.shape[0]
+        aux = [_lambda] * theta.shape[0]
         Y_lambda = np.array(aux + nonzero_sigma.ravel().tolist()[0])
 
         Y = np.array([np.random.poisson(l, n_samples) for l in Y_lambda]).T

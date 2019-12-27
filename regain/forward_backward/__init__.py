@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-=======
 # BSD 3-Clause License
 
 # Copyright (c) 2019, regain authors
@@ -33,7 +31,5 @@ try:
     import prox_tv
 except ImportError:
     import warnings
-    warnings.warn(
-        "Forward-backward minimisation method relies on `prox_tv` "
-        "library. Please install it before using this class.")
->>>>>>> develop
+    warnings.warn("Forward-backward minimisation method relies on `prox_tv` "
+                  "library. Please install it before using this class.")
