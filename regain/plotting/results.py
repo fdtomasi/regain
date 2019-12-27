@@ -36,39 +36,70 @@ from sklearn.metrics import auc, precision_recall_curve, roc_curve
 from sklearn.utils.deprecation import deprecated
 
 
+def plot_roc_curves(true, preds, ax=None, fontsize=15):
+    """Plot ROC curves using true and pred arrays."""
+    matplotlib.rcParams.update({'font.size': fontsize})
+    tprs = []
+    aucs = []
+    mean_fpr = np.linspace(0, 1, 100)
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(15, 10))
+    ax.plot(
+        [0, 1], [0, 1], linestyle='--', lw=2, color='r', label='Chance',
+        alpha=.8)
+
+    if true.ndim != 2:
+        true = (true != 0).astype(int).ravel()
+        preds_new = []
+        for p in preds:
+            preds_new.append(p.ravel())
+        preds = preds_new
+
+    for i, p in enumerate(preds):
+        fpr, tpr, thresholds = roc_curve(true, p)
+        tprs.append(interp(mean_fpr, fpr, tpr))
+        tprs[-1][0] = 0.0
+        roc_auc = auc(fpr, tpr)
+        aucs.append(roc_auc)
+        ax.plot(
+            fpr, tpr, lw=1, alpha=0.3,
+            label='ROC fold %d (AUC = %0.2f)' % (i, roc_auc))
+
+    mean_tpr = np.mean(tprs, axis=0)
+    mean_tpr[-1] = 1.0
+    mean_auc = auc(mean_fpr, mean_tpr)
+    std_auc = np.std(aucs)
+    ax.plot(
+        mean_fpr, mean_tpr, color='b',
+        label=r'Mean ROC (AUC = %0.2f $\pm$ %0.2f)' % (mean_auc, std_auc),
+        lw=2, alpha=.8)
+
+    std_tpr = np.std(tprs, axis=0)
+    tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
+    tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
+    ax.fill_between(
+        mean_fpr, tprs_lower, tprs_upper, color='grey', alpha=.2,
+        label=r'$\pm$ 1 std. dev.')
+
+    ax.set_xlim([-0.05, 1.05])
+    ax.set_ylim([-0.05, 1.05])
+    ax.set_xlabel('False Positive Rate')
+    ax.set_ylabel('True Positive Rate')
+    ax.legend(loc="lower right")
+    plt.show()
+
+
 def plot_curve(
         true, predictions, mode='roc', ax=None, filename=None, fontsize=15,
-        colors=None, multiple=False):
+        colors=None, multiple_true=False):
     """Plot a validation curve.
-
-    Compare the predictions with different methods with the true adjacency
-    matrix stored in true. If more than one comparison has been done it is
-    possible to provide a list of true matrices and a list of predictions.
 
     Parameters
     ----------
-    true: array-like, list of array-like
-        The true adjacency matrix of the graph.
-        If a list is provided the parameter multiple must be set to True.
     predictions : dict
         Keys is the algorithm, values list of predictions.
     mode : ('roc', 'precision_recall')
         Which curve to plot.
-    ax: Matplotlib Axes object, optional default=None
-        Draw the graph in the specified Matplotlib axes.
-    filename: str, optional default=None
-        Path to file where to save the resulting plot. If None no plot is
-        saved.
-    fontsize: int, optional default=15
-        Size of font in the final plot.
-    colors: list of colors, optional default=None
-        Colors to use to plot the curves, the colors shoud be provided in the
-        same order of the methods in the dictionary predictions for
-        correspondence.
-    multiple: boolean, optional default=False
-        If True the parameter true is intended as a list and the roc curves
-        are computed for different true adjacency matrix.
-
     """
     matplotlib.rcParams.update({'font.size': fontsize})
     if ax is None:
@@ -79,14 +110,12 @@ def plot_curve(
     curve_func = roc_curve if mode == 'roc' else precision_recall_curve
     for c, (key, preds) in enumerate(predictions.items()):
         if len(preds) == 1:
-            if multiple:
-                raise ValueError('Multiple true matrices and only one '
-                                 'prediction')
-            true = (~np.isclose(true, 0, rtol=1e-7)).astype(int).ravel()
-            preds_new = []
-            for p in preds:
-                preds_new.append(p.ravel())
-            preds = preds_new
+            if true.ndim != 2:
+                true = (~np.isclose(true, 0, rtol=1e-7)).astype(int).ravel()
+                preds_new = []
+                for p in preds:
+                    preds_new.append(p.ravel())
+                preds = preds_new
             fpr, tpr, thresholds = curve_func(true, preds[0])
             kwargs = dict(
                 lw=1, color=colors[c] if colors is not None else None)
@@ -94,30 +123,27 @@ def plot_curve(
                 roc_auc = auc(fpr, tpr)
                 ax.plot(
                     fpr, tpr,
-                    label='%s %s (AUC = %0.2f)' % (mode.upper(), str(key),
-                                                   roc_auc),
+                    label='%s %s (AUC = %0.2f)' % (mode, str(key), roc_auc),
                     **kwargs)
             else:
                 roc_auc = auc(tpr, fpr)
                 ax.plot(
                     tpr, fpr,
-                    label='%s %s (AUC = %0.2f)' % (mode.upper(), str(key),
-                                                   roc_auc),
+                    label='%s %s (AUC = %0.2f)' % (mode, str(key), roc_auc),
                     **kwargs)
         else:
             tprs = []
             aucs = []
             mean_fpr = np.linspace(0, 1, 100)
 
-            if multiple:
-                true = [(~np.isclose(t, 0, rtol=1e-7)).astype(int).ravel()
-                        for t in true]
+            if multiple_true:
+                true = [(~np.isclose(t, 0, rtol=1e-7)).astype(int).ravel() for t in true]
             else:
                 true = (~np.isclose(true, 0, rtol=1e-7)).astype(int).ravel()
             preds = [p.ravel() for p in preds]
 
             for i, p in enumerate(preds):
-                if multiple:
+                if multiple_true:
                     t = true[i]
                 else:
                     t = true
@@ -126,6 +152,9 @@ def plot_curve(
                 tprs[-1][0] = int(mode != 'roc')
                 roc_auc = auc(fpr, tpr) if mode == 'roc' else auc(tpr, fpr)
                 aucs.append(roc_auc)
+                # ax.plot(
+                #     fpr, tpr, lw=1,
+                #     color=colors[c] if colors is not None else None, alpha=0.3)
 
             mean_tpr = np.mean(tprs, axis=0)
             mean_tpr[-1] = int(mode == 'roc')
