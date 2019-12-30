@@ -105,8 +105,6 @@ def latent_graphical_lasso(
         for the primal and dual residual norms at each iteration.
 
     """
-    _, n_features = emp_cov.shape
-
     K = init_precision(emp_cov, mode=init)
     L = np.zeros_like(emp_cov)
     U = np.zeros_like(emp_cov)
@@ -171,7 +169,7 @@ def latent_graphical_lasso(
 
 
 class LatentGraphicalLasso(GraphicalLasso):
-    """Sparse inverse covariance estimation with an l1-penalized estimator.
+    """Sparse inverse covariance + low-rank matrix estimation.
 
     Parameters
     ----------

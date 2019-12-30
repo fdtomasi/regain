@@ -148,7 +148,7 @@ def tgl_forward_backward(
     return_history=False, return_n_iter=True, choose='gamma',
     lamda_criterion='b', time_norm=1, compute_objective=True,
     return_n_linesearch=False, vareps=1e-5, stop_at=None, stop_when=1e-4,
-    laplacian_penalty=False, init='empirical'):
+        laplacian_penalty=False, init='empirical'):
     """Time-varying graphical lasso solver with forward-backward splitting.
 
     Solves the following problem via FBS:

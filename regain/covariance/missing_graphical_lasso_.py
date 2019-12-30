@@ -37,18 +37,10 @@ from __future__ import division
 import warnings
 
 import numpy as np
-from scipy import linalg
 from six.moves import range
-from sklearn.covariance import empirical_covariance
-from sklearn.utils.extmath import fast_logdet
-from sklearn.utils.validation import check_array
 
-from regain.norm import l1_od_norm
-from regain.prox import prox_logdet, soft_thresholding_od
-from regain.update_rules import update_rho
-from regain.utils import convergence
-from regain.covariance.graphical_lasso_ import GraphicalLasso, logl, objective
-from regain.covariance.graphical_lasso_ import init_precision, graphical_lasso
+from regain.covariance.graphical_lasso_ import (
+    GraphicalLasso, graphical_lasso, logl)
 
 
 def compute_empirical_covariance(X, K, cs):
@@ -61,12 +53,14 @@ def compute_empirical_covariance(X, K, cs):
                 if np.isnan(X[i, v]) and np.isnan(X[i, s]):
                     nans = np.where(np.isnan(X[i, :]))[0]
                     xxm, yym = np.meshgrid(nans, nans)
-                    inv = np.linalg.pinv(K[xxm, yym])[np.where(nans==v)[0][0], np.where(nans==s)[0][0]]
-                    emp_cov[i, v, s] = inv + cs[i, v]*cs[i, s]
+                    inv = np.linalg.pinv(
+                        K[xxm, yym])[np.where(nans == v)[0][0],
+                                     np.where(nans == s)[0][0]]
+                    emp_cov[i, v, s] = inv + cs[i, v] * cs[i, s]
                 else:
-                    emp_cov[i, v, s] = aux[i, v]*aux[i, s]
-    emp_cov =  np.sum(emp_cov, axis=0)
-    return emp_cov/np.max(emp_cov)
+                    emp_cov[i, v, s] = aux[i, v] * aux[i, s]
+    emp_cov = np.sum(emp_cov, axis=0)
+    return emp_cov / np.max(emp_cov)
 
 
 def compute_cs(means, K, X):
@@ -78,7 +72,7 @@ def compute_cs(means, K, X):
         xxm1, yyo = np.meshgrid(obs, nans)
         KK = np.linalg.pinv(K[xxm, yym]).dot(K[xxm1, yyo])
         cs[i, nans] = means[nans] - KK.dot(X[i, obs].T - means[obs])
-    return cs/max(np.max(np.abs(cs)),1)
+    return cs / max(np.max(np.abs(cs)), 1)
 
 
 def compute_mean(X, cs):
@@ -153,26 +147,22 @@ def missing_graphical_lasso(
         old_logl = loglik
 
         cs = compute_cs(means, K, X)
-        #print(cs)
         means = compute_mean(X, cs)
         emp_cov = compute_empirical_covariance(X, K, cs)
-        #print(emp_cov)
-        K, _ = graphical_lasso(emp_cov, alpha=alpha, rho=rho,
-                               over_relax=over_relax, max_iter=max_iter,
-                               verbose=max(0, int(verbose-1)),
-                               tol=tol, rtol=rtol, return_history=False,
-                               return_n_iter=False,
-                               update_rho_options=update_rho_options,
-                               compute_objective=compute_objective,
-                               init=K)
+        K, _ = graphical_lasso(
+            emp_cov, alpha=alpha, rho=rho, over_relax=over_relax,
+            max_iter=max_iter, verbose=max(0, int(verbose - 1)), tol=tol,
+            rtol=rtol, return_history=False, return_n_iter=False,
+            update_rho_options=update_rho_options,
+            compute_objective=compute_objective, init=K)
         loglik = logl(emp_cov, K)
         diff = old_logl - loglik
-        checks.append(dict(iteration=iter_,
-                           log_likelihood=logl,
-                           difference=diff))
+        checks.append(
+            dict(iteration=iter_, log_likelihood=logl, difference=diff))
         if verbose:
-            print("Iter %d: log-likelihood %.4f, difference: %.4f" % (
-                    iter_, loglik, diff))
+            print(
+                "Iter %d: log-likelihood %.4f, difference: %.4f" %
+                (iter_, loglik, diff))
         if np.abs(diff) < tol:
             break
     else:
@@ -247,16 +237,14 @@ class MissingGraphicalLasso(GraphicalLasso):
         Number of iterations run.
 
     """
-
     def __init__(
             self, alpha=0.01, rho=1., over_relax=1., max_iter=100, mode='admm',
             tol=1e-4, rtol=1e-4, verbose=False, assume_centered=False,
             update_rho_options=None, compute_objective=True, init='empirical'):
         super(MissingGraphicalLasso, self).__init__(
             alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
-            assume_centered=assume_centered, mode=mode, rho=rho,
-            rtol=rtol, over_relax=over_relax,
-            update_rho_options=update_rho_options,
+            assume_centered=assume_centered, mode=mode, rho=rho, rtol=rtol,
+            over_relax=over_relax, update_rho_options=update_rho_options,
             compute_objective=compute_objective, init=init)
 
     def fit(self, X, y=None):

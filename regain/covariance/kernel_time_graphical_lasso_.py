@@ -44,12 +44,12 @@ from sklearn.gaussian_process import kernels
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_is_fitted
 
-from regain.covariance.time_graphical_lasso_ import (TimeGraphicalLasso,
-                                                     init_precision, loss)
+from regain.covariance.time_graphical_lasso_ import (
+    TimeGraphicalLasso, init_precision, loss)
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
-from regain.utils import convergence, normalize_matrix
+from regain.utils import convergence
 from regain.validation import check_norm_prox
 
 # from regain.clustering import graph_k_means
@@ -323,7 +323,7 @@ def precision_similarity(K, psi):
 
 
 class KernelTimeGraphicalLasso(TimeGraphicalLasso):
-    """As KernelTimeGraphicalLasso, but X is 2d and y specifies time.
+    """Structure inference in time driven by a temporal kernel.
 
     Parameters
     ----------
@@ -385,7 +385,6 @@ class KernelTimeGraphicalLasso(TimeGraphicalLasso):
         Number of iterations run.
 
     """
-
     def __init__(
             self, alpha=0.01, beta=1, kernel=None, rho=1., tol=1e-4, rtol=1e-4,
             psi='laplacian', max_iter=100, verbose=False,
@@ -553,7 +552,6 @@ class SimilarityTimeGraphicalLasso(KernelTimeGraphicalLasso):
         Number of iterations run.
 
     """
-
     def __init__(
             self, alpha=0.01, beta=1, kernel=None, rho=1., tol=1e-4, rtol=1e-4,
             psi='laplacian', max_iter=100, verbose=False,
@@ -675,7 +673,7 @@ class SimilarityTimeGraphicalLasso(KernelTimeGraphicalLasso):
         return self
 
     def transform(self, X, y=None):
-        """Possibility to add in a Pipeline."""
+        """Possibility to add in a sklearn Pipeline."""
         check_is_fitted(self, ['similarity_matrix_'])
 
         return self.similarity_matrix_

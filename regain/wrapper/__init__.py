@@ -60,6 +60,11 @@ def check_matlab_engine(verbose=False):
 
 
 def lvglasso(emp_cov, alpha, tau, rho=1, verbose=False, use_octave=True):
+    """Wrapper for LVGLASSO in R.
+    
+    If emp_cov.ndim > 2, then emp_cov.shape[0] == emp_cov.shape[1].
+    In the temporal case, this means that the time is the last dimension.
+    """
     lvglasso_path = os.path.join(
         os.path.abspath(os.path.dirname(__file__)), 'matlab', 'lvglasso')
     if use_octave:

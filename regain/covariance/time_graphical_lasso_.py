@@ -43,7 +43,8 @@ from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_X_y
 
-from regain.covariance.graphical_lasso_ import GraphicalLasso, logl
+from regain.covariance.graphical_lasso_ import (
+    GraphicalLasso, init_precision, logl)
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
@@ -75,24 +76,6 @@ def objective(n_samples, S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
         obj += beta * sum(map(psi, Z_2 - Z_1))
 
     return obj
-
-
-def init_precision(emp_cov, mode='empirical'):
-    if isinstance(mode, np.ndarray):
-        return mode.copy()
-
-    if mode == 'empirical':
-        n_times, _, n_features = emp_cov.shape
-        covariance_ = emp_cov.copy()
-        covariance_ *= 0.95
-        K = np.empty_like(emp_cov)
-        for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
-            c.flat[::n_features + 1] = e.flat[::n_features + 1]
-            K[i] = linalg.pinvh(c)
-    elif mode == 'zeros':
-        K = np.zeros_like(emp_cov)
-
-    return K
 
 
 def time_graphical_lasso(
@@ -152,7 +135,6 @@ def time_graphical_lasso(
 
     """
     psi, prox_psi, psi_node_penalty = check_norm_prox(psi)
-
 
     Z_0 = init_precision(emp_cov, mode=init)
     Z_1 = Z_0.copy()[:-1]  # np.zeros_like(emp_cov)[:-1]
@@ -361,7 +343,6 @@ class TimeGraphicalLasso(GraphicalLasso):
         Number of iterations run.
 
     """
-
     def __init__(
             self, alpha=0.01, beta=1., mode='admm', rho=1., tol=1e-4,
             rtol=1e-4, psi='laplacian', max_iter=100, verbose=False,

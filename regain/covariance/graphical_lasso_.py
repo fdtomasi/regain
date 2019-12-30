@@ -66,12 +66,19 @@ def objective(emp_cov, x, z, alpha):
 
 
 def init_precision(emp_cov, mode='empirical'):
+    """Initialize the precision matrix given the empirical covariance."""
     if mode == 'empirical':
-        _, n_features = emp_cov.shape
         covariance_ = emp_cov.copy()
         covariance_ *= 0.95
-        covariance_.flat[::n_features + 1] = emp_cov.flat[::n_features + 1]
-        K = linalg.pinvh(covariance_)
+        n_features = emp_cov.shape[-1]
+        if emp_cov.ndim == 2:
+            covariance_.flat[::n_features + 1] = emp_cov.flat[::n_features + 1]
+            K = linalg.pinvh(covariance_)
+        else:
+            K = np.empty_like(emp_cov)
+            for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
+                c.flat[::n_features + 1] = e.flat[::n_features + 1]
+                K[i] = linalg.pinvh(c)
     elif isinstance(mode, np.ndarray):
         K = mode
     else:
@@ -125,20 +132,18 @@ def graphical_lasso(
 
     Returns
     -------
-    X : numpy.array, 2-dimensional
+    precision_ : numpy.array, 2-dimensional
         Solution to the problem.
-    S : np.array, 2 dimensional
+    covariance_ : np.array, 2 dimensional
         Empirical covariance matrix.
-    n_iter : int
+    n_iter_ : int
         If return_n_iter, returns the number of iterations before convergence.
-    history : list
+    history_ : list
         If return_history, then also a structure that contains the
         objective value, the primal and dual residual norms, and tolerances
         for the primal and dual residual norms at each iteration.
 
     """
-    _, n_features = emp_cov.shape
-
     Z = init_precision(emp_cov, mode=init)
     U = np.zeros_like(emp_cov)
     Z_old = np.zeros_like(Z)
