@@ -1,3 +1,32 @@
+# BSD 3-Clause License
+
+# Copyright (c) 2019, regain authors
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+
+# * Neither the name of the copyright holder nor the names of its
+#   contributors may be used to endorse or promote products derived from
+#   this software without specific prior written permission.
+
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Bayesian inference of a sparse inverse covariance matrix.
 
 Based on
@@ -20,7 +49,7 @@ from regain.covariance.graphical_lasso_ import GraphicalLasso, graphical_lasso
 
 
 def mk_all_ugs(n_dim):
-    """Utility for generating all possible """
+    """Utility for generating all possible graphs."""
     nedges = int(comb(n_dim, 2))
     m = 2**nedges
 
@@ -90,7 +119,7 @@ def score_blankets(blankets, X, alphas=(0.01, 0.5, 1)):
     return normalized_scores
 
 
-def get_graphs(blankets, scores, n_dim, n_resampling=200):
+def _get_graphs(blankets, scores, n_dim, n_resampling=200):
     idx = np.array(
         [
             np.random.choice(scores.shape[1], p=scores[i], size=n_resampling)
@@ -128,7 +157,7 @@ def covsel(x, p, nonZero, C):
 
 
 def precision_selection(G, n_dim, C):
-    """Need to specify G"""
+    """MLE of precision matrix given non-zero entries in G."""
     function = partial(covsel, p=n_dim, nonZero=G, C=C)
 
     x0 = np.eye(n_dim)
@@ -142,6 +171,7 @@ def precision_selection(G, n_dim, C):
 
 
 def GWishartFit(X, G, GWprior, mode='covsel'):
+    """Fit G-Wishart distribution."""
     n_samples, n_dim = X.shape
 
     d0 = GWprior.d0
@@ -174,6 +204,7 @@ def GWishartFit(X, G, GWprior, mode='covsel'):
 
 
 def compute_score(X, G, P, S, GWprior=None, score_method='bic'):
+    """Compute score function of P."""
     n_samples, n_dim = X.shape
 
     d0 = GWprior.d0
@@ -289,6 +320,7 @@ def compute_score(X, G, P, S, GWprior=None, score_method='bic'):
 
 
 def GWishartScore(X, G, d0=3, S0=None, score_method='bic', mode='covsel'):
+    """Compute score of G-Wishart distribution."""
     # %Initialize GW prior structure
     n_samples, n_dim = X.shape
     if S0 is None:
@@ -332,7 +364,7 @@ def bayesian_graphical_lasso(
 
     normalized_scores = score_blankets(mblankets, X=X, alphas=[0.01, 0.5, 1])
 
-    graphs = get_graphs(
+    graphs = _get_graphs(
         mblankets, normalized_scores, n_dim=n_dim, n_resampling=n_resampling)
 
     nonzeros_all = [np.triu(g, 1) + np.eye(n_dim, dtype=bool) for g in graphs]

@@ -1,3 +1,32 @@
+# BSD 3-Clause License
+
+# Copyright (c) 2017, Federico T.
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+
+# * Neither the name of the copyright holder nor the names of its
+#   contributors may be used to endorse or promote products derived from
+#   this software without specific prior written permission.
+
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Sparse inverse covariance selection via ADMM.
 
 More information can be found in the paper linked at:
@@ -33,8 +62,29 @@ def logl(emp_cov, precision):
 
 
 def objective(emp_cov, x, z, alpha):
-    """Graphical lasso objective."""
-    return -logl(emp_cov, x) + alpha * l1_od_norm(z)
+    return -logl(emp_cov, x) + l1_od_norm(alpha * z)
+
+
+def init_precision(emp_cov, mode='empirical'):
+    """Initialize the precision matrix given the empirical covariance."""
+    if mode == 'empirical':
+        covariance_ = emp_cov.copy()
+        covariance_ *= 0.95
+        n_features = emp_cov.shape[-1]
+        if emp_cov.ndim == 2:
+            covariance_.flat[::n_features + 1] = emp_cov.flat[::n_features + 1]
+            K = linalg.pinvh(covariance_)
+        else:
+            K = np.empty_like(emp_cov)
+            for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
+                c.flat[::n_features + 1] = e.flat[::n_features + 1]
+                K[i] = linalg.pinvh(c)
+    elif isinstance(mode, np.ndarray):
+        K = mode
+    else:
+        K = np.zeros_like(emp_cov)
+
+    return K
 
 
 def graphical_lasso(
@@ -44,7 +94,7 @@ def graphical_lasso(
     r"""Graphical lasso solver via ADMM.
 
     Solves the following problem:
-        minimize  trace(S*X) - log det X + alpha ||X||_{od,1}
+        minimize  trace(S*K) - log det K + alpha ||K||_{od,1}
 
     where S = (1/n) X^T \times X is the empirical covariance of the data
     matrix X (training observations by features).
@@ -76,34 +126,25 @@ def graphical_lasso(
         See regain.update_rules.update_rho function for more information.
     compute_objective : bool, default True
         Choose to compute the objective value.
-    init : ('empirical', 'zero')
-        Choose how to initialize the precision matrix, with the inverse
-        empirical covariance or zero matrix.
+    init : {'empirical', 'zeros', ndarray}, default 'empirical'
+        How to initialise the inverse covariance matrix. Default is take
+        the empirical covariance and inverting it.
 
     Returns
     -------
-    X : numpy.array, 2-dimensional
+    precision_ : numpy.array, 2-dimensional
         Solution to the problem.
-    S : np.array, 2 dimensional
+    covariance_ : np.array, 2 dimensional
         Empirical covariance matrix.
-    n_iter : int
+    n_iter_ : int
         If return_n_iter, returns the number of iterations before convergence.
-    history : list
+    history_ : list
         If return_history, then also a structure that contains the
         objective value, the primal and dual residual norms, and tolerances
         for the primal and dual residual norms at each iteration.
 
     """
-    _, n_features = emp_cov.shape
-
-    if init == 'empirical':
-        covariance_ = emp_cov.copy()
-        covariance_ *= 0.95
-        covariance_.flat[::n_features + 1] = emp_cov.flat[::n_features + 1]
-        Z = linalg.pinvh(covariance_)
-    else:
-        Z = np.zeros_like(emp_cov)
-
+    Z = init_precision(emp_cov, mode=init)
     U = np.zeros_like(emp_cov)
     Z_old = np.zeros_like(Z)
 
@@ -135,7 +176,7 @@ def graphical_lasso(
         if verbose:
             print(
                 "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                "eps_pri: %.4f, eps_dual: %.4f" % check)
+                "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
@@ -219,7 +260,7 @@ class GraphicalLasso(GraphLasso):
     def __init__(
             self, alpha=0.01, rho=1., over_relax=1., max_iter=100, mode='admm',
             tol=1e-4, rtol=1e-4, verbose=False, assume_centered=False,
-            update_rho_options=None, compute_objective=True):
+            update_rho_options=None, compute_objective=True, init='empirical'):
         super(GraphicalLasso, self).__init__(
             alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
             assume_centered=assume_centered, mode=mode)
@@ -228,6 +269,7 @@ class GraphicalLasso(GraphLasso):
         self.over_relax = over_relax
         self.update_rho_options = update_rho_options
         self.compute_objective = compute_objective
+        self.init = init
 
     def _fit(self, emp_cov):
         """Fit the GraphicalLasso model to X.
@@ -243,7 +285,7 @@ class GraphicalLasso(GraphLasso):
             max_iter=self.max_iter, over_relax=self.over_relax, rho=self.rho,
             verbose=self.verbose, return_n_iter=True, return_history=False,
             update_rho_options=self.update_rho_options,
-            compute_objective=self.compute_objective)
+            compute_objective=self.compute_objective, init=self.init)
         return self
 
     def fit(self, X, y=None):

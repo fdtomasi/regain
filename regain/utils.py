@@ -1,3 +1,33 @@
+# BSD 3-Clause License
+
+# Copyright (c) 2019, regain authors
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+
+# * Neither the name of the copyright holder nor the names of its
+#   contributors may be used to endorse or promote products derived from
+#   this software without specific prior written permission.
+
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 """Utils for REGAIN package."""
 from __future__ import division
 
@@ -7,7 +37,6 @@ import logging
 import os
 import sys
 import warnings
-# from collections import namedtuple
 from contextlib import contextmanager
 
 import numpy as np
@@ -16,7 +45,51 @@ from numpy.linalg.linalg import LinAlgError
 from scipy import stats
 from scipy.spatial.distance import squareform
 from six.moves import cPickle as pkl
-from sklearn.metrics import average_precision_score
+from sklearn.metrics import average_precision_score, matthews_corrcoef
+
+
+def display_topics(
+        H, W, feature_names, documents, n_top_words, n_top_documents,
+        print_docs=True):
+    """Display topics of LDA."""
+    topics = []
+    for topic_idx, topic in enumerate(H):
+        topics.append(
+            " ".join(
+                [
+                    feature_names[i] + " (%.3f)" % topic[i]
+                    for i in topic.argsort()[:-n_top_words - 1:-1]
+                ]))
+
+        print("Topic %d: %s" % (topic_idx, topics[-1]))
+        top_doc_indices = np.argsort(W[:, topic_idx])[::-1][:n_top_documents]
+        if print_docs:
+            for i, doc_index in enumerate(top_doc_indices):
+                print("doc %d: %s" % (doc_index, documents[doc_index]))
+    return topics
+
+
+def logentropy_normalize(X):
+    """Log-entropy normalisation."""
+    P = X / X.values.sum(axis=0, keepdims=True)
+    E = 1 + (P * np.log(P)).fillna(0).values.sum(
+        axis=0, keepdims=True) / np.log1p(X.shape[0])
+    return E * np.log1p(X)
+
+
+def top_n_indexes(arr, n):
+    import bottleneck as bn
+    idx = bn.argpartition(arr, arr.size - n, axis=None)[-n:]
+    width = arr.shape[1]
+    return [divmod(i, width) for i in idx]
+
+
+def retain_top_n(arr, n):
+    """Discard low values in a matrix."""
+    mask_array = np.zeros_like(arr)
+    for idx in top_n_indexes(np.abs(arr), n):
+        mask_array[idx] = arr[idx]
+    return mask_array
 
 
 def namedtuple_with_defaults(typename, field_names, default_values=()):
@@ -149,8 +222,8 @@ def read_network(
     columns = sorted(nn[0].unique(), key=lambda x: int(x[1:]))
     n_top_edges = int(nn.shape[0] * threshold / (2. if full_network else 1))
 
-    nn = nn.sort_values(
-        2, ascending=False)[:(2 if full_network else 1) * n_top_edges]
+    nn = nn.sort_values(2, ascending=False)[:(2 if full_network else 1) *
+                                            n_top_edges]
 
     net_julia = pd.DataFrame(columns=columns, index=columns,
                              dtype=float).fillna(0)
@@ -182,11 +255,23 @@ def upper_to_full(a):
 
 def compose(*functions):
     """Compose two or more functions."""
-
     def compose2(f, g):
         return lambda x: f(g(x))
 
     return functools.reduce(compose2, functions, lambda x: x)
+
+
+def convert_data_to_2d(data):
+    """Utility to help move to the new API.
+
+    Data are 3 dimensional with the first dimension representing classes or
+    time. The first dimension is compressed, and the belongin of the samples
+    to the class is encoded in y.
+    """
+    X = np.vstack(data)
+    y = np.array([np.ones(x.shape[0]) * i
+                  for i, x in enumerate(data)]).flatten().astype(int)
+    return X, y
 
 
 def error_rank(ells_true, ells_pred):
@@ -270,7 +355,8 @@ def error_norm(
     # optionally scale the error norm
     if scaling:
         scaling_factor = error.shape[0] if len(error.shape) < 3 \
-            else np.prod(error.shape[:2]) * ((error.shape[1] - 1) / 2. if upper_triangular else error.shape[1])
+            else (np.prod(error.shape[:2]) * ((error.shape[1] - 1) / 2.
+                  if upper_triangular else error.shape[1]))
         squared_norm = squared_norm / scaling_factor
     # finally get either the squared norm or the norm
     if squared:
@@ -341,7 +427,6 @@ def structure_error(
     # avoid inplace modifications
     true = true.copy()
     pred = pred.copy()
-
     if true.ndim > 2:
         y_true = np.array(flatten([squareform(x, checks=None) for x in true]))
         y_pred = np.array(flatten([squareform(x, checks=None) for x in pred]))
@@ -350,6 +435,7 @@ def structure_error(
         y_pred = squareform(pred, checks=None)
 
     average_precision = average_precision_score(y_true > 0, y_pred)
+    mcc = matthews_corrcoef(y_true > 0, y_pred > 0)
 
     if thresholding:
         pred[np.abs(pred) < eps] = 0
@@ -407,8 +493,38 @@ def structure_error(
         specificity=specificity, plr=positive_likelihood_ratio,
         nlr=negative_likelihood_ratio, dor=diagnostic_odds_ratio,
         balanced_accuracy=balanced_accuracy,
-        average_precision=average_precision)
+        average_precision=average_precision, mcc=mcc)
     return dictionary
+
+
+def mean_structure_error(true, preds):
+    """
+    Mean and std error in structure between a precision matrix and more
+    predicted matrices.
+
+    Parameters
+    ----------
+    true: array-like
+        True matrix. In grpahical inference, if an entry is different from 0
+        it is consider as an edge (inverse covariance).
+
+    preds: list of arrays, shape=k*(d,d)
+        Predicted matrices. In graphical inference, if an entry is different
+        from 0 it is consider as an edge (inverse covariance).
+    """
+    dictionary = dict(
+        tp=[], tn=[], fp=[], fn=[], precision=[], recall=[], f1=[],
+        accuracy=[], false_omission_rate=[], fdr=[], npv=[], prevalence=[],
+        miss_rate=[], fall_out=[], specificity=[], plr=[], nlr=[], dor=[],
+        balanced_accuracy=[], average_precision=[])
+    for p in preds:
+        res = structure_error(true, p, no_diagonal=True)
+        for k, v in res.items():
+            dictionary[k].append(v)
+    res = {}
+    for k, l in dictionary.items():
+        res[k] = str(np.mean(l)) + "+/-" + str(np.std(l))
+    return res
 
 
 def is_pos_semidef(x, tol=1e-15):
@@ -442,6 +558,8 @@ def ensure_posdef(X, inplace=True):
     def _ensure_posdef_2d(X, inplace=True):
         if not inplace:
             raise NotImplementedError("Only inplace implemented")
+        if positive_definite(X):
+            return
         X.flat[::X.shape[0] +
                1] = np.abs(X - np.diag(np.diag(X))).sum(axis=1) + 0.1
 

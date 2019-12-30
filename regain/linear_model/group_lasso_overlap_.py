@@ -1,3 +1,32 @@
+# BSD 3-Clause License
+
+# Copyright (c) 2019, regain authors
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+
+# * Neither the name of the copyright holder nor the names of its
+#   contributors may be used to endorse or promote products derived from
+#   this software without specific prior written permission.
+
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 from __future__ import division, print_function
 
 import warnings
@@ -7,8 +36,8 @@ import six
 from scipy import sparse
 from six.moves import range
 from sklearn.base import RegressorMixin
-from sklearn.linear_model.base import (LinearClassifierMixin, LinearModel,
-                                       _pre_fit)
+from sklearn.linear_model.base import (
+    LinearClassifierMixin, LinearModel, _pre_fit)
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.utils import check_array, check_X_y, deprecated
 from sklearn.utils.extmath import safe_sparse_dot
@@ -37,7 +66,7 @@ def D_function(d, groups):
     D = np.zeros(d)
     for dimension in range(d):
         # find groups which contain this dimension
-        for g, group in enumerate(groups):
+        for _, group in enumerate(groups):
             if dimension in group:
                 D[dimension] += 1
     return D
@@ -62,6 +91,47 @@ def P_star_x_bar_function(x, d, groups):
 def group_lasso_overlap(
         A, b, lamda=1.0, groups=None, rho=1.0, max_iter=100, tol=1e-4,
         verbose=False, rtol=1e-2):
+    r"""Group Lasso with Overlap solver.
+
+    Solves the following problem via ADMM
+       minimize 1/2*|| Ax - b ||_2^2 + \lambda sum(norm(x_i))
+
+    The input p is a K-element vector giving the block sizes n_i, so that x_i
+    is in R^{n_i}.
+
+    Parameters
+    ----------
+    A : array-like, 2-dimensional
+        Input matrix.
+    b : array-like, 1-dimensional
+        Output vector.
+    lamda : float, optional
+        Regularisation parameter.
+    groups : list
+        Groups of variables.
+    rho : float, optional
+        Augmented Lagrangian parameter.
+    alpha : float, optional
+        Over-relaxation parameter (typically between 1.0 and 1.8).
+    max_iter : int, optional
+        Maximum number of iterations.
+    tol : float, optional
+        Absolute tolerance for convergence.
+    rtol : float, optional
+        Relative tolerance for convergence.
+    return_history : bool, optional
+        Return the history of computed values.
+
+    Returns
+    -------
+    x : numpy.array
+        Solution to the problem.
+    history : list
+        If return_history, then also a structure that contains the
+        objective value, the primal and dual residual norms, and tolerances
+        for the primal and dual residual norms at each iteration.
+
+    """
     n, d = A.shape
 
     x = [np.zeros(len(g)) for g in groups]  # local variables
@@ -92,8 +162,8 @@ def group_lasso_overlap(
             objective(A, b, lamda, x, z),  # objective
             np.linalg.norm(x_consensus - z),  # rnorm
             np.linalg.norm(-rho * (z - zold)),  # snorm
-            np.sqrt(d) * tol + rtol * max(
-                np.linalg.norm(x_consensus), np.linalg.norm(-z)),  # eps primal
+            np.sqrt(d) * tol + rtol *
+            max(np.linalg.norm(x_consensus), np.linalg.norm(-z)),  # eps primal
             np.sqrt(d) * tol + rtol * np.linalg.norm(rho * y_consensus)
             # eps dual
         )
@@ -332,7 +402,6 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
 
 class GroupLassoOverlapClassifier(LinearClassifierMixin, GroupLassoOverlap):
     """Class to extend group lasso in case of classification."""
-
     def fit(self, X, y, check_input=True):
         self._label_binarizer = LabelBinarizer(pos_label=1, neg_label=-1)
         Y = self._label_binarizer.fit_transform(y)
@@ -427,10 +496,6 @@ def _overlapping_group_lasso(
     return P_star_x_bar_function(x), x
 
 
-def fi(xi):
-    return np.linalg.norm(xi)
-
-
 def objective(A, b, alpha, x, z):
-    return .5 * np.sum((A.dot(z) - b)**2) + alpha * np.sum(
-        [np.linalg.norm(x_i) for x_i in x])
+    """Group lasso with overlap objective function."""
+    return .5 * np.sum((A.dot(z) - b)**2) + alpha * np.linalg.norm(x)

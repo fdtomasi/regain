@@ -1,19 +1,45 @@
-"""Discriminant analysis with REGAIN.
+# BSD 3-Clause License
 
-XXX This module is work in progress.
-TODO Remove deprecated `decision_function2`
-"""
+# Copyright (c) 2019, regain authors
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+
+# * Neither the name of the copyright holder nor the names of its
+#   contributors may be used to endorse or promote products derived from
+#   this software without specific prior written permission.
+
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+"""Discriminant analysis with REGAIN."""
 
 import numpy as np
 from scipy import linalg
-from six.moves import xrange
+from six.moves import range
 from sklearn.base import BaseEstimator
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.utils import check_array, check_X_y, deprecated
+from sklearn.utils.extmath import fast_logdet
 from sklearn.utils.multiclass import check_classification_targets
 from sklearn.utils.validation import check_is_fitted
 
-from regain.covariance.graph_lasso_ import fast_logdet
 from regain.utils import ensure_posdef
 
 __all__ = ("DiscriminantAnalysis", "PrecomputedDiscriminantAnalysis")
@@ -58,7 +84,6 @@ class DiscriminantAnalysis(QuadraticDiscriminantAnalysis):
         of the Gaussian distributions along its principal axes, i.e. the
         variance in the rotated coordinate system.
     """
-
     def __init__(self, estimator, ensure_posdef=False, priors=None):
         self.estimator = estimator
         self.priors = np.asarray(priors) if priors is not None else None
@@ -91,19 +116,18 @@ class DiscriminantAnalysis(QuadraticDiscriminantAnalysis):
             self.priors_ = np.bincount(y) / float(n_samples)
         else:
             self.priors_ = self.priors
-        means = []
-        data = []
-        for ind in xrange(n_classes):
+        # means = []
+        for ind in range(n_classes):
             Xg = X[y == ind, :]
-            meang = Xg.mean(0)
-            means.append(meang)
+            # meang = Xg.mean(0)
+            # means.append(meang)
             if len(Xg) == 1:
                 raise ValueError(
                     'y has only 1 sample in class %s, covariance '
                     'is ill defined.' % str(self.classes_[ind]))
-            data.append(Xg)
+            # data.append(Xg)
 
-        self.estimator.fit(data, y)
+        self.estimator.fit(X, y)
         self.precision_ = self.estimator.precision_
 
         if hasattr(self.estimator, "covariance_"):
@@ -117,7 +141,7 @@ class DiscriminantAnalysis(QuadraticDiscriminantAnalysis):
             ensure_posdef(self.precision_, inplace=True)
             self.covariance_ = np.array(
                 [linalg.pinvh(p) for p in self.precision_])
-        self.means_ = np.asarray(means)
+        self.means_ = self.estimator.location_
         return self
 
     @deprecated(

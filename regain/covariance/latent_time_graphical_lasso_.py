@@ -1,3 +1,32 @@
+# BSD 3-Clause License
+
+# Copyright (c) 2017, Federico T.
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+
+# * Neither the name of the copyright holder nor the names of its
+#   contributors may be used to endorse or promote products derived from
+#   this software without specific prior written permission.
+
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Graphical latent variable models selection over time via ADMM."""
 from __future__ import division
 
@@ -9,7 +38,8 @@ from scipy import linalg
 from six.moves import map, range, zip
 from sklearn.utils.extmath import squared_norm
 
-from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso
+from regain.covariance.time_graphical_lasso_ import (
+    TimeGraphicalLasso, init_precision)
 from regain.covariance.time_graphical_lasso_ import objective as obj_tgl
 from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
@@ -80,9 +110,9 @@ def latent_time_graphical_lasso(
         See regain.update_rules.update_rho function for more information.
     compute_objective : bool, default True
         Choose to compute the objective value.
-    init : ('empirical', 'zero')
-        Choose how to initialize the precision matrix, with the inverse
-        empirical covariance or zero matrix.
+    init : {'empirical', 'zeros', ndarray}, default 'empirical'
+        How to initialise the inverse covariance matrix. Default is take
+        the empirical covariance and inverting it.
 
     Returns
     -------
@@ -97,19 +127,9 @@ def latent_time_graphical_lasso(
     psi, prox_psi, psi_node_penalty = check_norm_prox(psi)
     phi, prox_phi, phi_node_penalty = check_norm_prox(phi)
 
-    if init == 'empirical':
-        n_times, _, n_features = emp_cov.shape
-        covariance_ = emp_cov.copy()
-        covariance_ *= 0.95
-        Z_0 = np.empty_like(emp_cov)
-        for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
-            c.flat[::n_features + 1] = e.flat[::n_features + 1]
-            Z_0[i] = linalg.pinvh(c)
-    else:
-        Z_0 = np.zeros_like(emp_cov)
-
-    Z_1 = np.zeros_like(Z_0)[:-1]
-    Z_2 = np.zeros_like(Z_0)[1:]
+    Z_0 = init_precision(emp_cov, mode=init)
+    Z_1 = Z_0.copy()[:-1]
+    Z_2 = Z_0.copy()[1:]
     W_0 = np.zeros_like(Z_0)
     W_1 = np.zeros_like(Z_1)
     W_2 = np.zeros_like(Z_2)
@@ -334,9 +354,9 @@ class LatentTimeGraphicalLasso(TimeGraphicalLasso):
         Choose if compute the objective function during iterations
         (only useful if `verbose=True`).
 
-    mode : {'admm'}, default 'admm'
-        Minimisation algorithm. At the moment, only 'admm' is available,
-        so this is ignored.
+    init : {'empirical', 'zeros', ndarray}, default 'empirical'
+        How to initialise the inverse covariance matrix. Default is take
+        the empirical covariance and inverting it.
 
     Attributes
     ----------
@@ -353,16 +373,15 @@ class LatentTimeGraphicalLasso(TimeGraphicalLasso):
 
     def __init__(
             self, alpha=0.01, tau=1., beta=1., eta=1., mode='admm', rho=1.,
-            time_on_axis='first', tol=1e-4, rtol=1e-4, psi='laplacian',
-            phi='laplacian', max_iter=100, verbose=False,
-            assume_centered=False, update_rho_options=None,
-            compute_objective=True):
+            tol=1e-4, rtol=1e-4, psi='laplacian', phi='laplacian',
+            max_iter=100, verbose=False, assume_centered=False,
+            update_rho_options=None, compute_objective=True, init='empirical'):
         super(LatentTimeGraphicalLasso, self).__init__(
             alpha=alpha, beta=beta, mode=mode, rho=rho, tol=tol, rtol=rtol,
             psi=psi, max_iter=max_iter, verbose=verbose,
-            time_on_axis=time_on_axis, assume_centered=assume_centered,
+            assume_centered=assume_centered,
             update_rho_options=update_rho_options,
-            compute_objective=compute_objective)
+            compute_objective=compute_objective, init=init)
         self.tau = tau
         self.eta = eta
         self.phi = phi
@@ -397,5 +416,5 @@ class LatentTimeGraphicalLasso(TimeGraphicalLasso):
                 max_iter=self.max_iter, verbose=self.verbose,
                 return_n_iter=True, return_history=False,
                 update_rho_options=self.update_rho_options,
-                compute_objective=self.compute_objective)
+                compute_objective=self.compute_objective, init=self.init)
         return self

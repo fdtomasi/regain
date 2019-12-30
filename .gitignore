@@ -1,3 +1,4 @@
+notebooks/Untitled Folder/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -104,3 +105,11 @@ ENV/
 .magicindex.json
 
 \.vscode/
+
+/*/**/\.DS_Store
+
+\.DS_Store
+
+notebooks/graph-clustering/temp-plot\.html
+
+notebooks/octave-workspace

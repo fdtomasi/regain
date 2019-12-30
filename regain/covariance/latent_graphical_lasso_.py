@@ -1,3 +1,32 @@
+# BSD 3-Clause License
+
+# Copyright (c) 2017, Federico T.
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+
+# * Redistributions of source code must retain the above copyright notice, this
+#   list of conditions and the following disclaimer.
+
+# * Redistributions in binary form must reproduce the above copyright notice,
+#   this list of conditions and the following disclaimer in the documentation
+#   and/or other materials provided with the distribution.
+
+# * Neither the name of the copyright holder nor the names of its
+#   contributors may be used to endorse or promote products derived from
+#   this software without specific prior written permission.
+
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+# CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+# OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Graphical latent variable model selection via ADMM."""
 from __future__ import division
 
@@ -7,7 +36,7 @@ import numpy as np
 from scipy import linalg
 from six.moves import range
 
-from regain.covariance.graphical_lasso_ import GraphicalLasso
+from regain.covariance.graphical_lasso_ import GraphicalLasso, init_precision
 from regain.covariance.graphical_lasso_ import objective as obj_gl
 from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
@@ -58,9 +87,9 @@ def latent_graphical_lasso(
         See regain.update_rules.update_rho function for more information.
     compute_objective : bool, default True
         Choose to compute the objective value.
-    init : ('empirical', 'zero')
-        Choose how to initialize the precision matrix, with the inverse
-        empirical covariance or zero matrix.
+    init : {'empirical', 'zeros', ndarray}, default 'empirical'
+        How to initialise the inverse covariance matrix. Default is take
+        the empirical covariance and inverting it.
 
     Returns
     -------
@@ -76,16 +105,7 @@ def latent_graphical_lasso(
         for the primal and dual residual norms at each iteration.
 
     """
-    _, n_features = emp_cov.shape
-
-    if init == 'empirical':
-        covariance_ = emp_cov.copy()
-        covariance_ *= 0.95
-        covariance_.flat[::n_features + 1] = emp_cov.flat[::n_features + 1]
-        K = linalg.pinvh(covariance_)
-    else:
-        K = np.zeros_like(emp_cov)
-
+    K = init_precision(emp_cov, mode=init)
     L = np.zeros_like(emp_cov)
     U = np.zeros_like(emp_cov)
     R_old = np.zeros_like(emp_cov)
@@ -149,7 +169,7 @@ def latent_graphical_lasso(
 
 
 class LatentGraphicalLasso(GraphicalLasso):
-    """Sparse inverse covariance estimation with an l1-penalized estimator.
+    """Sparse inverse covariance + low-rank matrix estimation.
 
     Parameters
     ----------
@@ -193,9 +213,9 @@ class LatentGraphicalLasso(GraphicalLasso):
         Choose if compute the objective function during iterations
         (only useful if `verbose=True`).
 
-    mode : {'admm'}, default 'admm'
-        Minimisation algorithm. At the moment, only 'admm' is available,
-        so this is ignored.
+    init : {'empirical', 'zeros', ndarray}, default 'empirical'
+        How to initialise the inverse covariance matrix. Default is take
+        the empirical covariance and inverting it.
 
     Attributes
     ----------
@@ -216,12 +236,12 @@ class LatentGraphicalLasso(GraphicalLasso):
     def __init__(
             self, alpha=0.01, tau=1., rho=1., tol=1e-4, rtol=1e-4,
             max_iter=100, verbose=False, assume_centered=False, mode='admm',
-            update_rho_options=None, compute_objective=True):
+            update_rho_options=None, compute_objective=True, init='empirical'):
         super(LatentGraphicalLasso, self).__init__(
             alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
             verbose=verbose, assume_centered=assume_centered, mode=mode,
             update_rho_options=update_rho_options,
-            compute_objective=compute_objective)
+            compute_objective=compute_objective, init=init)
         self.tau = tau
 
     def get_precision(self):
@@ -252,5 +272,5 @@ class LatentGraphicalLasso(GraphicalLasso):
                 max_iter=self.max_iter, verbose=self.verbose,
                 return_n_iter=True, return_history=False,
                 update_rho_options=self.update_rho_options,
-                compute_objective=self.compute_objective)
+                compute_objective=self.compute_objective, init=self.init)
         return self
