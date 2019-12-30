@@ -46,14 +46,16 @@ from regain.utils import error_norm_time
 
 np.random.seed(42)
 data = make_dataset(n_dim_lat=1, n_dim_obs=10)
-X = data.data
+X = data.X
+y = data.y
 theta = data.thetas
 
-mdl = LatentTimeGraphicalLasso(max_iter=50).fit(X)
+mdl = LatentTimeGraphicalLasso(max_iter=50).fit(X, y)
 print("Error: %.2f" % error_norm_time(theta, mdl.precision_))
 ```
-Note that the input of `LatentTimeGraphicalLasso` is a three-dimensional matrix with shape `(n_times, n_samples, n_dimensions)`.
-If you have a single time (`n_times = 1`), ensure a `X = X.reshape(1, *X.shape)` before using `LatentTimeGraphicalLasso`, or, alternatively, use `LatentGraphicalLasso`.
+**IMPORTANT**
+We moved the API to be more consistent with `scikit-learn`.
+Now the input of `LatentTimeGraphicalLasso` is a two-dimensional matrix `X` with shape `(n_samples, n_dimensions)`, where the belonging of samples to a different index (for example, a different time point) is indicated in `y`.
 
 
 ## Citation
