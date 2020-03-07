@@ -28,14 +28,12 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import numpy as np
 import networkx as nx
+import numpy as np
+from sklearn.utils import Bunch
 
-
-from sklearn.datasets.base import Bunch
-
-from regain.datasets.poisson import poisson_sampler
 from regain.datasets.ising import ising_sampler
+from regain.datasets.poisson import poisson_sampler
 
 
 def make_multiclass_dataset(

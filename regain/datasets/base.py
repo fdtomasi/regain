@@ -33,15 +33,24 @@ from __future__ import division
 from functools import partial
 
 import numpy as np
-from sklearn.datasets.base import Bunch
+from sklearn.utils import Bunch
 
-from .gaussian import (
-    data_Meinshausen_Yuan, data_Meinshausen_Yuan_sparse_latent,
-    make_covariance, make_fede, make_fixed_sparsity, make_ma_xue_zou,
-    make_ma_xue_zou_rand_k, make_sin, make_sin_cos, make_sparse_low_rank)
-from .ising import ising_sampler, ising_theta_generator
-from .kernels import make_exp_sine_squared, make_ticc
-from .poisson import poisson_sampler, poisson_theta_generator
+from regain.datasets.gaussian import data_Meinshausen_Yuan
+from regain.datasets.gaussian import data_Meinshausen_Yuan_sparse_latent
+from regain.datasets.gaussian import make_covariance
+from regain.datasets.gaussian import make_fede
+from regain.datasets.gaussian import make_fixed_sparsity
+from regain.datasets.gaussian import make_ma_xue_zou
+from regain.datasets.gaussian import make_ma_xue_zou_rand_k
+from regain.datasets.gaussian import make_sin
+from regain.datasets.gaussian import make_sin_cos
+from regain.datasets.gaussian import make_sparse_low_rank
+from regain.datasets.ising import ising_sampler
+from regain.datasets.ising import ising_theta_generator
+from regain.datasets.kernels import make_exp_sine_squared
+from regain.datasets.kernels import make_ticc
+from regain.datasets.poisson import poisson_sampler
+from regain.datasets.poisson import poisson_theta_generator
 
 
 def _gaussian_case(
