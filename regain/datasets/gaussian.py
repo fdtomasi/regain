@@ -352,7 +352,7 @@ def make_ell(n_dim_obs=100, n_dim_lat=10):
     return L, K_HO
 
 
-def make_starting(n_dim_obs=100, n_dim_lat=10, degree=2, normalize=False):
+def make_starting(n_dim_obs=100, n_dim_lat=10, degree=2, normalize=False, eps=1e-2):
     """Generate starting theta, theta_observed, L, K_HO."""
     L, K_HO = make_ell(n_dim_obs, n_dim_lat)
 
@@ -388,10 +388,12 @@ def make_starting(n_dim_obs=100, n_dim_lat=10, degree=2, normalize=False):
                 indices = np.random.choice(possible_idx, n_choice)
                 theta[i, indices] = theta[indices, i] = .5 / degree
 
-    assert (is_pos_def(theta))
-    theta_observed = theta - L
-    assert (is_pos_def(theta_observed))
-    return theta, theta_observed, L, K_HO
+    if not is_pos_def(theta):
+        theta += np.diag(np.sum(theta, axis=1) + eps)
+    if not is_pos_def(theta - L):
+        theta += np.diag(eps + np.diag(L))
+    assert (is_pos_def(theta - L))
+    return theta, theta - L, L, K_HO
 
 
 def _update_theta_l2(
@@ -413,7 +415,7 @@ def _update_theta_l2(
     return theta
 
 
-def _update_theta_l1(theta_init, no, n_dim_obs):
+def _update_theta_l1(theta_init, no, n_dim_obs, eps=1e-2):
     theta = theta_init.copy()
     rows = np.zeros(no)
     cols = np.zeros(no)
@@ -425,7 +427,8 @@ def _update_theta_l1(theta_init, no, n_dim_obs):
             0.12, 0, 0
         ]) if theta[r, c] == 0 else .06  # np.random.rand(1) * .35
         theta[c, r] = theta[r, c]
-    assert (is_pos_def(theta))
+    if not is_pos_def(theta):
+        theta += np.diag(np.sum(theta, axis=1) + eps)
     return theta
 
 
@@ -493,7 +496,8 @@ def make_covariance(
 
         assert np.linalg.matrix_rank(L) == n_dim_lat
         assert (is_pos_semidef(L))
-        assert (is_pos_def(theta - L))
+        if not is_pos_def(theta - L):
+            theta += np.diag(epsilon + np.diag(L))
 
         thetas.append(theta)
         thetas_obs.append(theta - L)
