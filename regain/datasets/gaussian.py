@@ -65,13 +65,7 @@ def _permute_locations(locations, random_state):
     return new_locations
 
 
-def data_Meinshausen_Yuan(
-        p=198, h=2, n=200, T=10, random_state=None, **kwargs):
-    random_state = check_random_state(random_state)
-    nodes_locations = []
-    for i in range(p):
-        nodes_locations.append(list(random_state.uniform(size=2)))
-    probs = _compute_probabilities(nodes_locations, random_state)
+def _theta_my(probs, p, random_state, value=0.245):
     theta = np.zeros((p, p))
     for i in range(p):
         ix = np.argsort(probs[i, :])[::-1]
@@ -86,18 +80,26 @@ def data_Meinshausen_Yuan(
             ixs.append(ix[j])
             sel += 1
             j += 1
-        theta[i, ixs] = 0.245
-        theta[ixs, i] = 0.245
+        theta[i, ixs] = theta[ixs, i] = value
     to_remove = np.where(np.sum((theta != 0).astype(int), axis=1) > 4)[0]
     for t in to_remove:
         edges = np.nonzero(theta[t, :])[0]
         random_state.shuffle(edges)
         removable = edges[:-4]
-        theta[t, removable] = 0
-        theta[removable, t] = 0
-    np.fill_diagonal(theta, 1)
+        theta[t, removable] = theta[removable, t] = 0
 
+    np.fill_diagonal(theta, 1)
     assert is_pos_def(theta)
+    return theta
+
+
+def data_Meinshausen_Yuan(
+        p=198, h=2, n=200, T=10, random_state=None, **kwargs):
+    random_state = check_random_state(random_state)
+    nodes_locations = [list(random_state.uniform(size=2)) for i in range(p)]
+    probs = _compute_probabilities(nodes_locations, random_state)
+    theta = _theta_my(probs, p, random_state=random_state)
+
     latent = np.zeros((h, p))
     for i in range(h):
         for j in range(p):
@@ -124,32 +126,7 @@ def data_Meinshausen_Yuan(
         locations.append(locs)
         probs = _compute_probabilities(locs, random_state, theta_prev != 0)
 
-        theta = np.zeros((p, p))
-        for i in range(p):
-            ix = np.argsort(probs[i, :])[::-1]
-            no_nonzero = np.sum((theta != 0).astype(int), axis=1)[i]
-            ixs = []
-            sel = 1
-            j = 0
-            while sel <= 4 - no_nonzero and j < p:
-                if ix[j] < i:
-                    j += 1
-                    continue
-                ixs.append(ix[j])
-                sel += 1
-                j += 1
-            theta[i, ixs] = 0.245
-            theta[ixs, i] = 0.245
-        to_remove = np.where(np.sum((theta != 0).astype(int), axis=1) > 4)[0]
-        for t in to_remove:
-            edges = np.nonzero(theta[t, :])[0]
-            random_state.shuffle(edges)
-            removable = edges[:-4]
-            theta[t, removable] = 0
-            theta[removable, t] = 0
-        np.fill_diagonal(theta, 1)
-
-        assert is_pos_def(theta)
+        theta = _theta_my(probs, p, random_state=random_state)
         thetas.append(theta)
         theta_observed = theta - L
         assert is_pos_def(theta_observed)
@@ -164,37 +141,13 @@ def data_Meinshausen_Yuan(
 
 
 def data_Meinshausen_Yuan_sparse_latent(
-        p=198, h=2, n=200, T=10, random_state=None):
+        p=198, h=2, n=200, T=10, random_state=None, **kwargs):
     random_state = check_random_state(random_state)
     nodes_locations = [
         list(random_state.uniform(size=2)) for i in range(p + h)
     ]
     probs = _compute_probabilities(nodes_locations, random_state)
-    theta = np.zeros((p, p))
-    for i in range(p):
-        ix = np.argsort(probs[i, :-h])[::-1]
-        no_nonzero = np.sum((theta != 0).astype(int), axis=1)[i]
-        ixs = []
-        sel = 1
-        j = 0
-        while sel <= 4 - no_nonzero and j < p:
-            if ix[j] < i:
-                j += 1
-                continue
-            ixs.append(ix[j])
-            sel += 1
-            j += 1
-        theta[ixs, i] = theta[i, ixs] = 0.245
-    to_remove = np.where(np.sum((theta != 0).astype(int), axis=1) > 4)[0]
-    for t in to_remove:
-        edges = np.nonzero(theta[t, :])[0]
-        random_state.shuffle(edges)
-        removable = edges[:-4]
-        theta[t, removable] = 0
-        theta[removable, t] = 0
-    np.fill_diagonal(theta, 1)
-
-    assert is_pos_def(theta)
+    theta = _theta_my(probs[:, :-h], p, random_state=random_state)
 
     latent = np.zeros((h, p + h))
     to_put = (p + h) * 0.5
@@ -258,31 +211,7 @@ def data_Meinshausen_Yuan_sparse_latent(
         probs_lat = _compute_probabilities(
             locs[-h:], random_state, lat_prev != 0)
 
-        theta = np.zeros((p, p))
-        for i in range(p):
-            ix = np.argsort(probs_theta[i, :])[::-1]
-            no_nonzero = np.sum((theta != 0).astype(int), axis=1)[i]
-            ixs = []
-            sel = 1
-            j = 0
-            while sel <= 4 - no_nonzero and j < p:
-                if ix[j] < i:
-                    j += 1
-                    continue
-                ixs.append(ix[j])
-                sel += 1
-                j += 1
-            theta[i, ixs] = 0.245
-            theta[ixs, i] = 0.245
-        to_remove = np.where(np.sum((theta != 0).astype(int), axis=1) > 4)[0]
-        for t in to_remove:
-            edges = np.nonzero(theta[t, :])[0]
-            random_state.shuffle(edges)
-            removable = edges[:-4]
-            theta[t, removable] = 0
-            theta[removable, t] = 0
-        np.fill_diagonal(theta, 1)
-        assert is_pos_def(theta)
+        theta = _theta_my(probs_theta, p, random_state=random_state)
         thetas_O.append(theta)
 
         lat = np.zeros((h, h))
@@ -332,7 +261,7 @@ def data_Meinshausen_Yuan_sparse_latent(
 
 
 def make_ell(n_dim_obs=100, n_dim_lat=10):
-    """Doc."""
+    """Make ell matrix."""
     K_HO = np.zeros((n_dim_lat, n_dim_obs))
     for i in range(n_dim_lat):
         percentage = int(n_dim_obs * 0.99)
@@ -352,7 +281,8 @@ def make_ell(n_dim_obs=100, n_dim_lat=10):
     return L, K_HO
 
 
-def make_starting(n_dim_obs=100, n_dim_lat=10, degree=2, normalize=False, eps=1e-2):
+def make_starting(
+        n_dim_obs=100, n_dim_lat=10, degree=2, normalize=False, eps=1e-2):
     """Generate starting theta, theta_observed, L, K_HO."""
     L, K_HO = make_ell(n_dim_obs, n_dim_lat)
 
