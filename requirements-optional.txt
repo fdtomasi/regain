@@ -1,0 +1,5 @@
+# Optional requirements
+prox_tv
+matplotlib
+networkx
+#GPyOpt
