@@ -42,7 +42,10 @@ def test_quickstart():
 
 def test_make_dataset_gaussian():
     """Test default make_dataset with Gaussian distribution."""
-    data = datasets.make_dataset()
+    data = datasets.make_dataset(update_ell='l1', update_theta='l1')
+    data = datasets.make_dataset(update_ell='l2', update_theta='l1')
+    data = datasets.make_dataset(update_ell='l1', update_theta='l2')
+    data = datasets.make_dataset(update_ell='l2', update_theta='l2')
     data.X, data.y, data.thetas
 
 
