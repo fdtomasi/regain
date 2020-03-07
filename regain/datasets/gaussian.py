@@ -37,8 +37,10 @@ from scipy.spatial.distance import squareform
 from scipy.stats import norm
 from sklearn.utils import check_random_state
 
-from regain.utils import (
-    ensure_posdef, is_pos_def, is_pos_semidef, normalize_matrix)
+from regain.utils import ensure_posdef
+from regain.utils import is_pos_def
+from regain.utils import is_pos_semidef
+from regain.utils import normalize_matrix
 
 
 def _compute_probabilities(locations, random_state, mask=None):

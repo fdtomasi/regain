@@ -29,18 +29,18 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Generate data for kernel-based classes as `KernelTimeGraphicalLasso`."""
 
-from itertools import chain, combinations
+from itertools import chain
+from itertools import combinations
 
 import numpy as np
 from scipy import linalg
 from scipy.spatial.distance import squareform
 from sklearn.cluster import AgglomerativeClustering
-from sklearn.datasets.base import Bunch
+from sklearn.utils import Bunch
 
+from regain.datasets.gaussian import make_ell
 from regain.norm import l1_od_norm
 from regain.utils import is_pos_def
-
-from .gaussian import make_ell
 
 
 def make_exp_sine_squared(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
