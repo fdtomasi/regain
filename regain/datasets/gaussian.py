@@ -724,7 +724,7 @@ def make_ma_xue_zou(
 
 
 def make_ma_xue_zou_rand_k(
-        n_dim_obs=12, n_latent=3, T=1, epsilon=1e-3, sparsity=0.1):
+        n_dim_obs=12, n_latent=3, T=1, epsilon=1e-3, sparsity=0.1, **kwargs):
     """Generate the dataset as in Ma, Xue, Zou (2012)."""
     # p = n_dim_obs + n_latent  # int(n_dim_obs * 0.05)
     p = n_dim_obs + int(n_dim_obs * 0.05)

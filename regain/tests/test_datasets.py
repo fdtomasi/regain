@@ -46,6 +46,72 @@ def test_make_dataset_gaussian():
     data.X, data.y, data.thetas
 
 
+# def test_make_dataset_gaussian_my():
+#     """Test Gaussian make_dataset (MY)."""
+#     data = datasets.make_dataset(mode='my')
+#     data.X, data.y, data.thetas
+
+
+# def test_make_dataset_gaussian_mys():
+#     """Test Gaussian make_dataset (MYS)."""
+#     data = datasets.make_dataset(mode='mys')
+#     data.X, data.y, data.thetas
+
+
+def test_make_dataset_gaussian_sin():
+    """Test Gaussian make_dataset (sin)."""
+    data = datasets.make_dataset(mode='sin')
+    data.X, data.y, data.thetas
+
+
+def test_make_dataset_gaussian_fixed_sparsity():
+    """Test Gaussian make_dataset (fixed_sparsity)."""
+    data = datasets.make_dataset(mode='fixed_sparsity')
+    data.X, data.y, data.thetas
+
+
+def test_make_dataset_gaussian_sincos():
+    """Test Gaussian make_dataset (sincos)."""
+    data = datasets.make_dataset(mode='sincos')
+    data.X, data.y, data.thetas
+
+
+def test_make_dataset_gaussian_gp():
+    """Test Gaussian make_dataset (gp)."""
+    data = datasets.make_dataset(mode='gp')
+    data.X, data.y, data.thetas
+
+
+def test_make_dataset_gaussian_fede():
+    """Test Gaussian make_dataset (fede)."""
+    data = datasets.make_dataset(mode='fede')
+    data.X, data.y, data.thetas
+
+
+def test_make_dataset_gaussian_sklearn():
+    """Test Gaussian make_dataset (sklearn)."""
+    data = datasets.make_dataset(mode='sklearn')
+    data.X, data.y, data.thetas
+
+
+def test_make_dataset_gaussian_ma():
+    """Test Gaussian make_dataset (ma)."""
+    data = datasets.make_dataset(mode='ma')
+    data.X, data.y, data.thetas
+
+
+# def test_make_dataset_gaussian_mak():
+#     """Test Gaussian make_dataset (mak)."""
+#     data = datasets.make_dataset(mode='mak')
+#     data.X, data.y, data.thetas
+
+
+# def test_make_dataset_gaussian_ticc():
+#     """Test Gaussian make_dataset (ticc)."""
+#     data = datasets.make_dataset(mode='ticc', n_dim_lat=0)
+#     data.X, data.y, data.thetas
+
+
 # def test_make_dataset_ising():
 #     """Test default make_dataset with Ising distribution."""
 #     data = datasets.make_dataset(distribution='ising')

@@ -77,7 +77,7 @@ def _gaussian_case(
     #         normalize_starting_matrices=normalize_starting_matrices,
     #         degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity,
     #         proportional=proportional)
-    thetas, thetas_obs, ells = func(n_dim_obs, n_dim_lat, T, **kwargs)
+    thetas, thetas_obs, ells = func(n_dim_obs=n_dim_obs, n_dim_lat=n_dim_lat, T=T, **kwargs)
     sigmas = list(map(np.linalg.inv, thetas_obs))
     # map(normalize_matrix, sigmas)  # in place
 
