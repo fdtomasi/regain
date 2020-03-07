@@ -50,17 +50,10 @@ def _gaussian_case(
         normalize_starting_matrices=False, degree=2, epsilon=1e-2,
         keep_sparsity=False, proportional=False, **kwargs):
     modes = dict(
-        my=data_Meinshausen_Yuan,
-        mys=data_Meinshausen_Yuan_sparse_latent,
-        sin=make_sin,
-        fixed_sparsity=make_fixed_sparsity,
-        sincos=make_sin_cos,
-        gp=make_exp_sine_squared,
-        fede=make_fede,
-        sklearn=make_sparse_low_rank,
-        ma=make_ma_xue_zou,
-        mak=make_ma_xue_zou_rand_k,
-        ticc=make_ticc)
+        my=data_Meinshausen_Yuan, mys=data_Meinshausen_Yuan_sparse_latent,
+        sin=make_sin, fixed_sparsity=make_fixed_sparsity, sincos=make_sin_cos,
+        gp=make_exp_sine_squared, fede=make_fede, sklearn=make_sparse_low_rank,
+        ma=make_ma_xue_zou, mak=make_ma_xue_zou_rand_k, ticc=make_ticc)
 
     if mode is not None:
         # mode overrides other parameters, for back compatibility
@@ -84,7 +77,7 @@ def _gaussian_case(
     #         normalize_starting_matrices=normalize_starting_matrices,
     #         degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity,
     #         proportional=proportional)
-    thetas, thetas_obs, ells = func(n_dim_obs, n_dim_lat, T, **kwargs)
+    thetas, thetas_obs, ells = func(n_dim_obs=n_dim_obs, n_dim_lat=n_dim_lat, T=T, **kwargs)
     sigmas = list(map(np.linalg.inv, thetas_obs))
     # map(normalize_matrix, sigmas)  # in place
 
@@ -114,9 +107,11 @@ def _ising_case(
         for t in thetas
     ]
     data = np.array(samples)
+    X = np.vstack(data)
+    y = np.repeat(range(len(thetas)), n_samples).astype(int)
     if time_on_axis == "last":
         data = data.transpose(1, 2, 0)
-    return data, thetas
+    return Bunch(data=data, thetas=np.array(thetas), X=X, y=y)
 
 
 def _poisson_case(
@@ -129,9 +124,11 @@ def _poisson_case(
         for t in thetas
     ]
     data = np.array(samples)
+    X = np.vstack(data)
+    y = np.repeat(range(len(thetas)), n_samples).astype(int)
     if time_on_axis == "last":
         data = data.transpose(1, 2, 0)
-    return data, thetas
+    return Bunch(data=data, thetas=np.array(thetas), X=X, y=y)
 
 
 def make_dataset(

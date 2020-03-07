@@ -3,6 +3,7 @@ conda install -q python=$TRAVIS_PYTHON_VERSION conda-build jinja2 anaconda-clien
 
 # install additional packages with conda and pip
 pip install -r requirements.txt
+pip install -r requirements-optional.txt
 
 conda build tools
 
