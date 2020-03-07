@@ -40,7 +40,19 @@ def test_quickstart():
     data.X, data.y, data.thetas
 
 
-def test_make_dataset():
-    """Test default make_dataset function."""
+def test_make_dataset_gaussian():
+    """Test default make_dataset with Gaussian distribution."""
     data = datasets.make_dataset()
+    data.X, data.y, data.thetas
+
+
+# def test_make_dataset_ising():
+#     """Test default make_dataset with Ising distribution."""
+#     data = datasets.make_dataset(distribution='ising')
+#     data.X, data.y, data.thetas
+
+
+def test_make_dataset_poisson():
+    """Test default make_dataset with Poisson distribution."""
+    data = datasets.make_dataset(distribution='poisson', update_theta='l1')
     data.X, data.y, data.thetas
