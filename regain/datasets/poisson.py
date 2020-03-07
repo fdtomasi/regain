@@ -29,7 +29,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import warnings
 
-import networkx as nx
 import numpy as np
 
 
@@ -88,6 +87,7 @@ def poisson_theta_generator(n_dim_obs=10,
     list:
         List of adjaceny matrix of length T.
     """
+    import networkx as nx
     if random_graph.lower() == 'erdos-renyi':
         graph = nx.random_graphs.fast_gnp_random_graph(n=n_dim_obs,
                                                        p=probability)

@@ -33,7 +33,6 @@ import sys
 import itertools
 
 import numpy as np
-import networkx as nx
 import warnings
 
 
@@ -58,7 +57,7 @@ def ising_theta_generator(
         n_dim_obs=10, n=100, T=10, mode='l1', time_on_axis='first', change=1,
         responses=[-1, 1], random_graph='scale-free', probability=0.3,
         degree=2):
-    """Generates adjacency matix for Ising graphical model.
+    """Generates adjacency matrix for Ising graphical model.
 
     Parameters
     ----------
@@ -95,6 +94,7 @@ def ising_theta_generator(
     list:
         List of adjaceny matrix of length T.
     """
+    import networkx as nx
     if random_graph.lower() == 'erdos-renyi':
         graph = nx.random_graphs.fast_gnp_random_graph(n=n_dim_obs,
                                                        p=probability)
