@@ -30,6 +30,7 @@
 
 """Norm functions."""
 import numpy as np
+import tensorflow as tf
 from scipy.optimize import minimize
 
 
@@ -41,12 +42,12 @@ def vector_p_norm(a, p=1):
 
 def l1_norm(precision):
     """L1 norm."""
-    return np.abs(precision).sum()
+    return tf.reduce_sum(tf.abs(precision))
 
 
 def l1_od_norm(precision):
     """L1 norm off-diagonal."""
-    return l1_norm(precision) - np.abs(np.diag(precision)).sum()
+    return l1_norm(precision) - tf.reduce_sum(tf.abs(tf.linalg.diag_part(precision)))
 
 
 def node_penalty(X):

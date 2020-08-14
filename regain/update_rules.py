@@ -39,11 +39,12 @@ def update_rho(rho, rnorm, snorm, iteration=None, mu=10, tau_inc=2, tau_dec=2):
     ----------
     rho : float
     """
+    rho_new = rho
     if rnorm > mu * snorm:
-        return tau_inc * rho
+        rho_new *= tau_inc
     elif snorm > mu * rnorm:
-        return rho / tau_dec
-    return rho
+        rho_new /= tau_dec
+    return rho_new
 
 
 def update_gamma(gamma, iteration, eps=1e-4):
