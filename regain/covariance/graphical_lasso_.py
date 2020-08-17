@@ -155,10 +155,14 @@ def graphical_lasso(
     U = tf.zeros_like(emp_cov)
     Z_old = tf.zeros_like(Z)
 
+    rho = tf.cast(rho, Z.dtype)
+
     checks = []
     # pbar = tqdm(range(max_iter), disable=tf.math.logical_not(tf.cast(verbose, tf.bool)))
-    pbar = range(max_iter)
-    for iteration_ in pbar:
+    pbar = tf.range(max_iter)
+    iteration_ = 0
+    @tf.function
+    def mainloop(Z,U):
         # x-update
         A = Z - U
         A += tf.transpose(A)
@@ -171,6 +175,10 @@ def graphical_lasso(
 
         # update residuals
         U += K_hat - Z
+        return K,Z,U
+    for iteration_ in pbar:
+
+        K, Z, U = mainloop(Z,U)
 
         # diagnostics, reporting, termination checks
         obj = objective(emp_cov, K, Z, alpha)  # if compute_objective else np.nan
