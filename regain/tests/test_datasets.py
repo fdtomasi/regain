@@ -54,7 +54,6 @@ def test_make_dataset_gaussian():
 #     data = datasets.make_dataset(mode='my')
 #     data.X, data.y, data.thetas
 
-
 # def test_make_dataset_gaussian_mys():
 #     """Test Gaussian make_dataset (MYS)."""
 #     data = datasets.make_dataset(mode='mys')
@@ -108,20 +107,22 @@ def test_make_dataset_gaussian_ma():
 #     data = datasets.make_dataset(mode='mak')
 #     data.X, data.y, data.thetas
 
-
 # def test_make_dataset_gaussian_ticc():
 #     """Test Gaussian make_dataset (ticc)."""
 #     data = datasets.make_dataset(mode='ticc', n_dim_lat=0)
 #     data.X, data.y, data.thetas
 
 
-# def test_make_dataset_ising():
-#     """Test default make_dataset with Ising distribution."""
-#     data = datasets.make_dataset(distribution='ising')
-#     data.X, data.y, data.thetas
+def test_make_dataset_ising():
+    """Test default make_dataset with Ising distribution."""
+    data = datasets.make_dataset(
+        distribution='ising', n_samples=10, n_dim_obs=3, n_dim_lat=1, T=1)
+    data.X, data.y, data.thetas
 
 
 def test_make_dataset_poisson():
     """Test default make_dataset with Poisson distribution."""
-    data = datasets.make_dataset(distribution='poisson', update_theta='l1')
+    data = datasets.make_dataset(
+        distribution='poisson', update_theta='l1', n_samples=10, n_dim_obs=3,
+        n_dim_lat=1, T=1)
     data.X, data.y, data.thetas
