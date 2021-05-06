@@ -5,9 +5,9 @@ scipy>=0.16.1,>=1.0.0
 scikit_learn>=0.17
 setuptools
 six
+networkx
 
 # Optional
 #prox_tv
 #matplotlib
-#networkx
 #GPyOpt
