@@ -43,8 +43,7 @@ from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_X_y
 
-from regain.covariance.graphical_lasso_ import (
-    GraphicalLasso, init_precision, logl)
+from regain.covariance.graphical_lasso_ import GraphicalLasso, init_precision, logl
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
@@ -56,9 +55,7 @@ def loss(S, K, n_samples=None):
     """Loss function for time-varying graphical lasso."""
     if n_samples is None:
         n_samples = np.ones(S.shape[0])
-    return sum(
-        -ni * logl(emp_cov, precision)
-        for emp_cov, precision, ni in zip(S, K, n_samples))
+    return sum(-ni * logl(emp_cov, precision) for emp_cov, precision, ni in zip(S, K, n_samples))
 
 
 def objective(n_samples, S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
@@ -79,11 +76,25 @@ def objective(n_samples, S, K, Z_0, Z_1, Z_2, alpha, beta, psi):
 
 
 def time_graphical_lasso(
-        emp_cov, alpha=0.01, rho=1, beta=1, max_iter=100, n_samples=None,
-        verbose=False, psi='laplacian', tol=1e-4, rtol=1e-4,
-        return_history=False, return_n_iter=True, mode='admm',
-        compute_objective=True, stop_at=None, stop_when=1e-4,
-        update_rho_options=None, init='empirical'):
+    emp_cov,
+    alpha=0.01,
+    rho=1,
+    beta=1,
+    max_iter=100,
+    n_samples=None,
+    verbose=False,
+    psi="laplacian",
+    tol=1e-4,
+    rtol=1e-4,
+    return_history=False,
+    return_n_iter=True,
+    mode="admm",
+    compute_objective=True,
+    stop_at=None,
+    stop_when=1e-4,
+    update_rho_options=None,
+    init="empirical",
+):
     """Time-varying graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -156,11 +167,7 @@ def time_graphical_lasso(
     if n_samples is None:
         n_samples = np.ones(emp_cov.shape[0])
 
-    checks = [
-        convergence(
-            obj=objective(
-                n_samples, emp_cov, Z_0, Z_0, Z_1, Z_2, alpha, beta, psi))
-    ]
+    checks = [convergence(obj=objective(n_samples, emp_cov, Z_0, Z_0, Z_1, Z_2, alpha, beta, psi))]
     for iteration_ in range(max_iter):
         # update K
         A = Z_0 - U_0
@@ -170,34 +177,35 @@ def time_graphical_lasso(
         # soft_thresholding_ = partial(soft_thresholding, lamda=alpha / rho)
         # K = np.array(map(soft_thresholding_, A))
         A += A.transpose(0, 2, 1)
-        A /= 2.
+        A /= 2.0
 
         A *= -rho * divisor[:, None, None] / n_samples[:, None, None]
         A += emp_cov
 
-        K = np.array(
-            [
-                prox_logdet(a, lamda=ni / (rho * div))
-                for a, div, ni in zip(A, divisor, n_samples)
-            ])
+        K = np.array([prox_logdet(a, lamda=ni / (rho * div)) for a, div, ni in zip(A, divisor, n_samples)])
 
         # update Z_0
         A = K + U_0
         A += A.transpose(0, 2, 1)
-        A /= 2.
+        A /= 2.0
         Z_0 = soft_thresholding(A, lamda=alpha / rho)
 
         # other Zs
         A_1 = K[:-1] + U_1
         A_2 = K[1:] + U_2
         if not psi_node_penalty:
-            prox_e = prox_psi(A_2 - A_1, lamda=2. * beta / rho)
-            Z_1 = .5 * (A_1 + A_2 - prox_e)
-            Z_2 = .5 * (A_1 + A_2 + prox_e)
+            prox_e = prox_psi(A_2 - A_1, lamda=2.0 * beta / rho)
+            Z_1 = 0.5 * (A_1 + A_2 - prox_e)
+            Z_2 = 0.5 * (A_1 + A_2 + prox_e)
         else:
             Z_1, Z_2 = prox_psi(
-                np.concatenate((A_1, A_2), axis=1), lamda=.5 * beta / rho,
-                rho=rho, tol=tol, rtol=rtol, max_iter=max_iter)
+                np.concatenate((A_1, A_2), axis=1),
+                lamda=0.5 * beta / rho,
+                rho=rho,
+                tol=tol,
+                rtol=rtol,
+                max_iter=max_iter,
+            )
 
         # update residuals
         U_0 += K - Z_0
@@ -205,17 +213,11 @@ def time_graphical_lasso(
         U_2 += K[1:] - Z_2
 
         # diagnostics, reporting, termination checks
-        rnorm = np.sqrt(
-            squared_norm(K - Z_0) + squared_norm(K[:-1] - Z_1) +
-            squared_norm(K[1:] - Z_2))
+        rnorm = np.sqrt(squared_norm(K - Z_0) + squared_norm(K[:-1] - Z_1) + squared_norm(K[1:] - Z_2))
 
-        snorm = rho * np.sqrt(
-            squared_norm(Z_0 - Z_0_old) + squared_norm(Z_1 - Z_1_old) +
-            squared_norm(Z_2 - Z_2_old))
+        snorm = rho * np.sqrt(squared_norm(Z_0 - Z_0_old) + squared_norm(Z_1 - Z_1_old) + squared_norm(Z_2 - Z_2_old))
 
-        obj = objective(
-            n_samples, emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi) \
-            if compute_objective else np.nan
+        obj = objective(n_samples, emp_cov, Z_0, K, Z_1, Z_2, alpha, beta, psi) if compute_objective else np.nan
 
         # if np.isinf(obj):
         #     Z_0 = Z_0_old
@@ -225,14 +227,14 @@ def time_graphical_lasso(
             obj=obj,
             rnorm=rnorm,
             snorm=snorm,
-            e_pri=np.sqrt(K.size + 2 * Z_1.size) * tol + rtol * max(
-                np.sqrt(
-                    squared_norm(Z_0) + squared_norm(Z_1) + squared_norm(Z_2)),
-                np.sqrt(
-                    squared_norm(K) + squared_norm(K[:-1]) +
-                    squared_norm(K[1:]))),
-            e_dual=np.sqrt(K.size + 2 * Z_1.size) * tol + rtol * rho *
-            np.sqrt(squared_norm(U_0) + squared_norm(U_1) + squared_norm(U_2)),
+            e_pri=np.sqrt(K.size + 2 * Z_1.size) * tol
+            + rtol
+            * max(
+                np.sqrt(squared_norm(Z_0) + squared_norm(Z_1) + squared_norm(Z_2)),
+                np.sqrt(squared_norm(K) + squared_norm(K[:-1]) + squared_norm(K[1:])),
+            ),
+            e_dual=np.sqrt(K.size + 2 * Z_1.size) * tol
+            + rtol * rho * np.sqrt(squared_norm(U_0) + squared_norm(U_1) + squared_norm(U_2)),
             # precision=Z_0.copy()
         )
         Z_0_old = Z_0.copy()
@@ -240,9 +242,7 @@ def time_graphical_lasso(
         Z_2_old = Z_2.copy()
 
         if verbose:
-            print(
-                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
+            print("obj: %.4f, rnorm: %.4f, snorm: %.4f," "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
 
         checks.append(check)
         if stop_at is not None:
@@ -252,16 +252,14 @@ def time_graphical_lasso(
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
 
-        rho_new = update_rho(
-            rho, rnorm, snorm, iteration=iteration_,
-            **(update_rho_options or {}))
+        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {}))
         # scaled dual variables should be also rescaled
         U_0 *= rho / rho_new
         U_1 *= rho / rho_new
         U_2 *= rho / rho_new
         rho = rho_new
 
-        #assert is_pos_def(Z_0)
+        # assert is_pos_def(Z_0)
     else:
         warnings.warn("Objective did not converge.")
 
@@ -343,17 +341,40 @@ class TimeGraphicalLasso(GraphicalLasso):
         Number of iterations run.
 
     """
+
     def __init__(
-            self, alpha=0.01, beta=1., mode='admm', rho=1., tol=1e-4,
-            rtol=1e-4, psi='laplacian', max_iter=100, verbose=False,
-            assume_centered=False, return_history=False,
-            update_rho_options=None, compute_objective=True, stop_at=None,
-            stop_when=1e-4, suppress_warn_list=False, init='empirical'):
+        self,
+        alpha=0.01,
+        beta=1.0,
+        mode="admm",
+        rho=1.0,
+        tol=1e-4,
+        rtol=1e-4,
+        psi="laplacian",
+        max_iter=100,
+        verbose=False,
+        assume_centered=False,
+        return_history=False,
+        update_rho_options=None,
+        compute_objective=True,
+        stop_at=None,
+        stop_when=1e-4,
+        suppress_warn_list=False,
+        init="empirical",
+    ):
         super(TimeGraphicalLasso, self).__init__(
-            alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
-            verbose=verbose, assume_centered=assume_centered, mode=mode,
+            alpha=alpha,
+            rho=rho,
+            tol=tol,
+            rtol=rtol,
+            max_iter=max_iter,
+            verbose=verbose,
+            assume_centered=assume_centered,
+            mode=mode,
             update_rho_options=update_rho_options,
-            compute_objective=compute_objective, init=init)
+            compute_objective=compute_objective,
+            init=init,
+        )
         self.beta = beta
         self.psi = psi
         self.return_history = return_history
@@ -383,13 +404,25 @@ class TimeGraphicalLasso(GraphicalLasso):
         """
 
         out = time_graphical_lasso(
-            emp_cov, alpha=self.alpha, rho=self.rho, beta=self.beta,
-            mode=self.mode, n_samples=n_samples, tol=self.tol, rtol=self.rtol,
-            psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
-            return_n_iter=True, return_history=self.return_history,
+            emp_cov,
+            alpha=self.alpha,
+            rho=self.rho,
+            beta=self.beta,
+            mode=self.mode,
+            n_samples=n_samples,
+            tol=self.tol,
+            rtol=self.rtol,
+            psi=self.psi,
+            max_iter=self.max_iter,
+            verbose=self.verbose,
+            return_n_iter=True,
+            return_history=self.return_history,
             update_rho_options=self.update_rho_options,
-            compute_objective=self.compute_objective, stop_at=self.stop_at,
-            stop_when=self.stop_when, init=self.init)
+            compute_objective=self.compute_objective,
+            stop_at=self.stop_at,
+            stop_when=self.stop_when,
+            init=self.init,
+        )
         if self.return_history:
             self.precision_, self.covariance_, self.history_, self.n_iter_ = out
         else:
@@ -408,9 +441,7 @@ class TimeGraphicalLasso(GraphicalLasso):
 
         """
         # Covariance does not make sense for a single feature
-        X, y = check_X_y(
-            X, y, accept_sparse=False, dtype=np.float64, order="C",
-            ensure_min_features=2, estimator=self)
+        X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64, order="C", ensure_min_features=2, estimator=self)
 
         n_dimensions = X.shape[1]
         self.classes_, n_samples = np.unique(y, return_counts=True)
@@ -420,15 +451,11 @@ class TimeGraphicalLasso(GraphicalLasso):
         if self.assume_centered:
             self.location_ = np.zeros((n_times, n_dimensions))
         else:
-            self.location_ = np.array(
-                [X[y == cl].mean(0) for cl in self.classes_])
+            self.location_ = np.array([X[y == cl].mean(0) for cl in self.classes_])
 
         emp_cov = np.array(
-            [
-                empirical_covariance(
-                    X[y == cl], assume_centered=self.assume_centered)
-                for cl in self.classes_
-            ])
+            [empirical_covariance(X[y == cl], assume_centered=self.assume_centered) for cl in self.classes_]
+        )
 
         return self._fit(emp_cov, n_samples)
 
@@ -455,26 +482,24 @@ class TimeGraphicalLasso(GraphicalLasso):
 
         """
         # Covariance does not make sense for a single feature
-        X, y = check_X_y(
-            X, y, accept_sparse=False, dtype=np.float64, order="C",
-            ensure_min_features=2, estimator=self)
+        X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64, order="C", ensure_min_features=2, estimator=self)
 
         # compute empirical covariance of the test set
         test_cov = np.array(
             [
-                empirical_covariance(
-                    X[y == cl] - self.location_[i], assume_centered=True)
+                empirical_covariance(X[y == cl] - self.location_[i], assume_centered=True)
                 for i, cl in enumerate(self.classes_)
-            ])
+            ]
+        )
 
         res = sum(
-            X[y == cl].shape[0] * log_likelihood(S, K) for S, K, cl in zip(
-                test_cov, self.get_observed_precision(), self.classes_))
+            X[y == cl].shape[0] * log_likelihood(S, K)
+            for S, K, cl in zip(test_cov, self.get_observed_precision(), self.classes_)
+        )
 
         return res
 
-    def error_norm(
-            self, comp_cov, norm='frobenius', scaling=True, squared=True):
+    def error_norm(self, comp_cov, norm="frobenius", scaling=True, squared=True):
         """Compute the Mean Squared Error between two covariance estimators.
         (In the sense of the Frobenius norm).
 
@@ -504,6 +529,4 @@ class TimeGraphicalLasso(GraphicalLasso):
         `self` and `comp_cov` covariance estimators.
 
         """
-        return error_norm_time(
-            self.covariance_, comp_cov, norm=norm, scaling=scaling,
-            squared=squared)
+        return error_norm_time(self.covariance_, comp_cov, norm=norm, scaling=scaling, squared=squared)

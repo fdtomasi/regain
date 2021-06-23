@@ -38,7 +38,7 @@ def _scalar_product(x, y):
 
 
 def fista_step(Y, Y_diff, t):
-    t_next = (1. + np.sqrt(1.0 + 4.0 * t * t)) / 2.
+    t_next = (1.0 + np.sqrt(1.0 + 4.0 * t * t)) / 2.0
     return Y + ((t - 1.0) / t_next) * Y_diff, t_next
 
 
@@ -51,9 +51,21 @@ def upper_diag_3d(x):
 
 
 def choose_gamma(
-        gamma, x, beta, alpha, lamda, grad, function_f=None, delta=1e-4,
-        eps=0.5, max_iter=1000, p=1, x_inv=None, choose='gamma',
-        laplacian_penalty=False):
+    gamma,
+    x,
+    beta,
+    alpha,
+    lamda,
+    grad,
+    function_f=None,
+    delta=1e-4,
+    eps=0.5,
+    max_iter=1000,
+    p=1,
+    x_inv=None,
+    choose="gamma",
+    laplacian_penalty=False,
+):
     """Choose gamma for backtracking.
 
     References
@@ -66,9 +78,7 @@ def choose_gamma(
         if laplacian_penalty:
             prox = soft_thresholding_od(x - gamma * grad, alpha * gamma)
         else:
-            prox = prox_FL(
-                x - gamma * grad, beta * gamma, alpha * gamma, p=p,
-                symmetric=True)
+            prox = prox_FL(x - gamma * grad, beta * gamma, alpha * gamma, p=p, symmetric=True)
         if positive_definite(prox) and choose != "gamma":
             break
 
@@ -86,9 +96,23 @@ def choose_gamma(
 
 
 def choose_lamda(
-        lamda, x, gamma, delta=1e-4, eps=0.5, function_f=None, penalty_f=None,
-        objective_f=None, gradient_f=None, function_g=None, max_iter=1000,
-        criterion='b', p=1, grad=None, prox=None, min_eigen_x=None):
+    lamda,
+    x,
+    gamma,
+    delta=1e-4,
+    eps=0.5,
+    function_f=None,
+    penalty_f=None,
+    objective_f=None,
+    gradient_f=None,
+    function_g=None,
+    max_iter=1000,
+    criterion="b",
+    p=1,
+    grad=None,
+    prox=None,
+    min_eigen_x=None,
+):
     """Choose lambda for backtracking.
 
     References
@@ -100,10 +124,10 @@ def choose_lamda(
     # min_eigen_y = np.min([np.linalg.eigh(z)[0] for z in prox])
 
     y_minus_x = prox - x
-    if criterion == 'b':
+    if criterion == "b":
         tolerance = _scalar_product(y_minus_x, grad)
         tolerance += delta / gamma * _scalar_product(y_minus_x, y_minus_x)
-    elif criterion == 'c':
+    elif criterion == "c":
         objective_x = objective_f(x)
         gx = function_g(x)
         gy = function_g(prox)
@@ -113,7 +137,7 @@ def choose_lamda(
         # line-search
         x1 = x + lamda * y_minus_x
 
-        if criterion == 'a':
+        if criterion == "a":
             iter_diff = x1 - x
             gradx1 = gradient_f(x1)
             grad_diff = gradx1 - grad
@@ -122,11 +146,11 @@ def choose_lamda(
             tolerance = delta * norm_iter_diff / (gamma * lamda)
             if norm_grad_diff <= tolerance:
                 break
-        elif criterion == 'b':
+        elif criterion == "b":
             loss_diff = function_f(K=x1) - fx
             if loss_diff <= lamda * tolerance and positive_definite(x1):
                 break
-        elif criterion == 'c':
+        elif criterion == "c":
             obj_diff = objective_f(x1) - objective_x
             # if positive_definite(x1) and obj_diff <= lamda * tolerance:
             cond = True

@@ -41,13 +41,11 @@ def test_ltgl_zero():
     y = [0, 0, 0, 1, 1, 1, 2, 2, 2]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        mdl = TimeGraphicalLasso(
-            max_iter=1, assume_centered=True).fit(x, y)
+        mdl = TimeGraphicalLasso(max_iter=1, assume_centered=True).fit(x, y)
 
     for p in mdl.precision_:
         # remove the diagonal
         p.flat[::4] = 0
 
     assert_array_equal(mdl.precision_, np.zeros((3, 3, 3)))
-    assert_array_equal(mdl.get_observed_precision(),
-                       mdl.precision_)
+    assert_array_equal(mdl.get_observed_precision(), mdl.precision_)

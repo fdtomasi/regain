@@ -54,48 +54,63 @@ from regain.datasets.poisson import poisson_theta_generator
 
 
 def _gaussian_case(
-        n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10, mode=None,
-        time_on_axis='first', update_ell='l2', update_theta='l2',
-        normalize_starting_matrices=False, degree=2, epsilon=1e-2,
-        keep_sparsity=False, proportional=False, **kwargs):
+    n_samples=100,
+    n_dim_obs=100,
+    n_dim_lat=10,
+    T=10,
+    mode=None,
+    time_on_axis="first",
+    update_ell="l2",
+    update_theta="l2",
+    normalize_starting_matrices=False,
+    degree=2,
+    epsilon=1e-2,
+    keep_sparsity=False,
+    proportional=False,
+    **kwargs
+):
     modes = dict(
-        my=data_Meinshausen_Yuan, mys=data_Meinshausen_Yuan_sparse_latent,
-        sin=make_sin, fixed_sparsity=make_fixed_sparsity, sincos=make_sin_cos,
-        gp=make_exp_sine_squared, fede=make_fede, sklearn=make_sparse_low_rank,
-        ma=make_ma_xue_zou, mak=make_ma_xue_zou_rand_k, ticc=make_ticc)
+        my=data_Meinshausen_Yuan,
+        mys=data_Meinshausen_Yuan_sparse_latent,
+        sin=make_sin,
+        fixed_sparsity=make_fixed_sparsity,
+        sincos=make_sin_cos,
+        gp=make_exp_sine_squared,
+        fede=make_fede,
+        sklearn=make_sparse_low_rank,
+        ma=make_ma_xue_zou,
+        mak=make_ma_xue_zou_rand_k,
+        ticc=make_ticc,
+    )
 
     if mode is not None:
         # mode overrides other parameters, for back compatibility
         func = mode if callable(mode) else modes.get(mode, None)
         if func is None:
-            raise ValueError(
-                "Unknown mode %s. "
-                "Choices are: %s" % (mode, list(modes.keys())))
-        kwargs.update(
-            degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity,
-            proportional=proportional)
+            raise ValueError("Unknown mode %s. " "Choices are: %s" % (mode, list(modes.keys())))
+        kwargs.update(degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity, proportional=proportional)
     else:
         func = partial(
-            make_covariance, update_ell=update_ell, update_theta=update_theta,
+            make_covariance,
+            update_ell=update_ell,
+            update_theta=update_theta,
             normalize_starting_matrices=normalize_starting_matrices,
-            degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity,
-            proportional=proportional)
+            degree=degree,
+            epsilon=epsilon,
+            keep_sparsity=keep_sparsity,
+            proportional=proportional,
+        )
     #     func = partial(
     #         _gaussian_case, mode='ma',
     #         update_ell=update_ell, update_theta=update_theta,
     #         normalize_starting_matrices=normalize_starting_matrices,
     #         degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity,
     #         proportional=proportional)
-    thetas, thetas_obs, ells = func(
-        n_dim_obs=n_dim_obs, n_dim_lat=n_dim_lat, T=T, **kwargs)
+    thetas, thetas_obs, ells = func(n_dim_obs=n_dim_obs, n_dim_lat=n_dim_lat, T=T, **kwargs)
     sigmas = list(map(np.linalg.inv, thetas_obs))
     # map(normalize_matrix, sigmas)  # in place
 
-    data = np.array(
-        [
-            np.random.multivariate_normal(
-                np.zeros(n_dim_obs), sigma, size=n_samples) for sigma in sigmas
-        ])
+    data = np.array([np.random.multivariate_normal(np.zeros(n_dim_obs), sigma, size=n_samples) for sigma in sigmas])
 
     X = np.vstack(data)
     y = np.repeat(range(len(sigmas)), n_samples).astype(int)
@@ -103,19 +118,15 @@ def _gaussian_case(
     if time_on_axis == "last":
         data = data.transpose(1, 2, 0)
     return Bunch(
-        data=data, thetas=np.array(thetas), X=X, y=y,
-        thetas_observed=np.array(thetas_obs), ells=np.array(ells))
+        data=data, thetas=np.array(thetas), X=X, y=y, thetas_observed=np.array(thetas_obs), ells=np.array(ells)
+    )
 
 
 def _ising_case(
-        n_samples=100, n_dim_obs=100, T=10, time_on_axis='first',
-        update_theta='l2', responses=[-1, 1], **kwargs):
-    thetas = ising_theta_generator(
-        n_dim_obs=n_dim_obs, n=n_samples, T=T, mode=update_theta, **kwargs)
-    samples = [
-        ising_sampler(t, np.zeros(n_dim_obs), n=n_samples, responses=[-1, 1])
-        for t in thetas
-    ]
+    n_samples=100, n_dim_obs=100, T=10, time_on_axis="first", update_theta="l2", responses=[-1, 1], **kwargs
+):
+    thetas = ising_theta_generator(n_dim_obs=n_dim_obs, n=n_samples, T=T, mode=update_theta, **kwargs)
+    samples = [ising_sampler(t, np.zeros(n_dim_obs), n=n_samples, responses=[-1, 1]) for t in thetas]
     data = np.array(samples)
     X = np.vstack(data)
     y = np.repeat(range(len(thetas)), n_samples).astype(int)
@@ -124,15 +135,9 @@ def _ising_case(
     return Bunch(data=data, thetas=np.array(thetas), X=X, y=y)
 
 
-def _poisson_case(
-        n_samples=100, n_dim_obs=100, T=10, time_on_axis='first',
-        update_theta='l1', **kwargs):
-    thetas = poisson_theta_generator(
-        n_dim_obs=n_dim_obs, T=T, mode=update_theta, **kwargs)
-    samples = [
-        poisson_sampler(t, variances=np.zeros(n_dim_obs), n_samples=n_samples)
-        for t in thetas
-    ]
+def _poisson_case(n_samples=100, n_dim_obs=100, T=10, time_on_axis="first", update_theta="l1", **kwargs):
+    thetas = poisson_theta_generator(n_dim_obs=n_dim_obs, T=T, mode=update_theta, **kwargs)
+    samples = [poisson_sampler(t, variances=np.zeros(n_dim_obs), n_samples=n_samples) for t in thetas]
     data = np.array(samples)
     X = np.vstack(data)
     y = np.repeat(range(len(thetas)), n_samples).astype(int)
@@ -142,11 +147,22 @@ def _poisson_case(
 
 
 def make_dataset(
-        n_samples=100, n_dim_obs=100, n_dim_lat=10, T=10, mode=None,
-        time_on_axis='first', update_ell='l2', update_theta='l2',
-        normalize_starting_matrices=False, degree=2, epsilon=1e-2,
-        keep_sparsity=False, proportional=False, distribution='gaussian',
-        **kwargs):
+    n_samples=100,
+    n_dim_obs=100,
+    n_dim_lat=10,
+    T=10,
+    mode=None,
+    time_on_axis="first",
+    update_ell="l2",
+    update_theta="l2",
+    normalize_starting_matrices=False,
+    degree=2,
+    epsilon=1e-2,
+    keep_sparsity=False,
+    proportional=False,
+    distribution="gaussian",
+    **kwargs
+):
     """Generate a synthetic dataset.
 
     Parameters
@@ -186,23 +202,42 @@ def make_dataset(
     n_dim_lat = int(n_dim_lat)
     n_samples = int(n_samples)
 
-    if distribution.lower() == 'gaussian':
+    if distribution.lower() == "gaussian":
         return _gaussian_case(
-            n_samples=n_samples, n_dim_obs=n_dim_obs, n_dim_lat=n_dim_lat, T=T,
-            mode=mode, time_on_axis=time_on_axis, update_ell=update_ell,
+            n_samples=n_samples,
+            n_dim_obs=n_dim_obs,
+            n_dim_lat=n_dim_lat,
+            T=T,
+            mode=mode,
+            time_on_axis=time_on_axis,
+            update_ell=update_ell,
             update_theta=update_theta,
             normalize_starting_matrices=normalize_starting_matrices,
-            degree=degree, epsilon=epsilon, keep_sparsity=keep_sparsity,
-            proportional=proportional, **kwargs)
+            degree=degree,
+            epsilon=epsilon,
+            keep_sparsity=keep_sparsity,
+            proportional=proportional,
+            **kwargs
+        )
 
-    elif distribution.lower() == 'ising':
+    elif distribution.lower() == "ising":
         return _ising_case(
-            n_samples=n_samples, n_dim_obs=n_dim_obs, T=T,
-            time_on_axis=time_on_axis, update_theta=update_theta,
-            responses=[-1, 1], **kwargs)
-    elif distribution.lower() == 'poisson':
+            n_samples=n_samples,
+            n_dim_obs=n_dim_obs,
+            T=T,
+            time_on_axis=time_on_axis,
+            update_theta=update_theta,
+            responses=[-1, 1],
+            **kwargs
+        )
+    elif distribution.lower() == "poisson":
         return _poisson_case(
-            n_samples=n_samples, n_dim_obs=n_dim_obs, T=T,
-            time_on_axis=time_on_axis, update_theta=update_theta, **kwargs)
+            n_samples=n_samples,
+            n_dim_obs=n_dim_obs,
+            T=T,
+            time_on_axis=time_on_axis,
+            update_theta=update_theta,
+            **kwargs
+        )
     else:
-        raise ValueError('distribution `%s` undefined' % distribution)
+        raise ValueError("distribution `%s` undefined" % distribution)

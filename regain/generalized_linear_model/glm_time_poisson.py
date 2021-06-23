@@ -56,9 +56,7 @@ def loss_poisson(X, K, n_samples=None):
     """Loss function for time-varying poisson model."""
     if n_samples is None:
         n_samples = np.ones(X.shape[0])
-    return sum(
-        -ni * loss(x, k)
-        for x, k, ni in zip(X, K, n_samples))
+    return sum(-ni * loss(x, k) for x, k, ni in zip(X, K, n_samples))
 
 
 def objective(X, K, Z_M, alpha, kernel, psi):
@@ -75,13 +73,24 @@ def objective(X, K, Z_M, alpha, kernel, psi):
     return obj
 
 
-def _fit_time_poisson_model(X, alpha=0.01, rho=1, kernel=None,
-                            max_iter=100, verbose=False, psi='laplacian',
-                            gamma=0.1,
-                            tol=1e-4, rtol=1e-4, return_history=False,
-                            return_n_iter=True, compute_objective=True,
-                            stop_at=None, stop_when=1e-4,
-                            n_cores=-1):
+def _fit_time_poisson_model(
+    X,
+    alpha=0.01,
+    rho=1,
+    kernel=None,
+    max_iter=100,
+    verbose=False,
+    psi="laplacian",
+    gamma=0.1,
+    tol=1e-4,
+    rtol=1e-4,
+    return_history=False,
+    return_n_iter=True,
+    compute_objective=True,
+    stop_at=None,
+    stop_when=1e-4,
+    n_cores=-1,
+):
     """Time-varying graphical model solver.
 
     Solves the following problem via ADMM:
@@ -123,7 +132,7 @@ def _fit_time_poisson_model(X, alpha=0.01, rho=1, kernel=None,
     """
     psi, prox_psi, psi_node_penalty = check_norm_prox(psi)
     n_times, n_samples, n_features = X.shape
-    n_samples = np.array([n_samples]*n_times)
+    n_samples = np.array([n_samples] * n_times)
 
     if kernel is None:
         kernel = np.eye(n_times)
@@ -148,10 +157,7 @@ def _fit_time_poisson_model(X, alpha=0.01, rho=1, kernel=None,
         Z_R_old = np.zeros_like(Z_R)
         Z_M_old[m] = (Z_L_old, Z_R_old)
 
-    checks = [
-        convergence(
-            obj=objective(X, K, Z_M, alpha, kernel, psi))
-    ]
+    checks = [convergence(obj=objective(X, K, Z_M, alpha, kernel, psi))]
     for iteration_ in range(max_iter):
         # update K
         A = np.zeros_like(K)
@@ -161,19 +167,19 @@ def _fit_time_poisson_model(X, alpha=0.01, rho=1, kernel=None,
 
         A /= n_times
         A += A.transpose(0, 2, 1)
-        A /= 2.
+        A /= 2.0
         # K_new = np.zeros_like(K)
 
         for t in range(n_times):
             thetas_pred = []
             for v in range(n_features):
-                inner_verbose = max(0, verbose-1)
-                res = fit_each_variable(X[t, :, :], v, alpha, tol=tol,
-                                        verbose=inner_verbose, A=A[t, :, :],
-                                        T=n_times, rho=rho)
+                inner_verbose = max(0, verbose - 1)
+                res = fit_each_variable(
+                    X[t, :, :], v, alpha, tol=tol, verbose=inner_verbose, A=A[t, :, :], T=n_times, rho=rho
+                )
                 thetas_pred.append(res[0])
 
-            K[t, :, :] = build_adjacency_matrix(thetas_pred, 'union')
+            K[t, :, :] = build_adjacency_matrix(thetas_pred, "union")
 
         # other Zs
         for m in range(1, n_times):
@@ -181,16 +187,18 @@ def _fit_time_poisson_model(X, alpha=0.01, rho=1, kernel=None,
             A_L = K[:-m] + U_L
             A_R = K[m:] + U_R
             if not psi_node_penalty:
-                prox_e = prox_psi(
-                    A_R - A_L,
-                    lamda=2. * np.diag(kernel, m)[:, None, None] / rho)
-                Z_L = .5 * (A_L + A_R - prox_e)
-                Z_R = .5 * (A_L + A_R + prox_e)
+                prox_e = prox_psi(A_R - A_L, lamda=2.0 * np.diag(kernel, m)[:, None, None] / rho)
+                Z_L = 0.5 * (A_L + A_R - prox_e)
+                Z_R = 0.5 * (A_L + A_R + prox_e)
             else:
                 Z_L, Z_R = prox_psi(
                     np.concatenate((A_L, A_R), axis=1),
-                    lamda=.5 * np.diag(kernel, m)[:, None, None] / rho,
-                    rho=rho, tol=tol, rtol=rtol, max_iter=max_iter)
+                    lamda=0.5 * np.diag(kernel, m)[:, None, None] / rho,
+                    rho=rho,
+                    tol=tol,
+                    rtol=rtol,
+                    max_iter=max_iter,
+                )
             Z_M[m] = (Z_L, Z_R)
 
             # update other residuals
@@ -198,38 +206,37 @@ def _fit_time_poisson_model(X, alpha=0.01, rho=1, kernel=None,
             U_R += K[m:] - Z_R
 
         # diagnostics, reporting, termination checks
-        rnorm = np.sqrt(sum(squared_norm(K[:-m] - Z_M[m][0]) +
-                        squared_norm(K[m:] - Z_M[m][1])
-                        for m in range(1, n_times)))
+        rnorm = np.sqrt(
+            sum(squared_norm(K[:-m] - Z_M[m][0]) + squared_norm(K[m:] - Z_M[m][1]) for m in range(1, n_times))
+        )
 
-        snorm = rho * np.sqrt(sum(squared_norm(Z_M[m][0] - Z_M_old[m][0]) +
-                                  squared_norm(Z_M[m][1] - Z_M_old[m][1])
-                                  for m in range(1, n_times)))
+        snorm = rho * np.sqrt(
+            sum(
+                squared_norm(Z_M[m][0] - Z_M_old[m][0]) + squared_norm(Z_M[m][1] - Z_M_old[m][1])
+                for m in range(1, n_times)
+            )
+        )
 
-        obj = objective(X, K, Z_M, alpha, kernel, psi) \
-            if compute_objective else np.nan
+        obj = objective(X, K, Z_M, alpha, kernel, psi) if compute_objective else np.nan
 
         check = convergence(
-            obj=obj, rnorm=rnorm, snorm=snorm,
-            e_pri=n_features * n_times * tol + rtol * max(
-                np.sqrt(sum(
-                        squared_norm(Z_M[m][0]) + squared_norm(Z_M[m][1])
-                        for m in range(1, n_times))),
-                np.sqrt(
-                    squared_norm(K) + sum(
-                        squared_norm(K[:-m]) + squared_norm(K[m:])
-                        for m in range(1, n_times)))),
-            e_dual=n_features * n_times * tol + rtol * rho * np.sqrt(
-                sum(
-                    squared_norm(U_M[m][0]) + squared_norm(U_M[m][1])
-                    for m in range(1, n_times))))
+            obj=obj,
+            rnorm=rnorm,
+            snorm=snorm,
+            e_pri=n_features * n_times * tol
+            + rtol
+            * max(
+                np.sqrt(sum(squared_norm(Z_M[m][0]) + squared_norm(Z_M[m][1]) for m in range(1, n_times))),
+                np.sqrt(squared_norm(K) + sum(squared_norm(K[:-m]) + squared_norm(K[m:]) for m in range(1, n_times))),
+            ),
+            e_dual=n_features * n_times * tol
+            + rtol * rho * np.sqrt(sum(squared_norm(U_M[m][0]) + squared_norm(U_M[m][1]) for m in range(1, n_times))),
+        )
         for m in range(1, n_times):
             Z_M_old[m] = (Z_M[m][0].copy(), Z_M[m][1].copy())
 
         if verbose:
-            print(
-                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
+            print("obj: %.4f, rnorm: %.4f, snorm: %.4f," "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
 
         checks.append(check)
         if stop_at is not None:
@@ -239,9 +246,7 @@ def _fit_time_poisson_model(X, alpha=0.01, rho=1, kernel=None,
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
 
-        rho_new = update_rho(
-            rho, rnorm, snorm, iteration=iteration_,
-            **(update_rho_options or {}))
+        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {}))
         # scaled dual variables should be also rescaled
         # U_0 *= rho / rho_new
         for m in range(1, n_times):
@@ -272,8 +277,7 @@ def objective_kernel(theta, K, psi, kernel, times):
     obj = 0
     for m in range(1, K.shape[0]):
         # all possible markovians jumps
-        obj += np.sum(
-            np.array(list(map(psi, K[m:] - K[:-m]))) * np.diag(kernel, m))
+        obj += np.sum(np.array(list(map(psi, K[m:] - K[:-m]))) * np.diag(kernel, m))
 
     return obj
 
@@ -338,11 +342,22 @@ class TemporalPoissonModel(BaseEstimator):
     """
 
     def __init__(
-            self,  alpha=0.01, kernel=None, rho=1.,
-            tol=1e-4, rtol=1e-4, gamma=0.01,
-            psi='laplacian', max_iter=100, verbose=False, return_history=False,
-            compute_objective=True, ker_param=1,
-            max_iter_ext=100, n_cores=-1):
+        self,
+        alpha=0.01,
+        kernel=None,
+        rho=1.0,
+        tol=1e-4,
+        rtol=1e-4,
+        gamma=0.01,
+        psi="laplacian",
+        max_iter=100,
+        verbose=False,
+        return_history=False,
+        compute_objective=True,
+        ker_param=1,
+        max_iter_ext=100,
+        n_cores=-1,
+    ):
         self.alpha = alpha
         self.kernel = kernel
         self.rho = rho
@@ -363,34 +378,31 @@ class TemporalPoissonModel(BaseEstimator):
 
     def fit(self, X, y):
         # Covariance does not make sense for a single feature
-        X, y = check_X_y(
-            X, y, accept_sparse=False, dtype=np.float64, order="C",
-            ensure_min_features=2, estimator=self)
+        X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64, order="C", ensure_min_features=2, estimator=self)
 
         self.classes_, n_samples = np.unique(y, return_counts=True)
         X = np.around(X)  # to ensure discreteness
         self.data = X.copy()
         if np.any(self.data) < 0:
-            raise ValueError('Using the poisson distribution your data has '
-                             'to be positive')
+            raise ValueError("Using the poisson distribution your data has " "to be positive")
         X = np.array([X[y == cl] for cl in self.classes_])
 
         if self.ker_param == "auto":
             from scipy.optimize import minimize_scalar
 
             if not callable(self.kernel):
-                raise ValueError(
-                    "kernel should be a function if ker_param=='auto'")
+                raise ValueError("kernel should be a function if ker_param=='auto'")
             # discover best kernel parameter via alternating minimization
             # initialise precision matrices, as warm start
             theta_old = 0
             for i in range(self.max_iter_ext):
                 # E step - discover best kernel parameter
                 theta = minimize_scalar(
-                    objective_kernel, args=(
-                        self.precision_, self.psi, self.kernel,
-                        self.classes_[:, None]), bounds=(0, X.shape[0]),
-                    method='bounded').x
+                    objective_kernel,
+                    args=(self.precision_, self.psi, self.kernel, self.classes_[:, None]),
+                    bounds=(0, X.shape[0]),
+                    method="bounded",
+                ).x
 
                 if i > 0 and abs(theta_old - theta) < 1e-5:
                     break
@@ -400,25 +412,31 @@ class TemporalPoissonModel(BaseEstimator):
                 # M step
                 try:
                     # this works if it is a ExpSineSquared or RBF kernel
-                    kernel = self.kernel(length_scale=theta)(
-                        self.classes_[:, None])
+                    kernel = self.kernel(length_scale=theta)(self.classes_[:, None])
                 except TypeError:
                     # maybe it's a ConstantKernel
-                    kernel = self.kernel(constant_value=theta)(
-                        self.classes_[:, None])
+                    kernel = self.kernel(constant_value=theta)(self.classes_[:, None])
 
                 out = _fit_time_poisson_model(
-                    X, gamma=self.gamma,
-                    alpha=self.alpha, rho=self.rho, kernel=kernel,
-                    tol=self.tol, rtol=self.rtol,
-                    psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
-                    return_n_iter=True, return_history=self.return_history,
+                    X,
+                    gamma=self.gamma,
+                    alpha=self.alpha,
+                    rho=self.rho,
+                    kernel=kernel,
+                    tol=self.tol,
+                    rtol=self.rtol,
+                    psi=self.psi,
+                    max_iter=self.max_iter,
+                    verbose=self.verbose,
+                    return_n_iter=True,
+                    return_history=self.return_history,
                     compute_objective=self.compute_objective,
-                    n_cores=self.n_cores)
+                    n_cores=self.n_cores,
+                )
                 if self.return_history:
-                    self.precision_,  self.history_, self.n_iter_ = out
+                    self.precision_, self.history_, self.n_iter_ = out
                 else:
-                    self.precision_,  self.n_iter_ = out
+                    self.precision_, self.n_iter_ = out
                 theta_old = theta
             else:
                 print("warning: theta not converged")
@@ -427,31 +445,36 @@ class TemporalPoissonModel(BaseEstimator):
             if callable(self.kernel):
                 try:
                     # this works if it is a ExpSineSquared or RBF kernel
-                    kernel = self.kernel(length_scale=self.ker_param)(
-                        self.classes_[:, None])
+                    kernel = self.kernel(length_scale=self.ker_param)(self.classes_[:, None])
                 except TypeError:
                     # maybe it's a ConstantKernel
-                    kernel = self.kernel(constant_value=self.ker_param)(
-                        self.classes_[:, None])
+                    kernel = self.kernel(constant_value=self.ker_param)(self.classes_[:, None])
             else:
                 kernel = self.kernel
                 if kernel.shape[0] != self.classes_.size:
                     raise ValueError(
                         "Kernel size does not match classes of samples, "
-                        "got {} classes and kernel has shape {}".format(
-                            self.classes_.size, kernel.shape[0]))
+                        "got {} classes and kernel has shape {}".format(self.classes_.size, kernel.shape[0])
+                    )
             out = _fit_time_poisson_model(
-                X, gamma=self.gamma,
-                alpha=self.alpha, rho=self.rho, kernel=kernel,
-                tol=self.tol, rtol=self.rtol,
-                psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
-                return_n_iter=True, return_history=self.return_history,
+                X,
+                gamma=self.gamma,
+                alpha=self.alpha,
+                rho=self.rho,
+                kernel=kernel,
+                tol=self.tol,
+                rtol=self.rtol,
+                psi=self.psi,
+                max_iter=self.max_iter,
+                verbose=self.verbose,
+                return_n_iter=True,
+                return_history=self.return_history,
                 compute_objective=self.compute_objective,
-                )
+            )
             if self.return_history:
-                self.precision_,  self.history_, self.n_iter_ = out
+                self.precision_, self.history_, self.n_iter_ = out
             else:
-                self.precision_,  self.n_iter_ = out
+                self.precision_, self.n_iter_ = out
 
         return self
 
@@ -474,9 +497,7 @@ class TemporalPoissonModel(BaseEstimator):
             estimator of its covariance matrix.
         """
         # Covariance does not make sense for a single feature
-        X, y = check_X_y(
-            X, y, accept_sparse=False, dtype=np.float64, order="C",
-            ensure_min_features=2, estimator=self)
+        X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64, order="C", ensure_min_features=2, estimator=self)
 
         # TO THINK
         return -99999999
@@ -547,18 +568,42 @@ class SimilarityTemporalPoissonModel(TemporalPoissonModel):
     """
 
     def __init__(
-            self, alpha=0.01, beta=1, kernel=None, rho=1., tol=1e-4, rtol=1e-4,
-            psi='laplacian', max_iter=100, verbose=False, gamma=1e-3,
-            assume_centered=False, return_history=False,
-            update_rho_options=None, compute_objective=True, ker_param=1,
-            max_iter_ext=100, init='empirical', eps=1e-6, n_clusters=None):
+        self,
+        alpha=0.01,
+        beta=1,
+        kernel=None,
+        rho=1.0,
+        tol=1e-4,
+        rtol=1e-4,
+        psi="laplacian",
+        max_iter=100,
+        verbose=False,
+        gamma=1e-3,
+        assume_centered=False,
+        return_history=False,
+        update_rho_options=None,
+        compute_objective=True,
+        ker_param=1,
+        max_iter_ext=100,
+        init="empirical",
+        eps=1e-6,
+        n_clusters=None,
+    ):
         super(SimilarityTemporalPoissonModel, self).__init__(
-            alpha=alpha, rho=rho, tol=tol, rtol=rtol,
-            max_iter=max_iter, verbose=verbose, gamma=gamma,
+            alpha=alpha,
+            rho=rho,
+            tol=tol,
+            rtol=rtol,
+            max_iter=max_iter,
+            verbose=verbose,
+            gamma=gamma,
             assume_centered=assume_centered,
             update_rho_options=update_rho_options,
-            compute_objective=compute_objective, return_history=return_history,
-            psi=psi, init=init)
+            compute_objective=compute_objective,
+            return_history=return_history,
+            psi=psi,
+            init=init,
+        )
         # in this class, `kernel` is either a matrix TxT or None
         # if None, automatically learn all the weights
         self.beta = beta
@@ -568,16 +613,14 @@ class SimilarityTemporalPoissonModel(TemporalPoissonModel):
         self.n_clusters = n_clusters
 
     def fit(self, X, y):
-        X, y = check_X_y(
-            X, y, accept_sparse=False, dtype=np.float64, order="C",
-            ensure_min_features=2, estimator=self)
+        X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64, order="C", ensure_min_features=2, estimator=self)
 
         self.classes_, n_samples = np.unique(y, return_counts=True)
         self.data = X.copy()
         if np.unique(self.data).size != 2:
-            raise ValueError('Using the ising distribution your data has '
-                             'to contain only two values, either 0 and 1 '
-                             'or -1, 1')
+            raise ValueError(
+                "Using the ising distribution your data has " "to contain only two values, either 0 and 1 " "or -1, 1"
+            )
         X = np.array([X[y == cl] for cl in self.classes_])
         print(X.shape)
         if self.kernel is None:
@@ -596,28 +639,33 @@ class SimilarityTemporalPoissonModel(TemporalPoissonModel):
                 theta = precision_similarity(self.precision_, psi)
                 kernel = theta
                 labels_pred = AgglomerativeClustering(
-                    n_clusters=self.n_clusters, affinity='precomputed',
-                    linkage='complete').fit_predict(kernel)
-                if i > 0 and np.linalg.norm(labels_pred - labels_pred_old
-                                            ) / labels_pred.size < self.eps:
+                    n_clusters=self.n_clusters, affinity="precomputed", linkage="complete"
+                ).fit_predict(kernel)
+                if i > 0 and np.linalg.norm(labels_pred - labels_pred_old) / labels_pred.size < self.eps:
                     break
-                kernel = kernels.RBF(0.0001)(
-                    labels_pred[:, None]) + kernels.RBF(self.beta)(
-                        np.arange(n_times)[:, None])
+                kernel = kernels.RBF(0.0001)(labels_pred[:, None]) + kernels.RBF(self.beta)(
+                    np.arange(n_times)[:, None]
+                )
 
                 out = _fit_time_poisson_model(
-                    X, alpha=self.alpha, rho=self.rho, kernel=kernel,
-                    tol=self.tol, rtol=self.rtol,
-                    psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
-                    return_n_iter=True, return_history=self.return_history,
+                    X,
+                    alpha=self.alpha,
+                    rho=self.rho,
+                    kernel=kernel,
+                    tol=self.tol,
+                    rtol=self.rtol,
+                    psi=self.psi,
+                    max_iter=self.max_iter,
+                    verbose=self.verbose,
+                    return_n_iter=True,
+                    return_history=self.return_history,
                     update_rho_options=self.update_rho_options,
                     compute_objective=self.compute_objective,
-                    init=self.precision_)
+                    init=self.precision_,
+                )
 
                 if self.return_history:
-                    (
-                        self.precision_,  self.history_,
-                        self.n_iter_) = out
+                    (self.precision_, self.history_, self.n_iter_) = out
                 else:
                     self.precision_, self.n_iter_ = out
                 labels_pred_old = labels_pred
@@ -631,21 +679,27 @@ class SimilarityTemporalPoissonModel(TemporalPoissonModel):
             if kernel.shape[0] != self.classes_.size:
                 raise ValueError(
                     "Kernel size does not match classes of samples, "
-                    "got {} classes and kernel has shape {}".format(
-                        self.classes_.size, kernel.shape[0]))
+                    "got {} classes and kernel has shape {}".format(self.classes_.size, kernel.shape[0])
+                )
 
             out = _fit_time_poisson_model(
-                X, alpha=self.alpha, rho=self.rho, kernel=kernel,
-                tol=self.tol, rtol=self.rtol,
-                psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
-                return_n_iter=True, return_history=self.return_history,
+                X,
+                alpha=self.alpha,
+                rho=self.rho,
+                kernel=kernel,
+                tol=self.tol,
+                rtol=self.rtol,
+                psi=self.psi,
+                max_iter=self.max_iter,
+                verbose=self.verbose,
+                return_n_iter=True,
+                return_history=self.return_history,
                 update_rho_options=self.update_rho_options,
                 compute_objective=self.compute_objective,
-                init=self.precision_)
+                init=self.precision_,
+            )
             if self.return_history:
-                (
-                    self.precision_, self.history_,
-                    self.n_iter_) = out
+                (self.precision_, self.history_, self.n_iter_) = out
             else:
                 self.precision_, self.n_iter_ = out
 
@@ -653,6 +707,6 @@ class SimilarityTemporalPoissonModel(TemporalPoissonModel):
 
     def transform(self, X, y=None):
         """Possibility to add in a Pipeline."""
-        check_is_fitted(self, ['similarity_matrix_'])
+        check_is_fitted(self, ["similarity_matrix_"])
 
         return self.similarity_matrix_

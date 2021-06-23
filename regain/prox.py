@@ -121,13 +121,10 @@ def blockwise_soft_thresholding_symmetric(a, lamda):
 
         out = np.empty_like(a, dtype=float)
         for t, (x, c_norm) in enumerate(zip(a, col_norms)):
-            out[t] = np.dot(
-                x,
-                np.diag((ones_vect - lamda[t] / c_norm) * (c_norm > lamda[t])))
+            out[t] = np.dot(x, np.diag((ones_vect - lamda[t] / c_norm) * (c_norm > lamda[t])))
 
     else:
-        out = np.dot(
-            a, np.diag((ones_vect - lamda / col_norms) * (col_norms > lamda)))
+        out = np.dot(a, np.diag((ones_vect - lamda / col_norms) * (col_norms > lamda)))
 
     return out
 
@@ -159,8 +156,7 @@ def prox_linf_1d(a, lamda):
     from scipy.optimize import minimize
 
     def _f(x):
-        return lamda * np.linalg.norm(x, np.inf) + \
-            .5 * np.power(np.linalg.norm(a - x), 2)
+        return lamda * np.linalg.norm(x, np.inf) + 0.5 * np.power(np.linalg.norm(a - x), 2)
 
     return minimize(_f, a).x
 
@@ -169,21 +165,20 @@ def prox_linf(a, lamda):
     """Proximal operator for l-inf norm."""
     x = np.zeros_like(a)
     for t in range(a.shape[0]):
-        x[t] = np.array(
-            [prox_linf_1d(a[t, :, j], lamda) for j in range(a.shape[1])]).T
+        x[t] = np.array([prox_linf_1d(a[t, :, j], lamda) for j in range(a.shape[1])]).T
     return x
 
 
 def prox_logdet(a, lamda):
     """Time-varying latent variable graphical lasso prox."""
     es, Q = np.linalg.eigh(a)
-    xi = (-es + np.sqrt(np.square(es) + 4. / lamda)) * lamda / 2.
+    xi = (-es + np.sqrt(np.square(es) + 4.0 / lamda)) * lamda / 2.0
     return np.linalg.multi_dot((Q, np.diag(xi), Q.T))
 
 
 def prox_logdet_ala_ma(a, lamda):
     es, Q = np.linalg.eigh(a)
-    xi = (-es + np.sqrt(np.square(es) + 4. * lamda)) / 2.
+    xi = (-es + np.sqrt(np.square(es) + 4.0 * lamda)) / 2.0
     return np.linalg.multi_dot((Q, np.diag(xi), Q.T))
 
 
@@ -196,7 +191,7 @@ def prox_trace_indicator(a, lamda):
 
 def prox_laplacian(a, lamda):
     """Prox for l_2 square norm, Laplacian regularisation."""
-    return a / (1 + 2. * lamda)
+    return a / (1 + 2.0 * lamda)
 
 
 def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
@@ -206,7 +201,7 @@ def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
     """
     n_time, _, n_dim = A_12.shape
 
-    U_1 = np.full((A_12.shape[0], n_dim, n_dim), 1. / n_dim, dtype=float)
+    U_1 = np.full((A_12.shape[0], n_dim, n_dim), 1.0 / n_dim, dtype=float)
     U_2 = np.copy(U_1)
     Y_1 = np.copy(U_1)
     Y_2 = np.copy(U_1)
@@ -220,9 +215,7 @@ def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
     W_old = np.zeros_like(U_1)
 
     for iteration_ in range(max_iter):
-        A = (
-            Y_1 - Y_2 - W - U_1 +
-            (W.transpose(0, 2, 1) - U_2).transpose(0, 2, 1)) / 2.
+        A = (Y_1 - Y_2 - W - U_1 + (W.transpose(0, 2, 1) - U_2).transpose(0, 2, 1)) / 2.0
         V = blockwise_soft_thresholding_symmetric(A, lamda=lamda)
 
         A = np.concatenate(((V + U_2).transpose(0, 2, 1), A_12), axis=1)
@@ -231,7 +224,7 @@ def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
         Z = np.empty_like(A)
         for i, (A_i, D_i) in enumerate(zip(A, D)):
             Z[i] = inverse.dot(2 * A_i - C.T.dot(D_i))
-        W, Y_1, Y_2 = (Z[:, i * n_dim:(i + 1) * n_dim, :] for i in range(3))
+        W, Y_1, Y_2 = (Z[:, i * n_dim : (i + 1) * n_dim, :] for i in range(3))
 
         # update residuals
         delta_U_1 = V + W - (Y_1 - Y_2)
@@ -241,15 +234,16 @@ def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
 
         # diagnostics
         rnorm = np.sqrt(squared_norm(delta_U_1) + squared_norm(delta_U_2))
-        snorm = rho * np.sqrt(
-            squared_norm(W - W_old) + squared_norm(V + W - V_old - W_old))
+        snorm = rho * np.sqrt(squared_norm(W - W_old) + squared_norm(V + W - V_old - W_old))
         check = convergence(
-            obj=np.nan, rnorm=rnorm, snorm=snorm,
-            e_pri=np.sqrt(2 * V.size) * tol + rtol * max(
-                np.sqrt(squared_norm(W) + squared_norm(V + W)),
-                np.sqrt(squared_norm(V) + squared_norm(Y_1 - Y_2))),
-            e_dual=np.sqrt(2 * V.size) * tol +
-            rtol * rho * np.sqrt(squared_norm(U_1) + squared_norm(U_2)))
+            obj=np.nan,
+            rnorm=rnorm,
+            snorm=snorm,
+            e_pri=np.sqrt(2 * V.size) * tol
+            + rtol
+            * max(np.sqrt(squared_norm(W) + squared_norm(V + W)), np.sqrt(squared_norm(V) + squared_norm(Y_1 - Y_2))),
+            e_dual=np.sqrt(2 * V.size) * tol + rtol * rho * np.sqrt(squared_norm(U_1) + squared_norm(U_2)),
+        )
         W_old = W.copy()
         V_old = V.copy()
 
@@ -267,8 +261,7 @@ def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
     return Y_1, Y_2
 
 
-def prox_FL(
-        a, beta, lamda, p=1, symmetric=False, use_matlab=False, optimize=True):
+def prox_FL(a, beta, lamda, p=1, symmetric=False, use_matlab=False, optimize=True):
     """Fused Lasso prox.
 
     It is calculated as the Total variation prox + soft thresholding
@@ -297,12 +290,11 @@ def prox_FL(
             Z[upper_ind] = [func(row, beta) for row in b[upper_ind]]
 
             e = np.array(np.split(Z, a.shape[1], axis=0)).transpose(2, 0, 1)
-            Y = (e + e.transpose(0, 2, 1)) / (
-                np.array([np.eye(a.shape[1]) for i in range(a.shape[0])]) + 1)
+            Y = (e + e.transpose(0, 2, 1)) / (np.array([np.eye(a.shape[1]) for i in range(a.shape[0])]) + 1)
         else:
             for i in range(np.power(a.shape[1], 2)):
-                solution = func(a.flat[i::np.power(a.shape[1], 2)], beta)
-                Y.flat[i::np.power(a.shape[1], 2)] = solution
+                solution = func(a.flat[i :: np.power(a.shape[1], 2)], beta)
+                Y.flat[i :: np.power(a.shape[1], 2)] = solution
 
     # fused-lasso (soft-thresholding on the solution)
     Y_soft = soft_thresholding(Y, lamda)

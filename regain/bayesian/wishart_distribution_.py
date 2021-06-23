@@ -40,6 +40,7 @@ import statsmodels.sandbox.distributions.mv_normal as mvd
 
 class WishartDistribution(BaseEstimator):
     """Wishart distribution."""
+
     def __init__(self, nu, S):
         self.nu = nu
         self.S = S
@@ -52,8 +53,7 @@ class WishartDistribution(BaseEstimator):
 
     @property
     def mode(self):
-        return (self.nu - self.D - 1) * self.S \
-            if self.nu > self.D + 1 else np.nan
+        return (self.nu - self.D - 1) * self.S if self.nu > self.D + 1 else np.nan
 
     def log_likelihood(self, X):
         """Equivalent to scipy.
@@ -70,7 +70,7 @@ class WishartDistribution(BaseEstimator):
         logp -= nu * n_dim * np.log(2)
         logp -= 2 * multigammaln(0.5 * nu, n_dim)
         logp -= nu * fast_logdet(self.S)
-        logp /= 2.
+        logp /= 2.0
         return logp
 
     def likelihood(self, X):
@@ -84,6 +84,7 @@ class WishartDistribution(BaseEstimator):
 
 class InverseWishartDistribution(WishartDistribution):
     """Inverse Wishart (IW) distribution."""
+
     def __init__(self, nu, S):
         super(InverseWishartDistribution, self).__init__(nu=nu, S=S)
 
@@ -111,10 +112,10 @@ class InverseWishartDistribution(WishartDistribution):
         logp -= (nu + n_dim + 1) * fast_logdet(X)
         logp -= nu * n_dim * np.log(2)
         logp -= 2 * multigammaln(0.5 * nu, n_dim)
-        logp /= 2.
+        logp /= 2.0
         return logp
 
-    #def wishartrand(self):
+    # def wishartrand(self):
     #    dim = self.inv_psi.shape[0]
     #    chol = np.linalg.cholesky(self.inv_psi)
     #    foo = np.zeros((dim,dim))
@@ -141,6 +142,7 @@ class NormalInverseWishartDistribution(InverseWishartDistribution):
     ----------
     Murphy's "A probabilistic approach", pag 133.
     """
+
     def __init__(self, mu, kappa, nu, S):
         super(NormalInverseWishartDistribution, self).__init__(nu=nu, S=S)
         self.mu = mu
@@ -152,18 +154,11 @@ class NormalInverseWishartDistribution(InverseWishartDistribution):
         Sigma is a sample from the InverseWishartDistribution.
         mu is a sample from the multivariate_normal.
         """
-        iw_samples = super(NormalInverseWishartDistribution,
-                           self).sample(n_samples=n_samples)
+        iw_samples = super(NormalInverseWishartDistribution, self).sample(n_samples=n_samples)
         if n_samples == 1:
-            mu = np.random.multivariate_normal(
-                self.mu, iw_samples / self.kappa)
+            mu = np.random.multivariate_normal(self.mu, iw_samples / self.kappa)
             return (mu, iw_samples)
-        return [
-            (
-                np.random.multivariate_normal(self.mu,
-                                              Sigma / self.kappa), Sigma)
-            for Sigma in iw_samples
-        ]
+        return [(np.random.multivariate_normal(self.mu, Sigma / self.kappa), Sigma) for Sigma in iw_samples]
 
     def log_likelihood(self, mu, X):
         """Equivalent to likelihood of Normal times InverseWishart."""
@@ -200,8 +195,7 @@ class NormalInverseWishartDistribution(InverseWishartDistribution):
         # XXX this is univariate, need multivariate in Python
         # marginal_mu = stats.t(
         #     df=df, loc=self.mu, scale=self.S / (self.kappa * df))
-        marginal_mu = mvd.MVT(
-            df=df, mean=self.mu.ravel(), sigma=self.S / (self.kappa * df))
+        marginal_mu = mvd.MVT(df=df, mean=self.mu.ravel(), sigma=self.S / (self.kappa * df))
         marginal_sigma = InverseWishartDistribution(nu=self.nu, S=self.S)
         return (marginal_mu, marginal_sigma)
 
@@ -237,9 +231,7 @@ class NormalInverseWishartDistribution(InverseWishartDistribution):
     def predictive(self):
         """Posterior predictive. See pag 135."""
         df = self.nu - self.D + 1
-        return mvd.MVT(
-            df=df, mean=self.mu.ravel(),
-            sigma=(self.kappa + 1) * self.S / (self.kappa * df))
+        return mvd.MVT(df=df, mean=self.mu.ravel(), sigma=(self.kappa + 1) * self.S / (self.kappa * df))
 
 
 def main():
@@ -254,8 +246,7 @@ def main():
     X = np.random.multivariate_normal(mu, Sigma, size=n_samples)
 
     # prior
-    prior = NormalInverseWishartDistribution(
-        np.zeros(n_dim), 1, v_0, np.eye(n_dim))
+    prior = NormalInverseWishartDistribution(np.zeros(n_dim), 1, v_0, np.eye(n_dim))
 
     z = prior.posterior(X)
 
@@ -266,5 +257,5 @@ def main():
     print(np.linalg.norm(z.marginal_mean - Sigma))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

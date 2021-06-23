@@ -37,8 +37,7 @@ import numpy as np
 from six.moves import map, range, zip
 from sklearn.utils.extmath import squared_norm
 
-from regain.covariance.latent_time_graphical_lasso_ import \
-    LatentTimeGraphicalLasso
+from regain.covariance.latent_time_graphical_lasso_ import LatentTimeGraphicalLasso
 from regain.norm import l1_od_norm
 from regain.prox import prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
@@ -46,22 +45,36 @@ from regain.utils import convergence
 from regain.validation import check_input, check_norm_prox
 
 
-def objective(
-        S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2, alpha, tau, beta, eta, psi, phi):
+def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2, alpha, tau, beta, eta, psi, phi):
     """Objective for latent variable time-varying matrix decomposition."""
     obj = squared_norm(S - R)
     obj += alpha * sum(map(l1_od_norm, Z_0))
-    obj += tau * sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
+    obj += tau * sum(map(partial(np.linalg.norm, ord="nuc"), W_0))
     obj += beta * sum(map(psi, Z_2 - Z_1))
     obj += eta * sum(map(phi, W_2 - W_1))
     return obj
 
 
 def latent_time_matrix_decomposition(
-        emp_cov, alpha=0.01, tau=1., rho=1., beta=1., eta=1., max_iter=100,
-        verbose=False, psi='laplacian', phi='laplacian', mode='admm', tol=1e-4,
-        rtol=1e-4, assume_centered=False, return_history=False,
-        return_n_iter=True, update_rho_options=None, compute_objective=True):
+    emp_cov,
+    alpha=0.01,
+    tau=1.0,
+    rho=1.0,
+    beta=1.0,
+    eta=1.0,
+    max_iter=100,
+    verbose=False,
+    psi="laplacian",
+    phi="laplacian",
+    mode="admm",
+    tol=1e-4,
+    rtol=1e-4,
+    assume_centered=False,
+    return_history=False,
+    return_n_iter=True,
+    update_rho_options=None,
+    compute_objective=True,
+):
     r"""Latent variable time-varying matrix decomposition solver.
 
     Solves the following problem via ADMM:
@@ -139,20 +152,24 @@ def latent_time_matrix_decomposition(
         A /= divisor[:, None, None]
         # soft_thresholding_ = partial(soft_thresholding, lamda=alpha / rho)
         # Z_0 = np.array(map(soft_thresholding_, A))
-        Z_0 = soft_thresholding(
-            A, lamda=alpha / (rho * divisor[:, None, None]))
+        Z_0 = soft_thresholding(A, lamda=alpha / (rho * divisor[:, None, None]))
 
         # update Z_1, Z_2
         A_1 = Z_0[:-1] + X_1
         A_2 = Z_0[1:] + X_2
         if not psi_node_penalty:
-            prox_e = prox_psi(A_2 - A_1, lamda=2. * beta / rho)
-            Z_1 = .5 * (A_1 + A_2 - prox_e)
-            Z_2 = .5 * (A_1 + A_2 + prox_e)
+            prox_e = prox_psi(A_2 - A_1, lamda=2.0 * beta / rho)
+            Z_1 = 0.5 * (A_1 + A_2 - prox_e)
+            Z_2 = 0.5 * (A_1 + A_2 + prox_e)
         else:
             Z_1, Z_2 = prox_psi(
-                np.concatenate((A_1, A_2), axis=1), lamda=.5 * beta / rho,
-                rho=rho, tol=tol, rtol=rtol, max_iter=max_iter)
+                np.concatenate((A_1, A_2), axis=1),
+                lamda=0.5 * beta / rho,
+                rho=rho,
+                tol=tol,
+                rtol=rtol,
+                max_iter=max_iter,
+            )
 
         # update W_0
         A = Z_0 - R - X_0
@@ -160,25 +177,26 @@ def latent_time_matrix_decomposition(
         A[1:] += W_2 - U_2
         A /= divisor[:, None, None]
         A += A.transpose(0, 2, 1)
-        A /= 2.
+        A /= 2.0
 
-        W_0 = np.array(
-            [
-                prox_trace_indicator(a, lamda=tau / (rho * div))
-                for a, div in zip(A, divisor)
-            ])
+        W_0 = np.array([prox_trace_indicator(a, lamda=tau / (rho * div)) for a, div in zip(A, divisor)])
 
         # update W_1, W_2
         A_1 = W_0[:-1] + U_1
         A_2 = W_0[1:] + U_2
         if not phi_node_penalty:
-            prox_e = prox_phi(A_2 - A_1, lamda=2. * eta / rho)
-            W_1 = .5 * (A_1 + A_2 - prox_e)
-            W_2 = .5 * (A_1 + A_2 + prox_e)
+            prox_e = prox_phi(A_2 - A_1, lamda=2.0 * eta / rho)
+            W_1 = 0.5 * (A_1 + A_2 - prox_e)
+            W_2 = 0.5 * (A_1 + A_2 + prox_e)
         else:
             W_1, W_2 = prox_phi(
-                np.concatenate((A_1, A_2), axis=1), lamda=.5 * eta / rho,
-                rho=rho, tol=tol, rtol=rtol, max_iter=max_iter)
+                np.concatenate((A_1, A_2), axis=1),
+                lamda=0.5 * eta / rho,
+                rho=rho,
+                tol=tol,
+                rtol=rtol,
+                max_iter=max_iter,
+            )
 
         # update residuals
         X_0 += R - Z_0 + W_0
@@ -189,33 +207,54 @@ def latent_time_matrix_decomposition(
 
         # diagnostics, reporting, termination checks
         rnorm = np.sqrt(
-            squared_norm(R - Z_0 + W_0) + squared_norm(Z_0[:-1] - Z_1) +
-            squared_norm(Z_0[1:] - Z_2) + squared_norm(W_0[:-1] - W_1) +
-            squared_norm(W_0[1:] - W_2))
+            squared_norm(R - Z_0 + W_0)
+            + squared_norm(Z_0[:-1] - Z_1)
+            + squared_norm(Z_0[1:] - Z_2)
+            + squared_norm(W_0[:-1] - W_1)
+            + squared_norm(W_0[1:] - W_2)
+        )
 
         snorm = rho * np.sqrt(
-            squared_norm(R - R_old) + squared_norm(Z_1 - Z_1_old) +
-            squared_norm(Z_2 - Z_2_old) + squared_norm(W_1 - W_1_old) +
-            squared_norm(W_2 - W_2_old))
+            squared_norm(R - R_old)
+            + squared_norm(Z_1 - Z_1_old)
+            + squared_norm(Z_2 - Z_2_old)
+            + squared_norm(W_1 - W_1_old)
+            + squared_norm(W_2 - W_2_old)
+        )
 
-        obj = objective(emp_cov, R, Z_0, Z_1, Z_2, W_0, W_1, W_2,
-                        alpha, tau, beta, eta, psi, phi) \
-            if compute_objective else np.nan
+        obj = (
+            objective(emp_cov, R, Z_0, Z_1, Z_2, W_0, W_1, W_2, alpha, tau, beta, eta, psi, phi)
+            if compute_objective
+            else np.nan
+        )
 
         check = convergence(
-            obj=obj, rnorm=rnorm, snorm=snorm,
-            e_pri=np.sqrt(R.size + 4 * Z_1.size) * tol + rtol * max(
+            obj=obj,
+            rnorm=rnorm,
+            snorm=snorm,
+            e_pri=np.sqrt(R.size + 4 * Z_1.size) * tol
+            + rtol
+            * max(
                 np.sqrt(
-                    squared_norm(R) + squared_norm(Z_1) + squared_norm(Z_2) +
-                    squared_norm(W_1) + squared_norm(W_2)),
+                    squared_norm(R) + squared_norm(Z_1) + squared_norm(Z_2) + squared_norm(W_1) + squared_norm(W_2)
+                ),
                 np.sqrt(
-                    squared_norm(Z_0 - W_0) + squared_norm(Z_0[:-1]) +
-                    squared_norm(Z_0[1:]) + squared_norm(W_0[:-1]) +
-                    squared_norm(W_0[1:]))),
-            e_dual=np.sqrt(R.size + 4 * Z_1.size) * tol + rtol * rho * (
+                    squared_norm(Z_0 - W_0)
+                    + squared_norm(Z_0[:-1])
+                    + squared_norm(Z_0[1:])
+                    + squared_norm(W_0[:-1])
+                    + squared_norm(W_0[1:])
+                ),
+            ),
+            e_dual=np.sqrt(R.size + 4 * Z_1.size) * tol
+            + rtol
+            * rho
+            * (
                 np.sqrt(
-                    squared_norm(X_0) + squared_norm(X_1) + squared_norm(X_2) +
-                    squared_norm(U_1) + squared_norm(U_2))))
+                    squared_norm(X_0) + squared_norm(X_1) + squared_norm(X_2) + squared_norm(U_1) + squared_norm(U_2)
+                )
+            ),
+        )
 
         R_old = R.copy()
         Z_1_old = Z_1.copy()
@@ -224,17 +263,13 @@ def latent_time_matrix_decomposition(
         W_2_old = W_2.copy()
 
         if verbose:
-            print(
-                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                "eps_pri: %.4f, eps_dual: %.4f" % check)
+            print("obj: %.4f, rnorm: %.4f, snorm: %.4f," "eps_pri: %.4f, eps_dual: %.4f" % check)
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
 
-        rho_new = update_rho(
-            rho, rnorm, snorm, iteration=iteration_,
-            **(update_rho_options or {}))
+        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {}))
         # scaled dual variables should be also rescaled
         X_0 *= rho / rho_new
         X_1 *= rho / rho_new
@@ -334,18 +369,43 @@ class LatentTimeMatrixDecomposition(LatentTimeGraphicalLasso):
         Number of iterations run.
 
     """
+
     def __init__(
-            self, alpha=0.01, tau=1., beta=1., eta=1., mode='admm', rho=1.,
-            time_on_axis='first', tol=1e-4, rtol=1e-4, psi='laplacian',
-            phi='laplacian', max_iter=100, verbose=False,
-            assume_centered=False, update_rho_options=None,
-            compute_objective=True):
+        self,
+        alpha=0.01,
+        tau=1.0,
+        beta=1.0,
+        eta=1.0,
+        mode="admm",
+        rho=1.0,
+        time_on_axis="first",
+        tol=1e-4,
+        rtol=1e-4,
+        psi="laplacian",
+        phi="laplacian",
+        max_iter=100,
+        verbose=False,
+        assume_centered=False,
+        update_rho_options=None,
+        compute_objective=True,
+    ):
         super(LatentTimeMatrixDecomposition, self).__init__(
-            alpha=alpha, beta=beta, tau=tau, eta=eta, mode=mode, rho=rho,
-            tol=tol, rtol=rtol, psi=psi, phi=phi, max_iter=max_iter,
-            verbose=verbose, assume_centered=assume_centered,
+            alpha=alpha,
+            beta=beta,
+            tau=tau,
+            eta=eta,
+            mode=mode,
+            rho=rho,
+            tol=tol,
+            rtol=rtol,
+            psi=psi,
+            phi=phi,
+            max_iter=max_iter,
+            verbose=verbose,
+            assume_centered=assume_centered,
             update_rho_options=update_rho_options,
-            compute_objective=compute_objective)
+            compute_objective=compute_objective,
+        )
         self.time_on_axis = time_on_axis
 
     def _fit(self, X):
@@ -358,17 +418,26 @@ class LatentTimeMatrixDecomposition(LatentTimeGraphicalLasso):
             Matrix to decompose.
 
         """
-        self.precision_, self.latent_, self.n_iter_ = \
-            latent_time_matrix_decomposition(
-                X, alpha=self.alpha, tau=self.tau, rho=self.rho,
-                beta=self.beta, eta=self.eta, mode=self.mode,
-                tol=self.tol, rtol=self.rtol, psi=self.psi, phi=self.phi,
-                max_iter=self.max_iter, verbose=self.verbose,
-                return_n_iter=True, return_history=False,
-                update_rho_options=self.update_rho_options,
-                compute_objective=self.compute_objective)
-        self.reconstruction_err_ = squared_norm(
-            X - self.get_observed_precision())
+        self.precision_, self.latent_, self.n_iter_ = latent_time_matrix_decomposition(
+            X,
+            alpha=self.alpha,
+            tau=self.tau,
+            rho=self.rho,
+            beta=self.beta,
+            eta=self.eta,
+            mode=self.mode,
+            tol=self.tol,
+            rtol=self.rtol,
+            psi=self.psi,
+            phi=self.phi,
+            max_iter=self.max_iter,
+            verbose=self.verbose,
+            return_n_iter=True,
+            return_history=False,
+            update_rho_options=self.update_rho_options,
+            compute_objective=self.compute_objective,
+        )
+        self.reconstruction_err_ = squared_norm(X - self.get_observed_precision())
         return self
 
     def fit(self, X, y=None):
@@ -384,7 +453,6 @@ class LatentTimeMatrixDecomposition(LatentTimeGraphicalLasso):
         y : (ignored)
 
         """
-        X, _, _, _ = check_input(
-            X, time_on_axis=self.time_on_axis, estimator=self)
+        X, _, _, _ = check_input(X, time_on_axis=self.time_on_axis, estimator=self)
 
         return self._fit(X)

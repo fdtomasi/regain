@@ -48,5 +48,4 @@ def test_lgl_zero():
 
     assert_array_equal(mdl.precision_, a)
     assert_array_equal(mdl.latent_, a)
-    assert_array_equal(mdl.get_precision(),
-                       mdl.precision_ - mdl.latent_)
+    assert_array_equal(mdl.get_precision(), mdl.precision_ - mdl.latent_)

@@ -51,33 +51,29 @@ def check_matlab_engine(verbose=False):
         try:
             matlab_engine = matlab.engine.start_matlab()
         except NameError as e:
-            if 'name \'matlab\' is not defined' in str(e):
-                raise ValueError(
-                    "`matlab` package not found. "
-                    "Please note you will need Matlab >= 2016b to use it.")
+            if "name 'matlab' is not defined" in str(e):
+                raise ValueError("`matlab` package not found. " "Please note you will need Matlab >= 2016b to use it.")
     # else:
     #     close_engine = False
 
 
 def lvglasso(emp_cov, alpha, tau, rho=1, verbose=False, use_octave=True):
     """Wrapper for LVGLASSO in R.
-    
+
     If emp_cov.ndim > 2, then emp_cov.shape[0] == emp_cov.shape[1].
     In the temporal case, this means that the time is the last dimension.
     """
-    lvglasso_path = os.path.join(
-        os.path.abspath(os.path.dirname(__file__)), 'matlab', 'lvglasso')
+    lvglasso_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "matlab", "lvglasso")
     if use_octave:
         from oct2py import octave
+
         octave.addpath(lvglasso_path, nout=0)
         result = octave.LVGLASSO(emp_cov, alpha, tau, rho)
     else:
         global matlab_engine
         check_matlab_engine(verbose=verbose)
         matlab_engine.addpath(lvglasso_path, nargout=0)
-        result = matlab_engine.LVGLASSO(
-            matlab.double(emp_cov.tolist()), float(alpha), float(tau),
-            float(rho))
+        result = matlab_engine.LVGLASSO(matlab.double(emp_cov.tolist()), float(alpha), float(tau), float(rho))
     return result
 
 
@@ -85,14 +81,12 @@ def total_variation_condat(y, lamda, verbose=False):
     global matlab_engine
     check_matlab_engine(verbose=verbose)
 
-    tv_path = os.path.join(
-        os.path.abspath(os.path.dirname(__file__)), 'tv_condat')
+    tv_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "tv_condat")
     matlab_engine.addpath(tv_path, nargout=0)
 
     if verbose:
         print("Start GLOPRIDU algorithm ...")
-    x = matlab_engine.TV_Condat_v2(
-        matlab.double(y[:, None].tolist()), float(lamda))
+    x = matlab_engine.TV_Condat_v2(matlab.double(y[:, None].tolist()), float(lamda))
 
     # if close_engine:
     #     matlab_engine.quit()
@@ -100,8 +94,7 @@ def total_variation_condat(y, lamda, verbose=False):
     return x
 
 
-def group_lasso_overlap_paspal(
-        X, y, groups=(), lamda=0.1, verbose=False, **kwargs):
+def group_lasso_overlap_paspal(X, y, groups=(), lamda=0.1, verbose=False, **kwargs):
     """Group Lasso with Overlap via PASPAL (Matlab implementation).
 
     Parameters
@@ -126,8 +119,7 @@ def group_lasso_overlap_paspal(
     global matlab_engine
     check_matlab_engine(verbose=verbose)
 
-    glopridu_path = os.path.join(
-        os.path.abspath(os.path.dirname(__file__)), 'GLO_PRIMAL_DUAL_TOOLBOX')
+    glopridu_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "GLO_PRIMAL_DUAL_TOOLBOX")
     matlab_engine.addpath(glopridu_path, nargout=0)
 
     if verbose:
@@ -135,9 +127,9 @@ def group_lasso_overlap_paspal(
     coef_ = matlab_engine.glopridu_algorithm(
         matlab.double(X.tolist()),
         matlab.double(y[:, None].tolist()),
-        [matlab.int32((np.array(x) + 1).tolist())
-         for x in groups],  # +1 because of the change of indices
-        float(lamda))
+        [matlab.int32((np.array(x) + 1).tolist()) for x in groups],  # +1 because of the change of indices
+        float(lamda),
+    )
 
     # if close_engine:
     #     matlab_engine.quit()
@@ -148,6 +140,7 @@ def group_lasso_overlap_paspal(
 def test_group_lasso_paspal():
     """Test function for the module."""
     from sklearn.datasets import make_regression
+
     X, y, coef = make_regression(n_features=10, coef=True, n_informative=5)
 
     group_lasso_overlap_paspal(X, y, np.ones(10), 0.1)

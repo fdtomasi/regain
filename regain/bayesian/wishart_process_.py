@@ -41,15 +41,25 @@ from sklearn.utils.validation import check_X_y
 from tqdm import trange
 
 from regain.bayesian.gaussian_process_ import sample as sample_gp
-from regain.bayesian.sampling import (GWP_construct, elliptical_slice,
-                                      sample_ell, sample_hyper_kernel)
+from regain.bayesian.sampling import GWP_construct, elliptical_slice, sample_ell, sample_hyper_kernel
 from regain.bayesian.stats import lognstat, t_mvn_logpdf
 from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso
 
 
 def fit(
-        theta, var_prop, prior_theta_kernel, var_Lprop, prior_ell, kern, p,
-        nu=None, n_iter=500, verbose=False, likelihood=None, L=None):
+    theta,
+    var_prop,
+    prior_theta_kernel,
+    var_Lprop,
+    prior_ell,
+    kern,
+    p,
+    nu=None,
+    n_iter=500,
+    verbose=False,
+    likelihood=None,
+    L=None,
+):
     """Sample the parameters of kernel and lower Cholesky.
 
     Parameters
@@ -93,16 +103,14 @@ def fit(
     pbar = trange(n_iter, disable=not verbose)
     for i in pbar:
         # We first do ESS to obtain a new sample for u
-        pbar.set_description(
-            'loss: {:.3e}'.format(current_state.log_likelihood))
+        pbar.set_description("loss: {:.3e}".format(current_state.log_likelihood))
 
-        current_state = elliptical_slice(
-            current_state, umat, likelihood=likelihood)
+        current_state = elliptical_slice(current_state, umat, likelihood=likelihood)
 
         # We now do MH for sampling the hyperparameter of the kernel
         theta, accept = sample_hyper_kernel(
-            theta, var_prop, np.vstack(current_state.xx), kern,
-            prior_distr=prior_theta_kernel)
+            theta, var_prop, np.vstack(current_state.xx), kern, prior_distr=prior_theta_kernel
+        )
 
         if accept:
             # new kernel parameter, recompute
@@ -114,20 +122,16 @@ def fit(
                 except Exception:
                     K += 1e-8 * np.eye(K.shape[0])
 
-            current_state['xx'] = umat
-            current_state['log_likelihood'] = likelihood(
-                GWP_construct(umat, current_state['L']))
+            current_state["xx"] = umat
+            current_state["log_likelihood"] = likelihood(GWP_construct(umat, current_state["L"]))
 
         # We now do MH for sampling the elements in the matrix L
         # spherical normal prior, element uncorrelated
         if learn_ell:
-            Ltau = sample_ell(
-                Ltau, var_Lprop, current_state.xx, prior_distr=prior_ell,
-                likelihood=likelihood)
+            Ltau = sample_ell(Ltau, var_Lprop, current_state.xx, prior_distr=prior_ell, likelihood=likelihood)
             L__[np.tril_indices_from(L__)] = Ltau
-            current_state['L'] = L__
-            current_state['log_likelihood'] = likelihood(
-                GWP_construct(current_state['xx'], current_state['L']))
+            current_state["L"] = L__
+            current_state["log_likelihood"] = likelihood(GWP_construct(current_state["xx"], current_state["L"]))
 
         samples_u.append(current_state.xx)
         loglikes[i] = current_state.log_likelihood
@@ -164,8 +168,7 @@ def predict(t_test, t_train, u_map, L_map, kern, inverse_width_map):
     """
     # Compute the mean for ustar for test data
     KB = kern(t_train[:, None], inverse_width=inverse_width_map)
-    A = kern(
-        t_test[:, None], t_train[:, None], inverse_width=inverse_width_map)
+    A = kern(t_test[:, None], t_train[:, None], inverse_width=inverse_width_map)
     invKB = linalg.pinvh(KB)
 
     # u_test is the mean of the data
@@ -201,9 +204,21 @@ def _periodic_kernel(X, Y=None, inverse_width=1):
 
 class WishartProcess(TimeGraphicalLasso):
     def __init__(
-            self, theta=100, var_prop=1, mu_prior=1, var_prior=10,
-            var_Lprop=10, mu_Lprior=1, var_Lprior=1, n_iter=500, burn_in=None,
-            verbose=False, assume_centered=False, kernel=None, learn_ell=True):
+        self,
+        theta=100,
+        var_prop=1,
+        mu_prior=1,
+        var_prior=10,
+        var_Lprop=10,
+        mu_Lprior=1,
+        var_Lprior=1,
+        n_iter=500,
+        burn_in=None,
+        verbose=False,
+        assume_centered=False,
+        kernel=None,
+        learn_ell=True,
+    ):
         self.n_iter = n_iter
         self.burn_in = n_iter // 4 if burn_in is None else burn_in
         self.verbose = verbose
@@ -222,8 +237,7 @@ class WishartProcess(TimeGraphicalLasso):
         self.learn_ell = learn_ell
 
         mu_prior, sigma_prior = lognstat(mu_prior, var_prior)
-        self.prior_theta_kernel = stats.lognorm(
-            loc=0, s=sigma_prior, scale=np.exp(mu_prior))
+        self.prior_theta_kernel = stats.lognorm(loc=0, s=sigma_prior, scale=np.exp(mu_prior))
         self.prior_ell = stats.norm(loc=mu_Lprior, scale=np.sqrt(var_Lprior))
 
     def fit(self, X, y):
@@ -237,9 +251,7 @@ class WishartProcess(TimeGraphicalLasso):
             Indicate the temporal belonging of each matrix.
         """
         # Covariance does not make sense for a single feature
-        X, y = check_X_y(
-            X, y, accept_sparse=False, dtype=np.float64, order="C",
-            ensure_min_features=2, estimator=self)
+        X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64, order="C", ensure_min_features=2, estimator=self)
 
         n_dimensions = X.shape[1]
         self.classes_, n_samples = np.unique(y, return_counts=True)
@@ -249,15 +261,11 @@ class WishartProcess(TimeGraphicalLasso):
         if self.assume_centered:
             self.location_ = np.zeros((n_times, n_dimensions))
         else:
-            self.location_ = np.array(
-                [X[y == cl].mean(0) for cl in self.classes_])
+            self.location_ = np.array([X[y == cl].mean(0) for cl in self.classes_])
 
         # X = (X - self.location_).transpose(1, 2, 0)  # put time last
-        X_center = [
-            X[y == cl] - self.location_[i]
-            for i, cl in enumerate(self.classes_)
-        ]
-        if self.kernel is None or self.kernel.lower() == 'rbf':
+        X_center = [X[y == cl] - self.location_[i] for i, cl in enumerate(self.classes_)]
+        if self.kernel is None or self.kernel.lower() == "rbf":
             kern = partial(_rbf_kernel, var=1)
         else:
             kern = _periodic_kernel
@@ -274,12 +282,19 @@ class WishartProcess(TimeGraphicalLasso):
                 L = np.linalg.cholesky(cov)
 
         out = fit(
-            theta=self.theta, var_prop=self.var_prop,
+            theta=self.theta,
+            var_prop=self.var_prop,
             prior_theta_kernel=self.prior_theta_kernel,
-            var_Lprop=self.var_Lprop, prior_ell=self.prior_ell,
-            kern=partial(kern, self.classes_[:, None]), nu=self.nu_,
-            p=n_dimensions, n_iter=self.n_iter, verbose=self.verbose,
-            likelihood=self.likelihood, L=L)
+            var_Lprop=self.var_Lprop,
+            prior_ell=self.prior_ell,
+            kern=partial(kern, self.classes_[:, None]),
+            nu=self.nu_,
+            p=n_dimensions,
+            n_iter=self.n_iter,
+            verbose=self.verbose,
+            likelihood=self.likelihood,
+            L=L,
+        )
 
         if self.learn_ell:
             samples_u, loglikes, lps, Ls = out
@@ -287,9 +302,9 @@ class WishartProcess(TimeGraphicalLasso):
             samples_u, loglikes, lps = out
 
         # Burn in
-        self.lps_after_burnin = lps[self.burn_in:]
-        self.samples_u_after_burnin = samples_u[self.burn_in:]
-        self.loglikes_after_burnin = loglikes[self.burn_in:]
+        self.lps_after_burnin = lps[self.burn_in :]
+        self.samples_u_after_burnin = samples_u[self.burn_in :]
+        self.loglikes_after_burnin = loglikes[self.burn_in :]
 
         # % Select the best hyperparameters based on the loglikes_after_burnin
         pos = np.argmax(self.loglikes_after_burnin)
@@ -297,7 +312,7 @@ class WishartProcess(TimeGraphicalLasso):
         self.u_map = self.samples_u_after_burnin[pos]
 
         if self.learn_ell:
-            self.Ls_after_burnin = Ls[self.burn_in:]
+            self.Ls_after_burnin = Ls[self.burn_in :]
             self.Lmap = self.Ls_after_burnin[pos]
         else:
             self.Lmap = L
@@ -306,8 +321,7 @@ class WishartProcess(TimeGraphicalLasso):
 
         # compatibility with sklearn
         self.covariance_ = self.D_map.T
-        self.precision_ = np.array(
-            [linalg.pinvh(cov) for cov in self.covariance_])
+        self.precision_ = np.array([linalg.pinvh(cov) for cov in self.covariance_])
         return self
 
     def score(self, X, y):
@@ -332,14 +346,8 @@ class WishartProcess(TimeGraphicalLasso):
 
         """
         # Covariance does not make sense for a single feature
-        X, y = check_X_y(
-            X, y, accept_sparse=False, dtype=np.float64, order="C",
-            ensure_min_features=2, estimator=self)
+        X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64, order="C", ensure_min_features=2, estimator=self)
 
-        X_center = np.array(
-            [
-                X[y == cl] - self.location_[i]
-                for i, cl in enumerate(self.classes_)
-            ])
+        X_center = np.array([X[y == cl] - self.location_[i] for i, cl in enumerate(self.classes_)])
         logp = t_mvn_logpdf(X_center, self.D_map)
         return logp

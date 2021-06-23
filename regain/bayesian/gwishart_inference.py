@@ -51,13 +51,9 @@ from regain.covariance.graphical_lasso_ import GraphicalLasso, graphical_lasso
 def mk_all_ugs(n_dim):
     """Utility for generating all possible graphs."""
     nedges = int(comb(n_dim, 2))
-    m = 2**nedges
+    m = 2 ** nedges
 
-    ind = np.array(
-        [
-            list(binary_repr(x, width=len(binary_repr(m - 1))))
-            for x in range(m)
-        ]).astype(int)
+    ind = np.array([list(binary_repr(x, width=len(binary_repr(m - 1)))) for x in range(m)]).astype(int)
     ord = np.argsort(ind.sum(axis=1))
     ind = ind[ord]
 
@@ -74,9 +70,7 @@ def mk_all_ugs(n_dim):
 
 def markov_blankets(graphs, boolean=True, tol=1e-8, unique=False):
     """For each variable, list each of its markov blankets in graphs."""
-    m_blankets = [
-        np.array([G[i] for G in graphs]) for i in range(graphs[0].shape[0])
-    ]
+    m_blankets = [np.array([G[i] for G in graphs]) for i in range(graphs[0].shape[0])]
     for i, mb in enumerate(m_blankets):
         mb[:, i] = 0
         mb[np.abs(mb) < tol] = 0
@@ -104,30 +98,20 @@ def score_blankets(blankets, X, alphas=(0.01, 0.5, 1)):
                 X_mb = np.zeros((X.shape[0], 1))
 
             y_mb = X[:, i]
-            score = np.sum(
-                [
-                    LassoLars(alpha=alpha).fit(X_mb, y_mb).score(X_mb, y_mb)
-                    for alpha in alphas
-                ])
+            score = np.sum([LassoLars(alpha=alpha).fit(X_mb, y_mb).score(X_mb, y_mb) for alpha in alphas])
 
             scores.append(score)
         scores_all.append(scores)
 
     ss = np.exp(np.array(scores_all))
-    normalized_scores = ss / np.repeat(
-        ss.sum(axis=1)[:, None], ss.shape[1], axis=1)
+    normalized_scores = ss / np.repeat(ss.sum(axis=1)[:, None], ss.shape[1], axis=1)
     return normalized_scores
 
 
 def _get_graphs(blankets, scores, n_dim, n_resampling=200):
-    idx = np.array(
-        [
-            np.random.choice(scores.shape[1], p=scores[i], size=n_resampling)
-            for i in range(n_dim)
-        ])
+    idx = np.array([np.random.choice(scores.shape[1], p=scores[i], size=n_resampling) for i in range(n_dim)])
 
-    graphs_ = np.array([blankets[i][idx[i]] for i in range(n_dim)]).transpose(
-        1, 0, 2)
+    graphs_ = np.array([blankets[i][idx[i]] for i in range(n_dim)]).transpose(1, 0, 2)
     # symmetrise with AND operator -> product
     graphs = np.array([g * g.T for g in graphs_])
     return graphs
@@ -170,7 +154,7 @@ def precision_selection(G, n_dim, C):
     return XX
 
 
-def GWishartFit(X, G, GWprior, mode='covsel'):
+def GWishartFit(X, G, GWprior, mode="covsel"):
     """Fit G-Wishart distribution."""
     n_samples, n_dim = X.shape
 
@@ -179,9 +163,9 @@ def GWishartFit(X, G, GWprior, mode='covsel'):
 
     # check prior size violations
     if G.shape[0] != n_dim or G.shape[1] != n_dim:
-        raise ValueError('G must be p-by-p, with p dimensions X')
+        raise ValueError("G must be p-by-p, with p dimensions X")
     if S0.shape[0] != n_dim or S0.shape[1] != n_dim:
-        raise ValueError('GWprior.S0 must be p-by-p, with p dimensions X')
+        raise ValueError("GWprior.S0 must be p-by-p, with p dimensions X")
 
     # compute posterior scatter matrix
     dn = n_samples + d0
@@ -191,7 +175,7 @@ def GWishartFit(X, G, GWprior, mode='covsel'):
     S = n_samples * emp_cov
     C = (S + S0) / (dn - 2)
 
-    if mode == 'covsel':
+    if mode == "covsel":
         precision = precision_selection(G, n_dim, C)
     else:
         # use graph_lasso
@@ -203,7 +187,7 @@ def GWishartFit(X, G, GWprior, mode='covsel'):
     return precision, S
 
 
-def compute_score(X, G, P, S, GWprior=None, score_method='bic'):
+def compute_score(X, G, P, S, GWprior=None, score_method="bic"):
     """Compute score function of P."""
     n_samples, n_dim = X.shape
 
@@ -212,7 +196,7 @@ def compute_score(X, G, P, S, GWprior=None, score_method='bic'):
 
     # check prior size violations
     if S0.shape[0] != n_dim or S0.shape[1] != n_dim:
-        raise ValueError('GWprior.S0 must be p-by-p, with p dimensions X')
+        raise ValueError("GWprior.S0 must be p-by-p, with p dimensions X")
 
     dn = n_samples + d0
     # C = (S + S0) / (dn - 2)
@@ -223,7 +207,7 @@ def compute_score(X, G, P, S, GWprior=None, score_method='bic'):
     U, s, Vh = linalg.svd(P)
 
     # check
-    invP = np.linalg.multi_dot((Vh.T, np.diag(1. / s), U.T))
+    invP = np.linalg.multi_dot((Vh.T, np.diag(1.0 / s), U.T))
     logdetP = np.sum(np.log(s))
 
     # % compute loglik
@@ -236,7 +220,7 @@ def compute_score(X, G, P, S, GWprior=None, score_method='bic'):
 
     # % the posterior Sn parameter
     # Sn = (dn - 2) * invP
-    logh = (dn - 2) / 2. * (n_dim + logdetP)
+    logh = (dn - 2) / 2.0 * (n_dim + logdetP)
 
     # find full param set V
     Vi, Vj = np.nonzero(np.triu(G))
@@ -255,10 +239,10 @@ def compute_score(X, G, P, S, GWprior=None, score_method='bic'):
     GWpost.logdetP = logdetP
     GWpost.loglik = loglik
 
-    if score_method == 'bic':
+    if score_method == "bic":
         score = loglik - dof * np.log(n_samples) / 2 if n_samples > 0 else 0
 
-    elif score_method == 'diaglaplace':
+    elif score_method == "diaglaplace":
         # Diagonal hessian laplace approximation
         diagH = np.zeros(dof)
         for e1 in range(dof):
@@ -283,12 +267,11 @@ def compute_score(X, G, P, S, GWprior=None, score_method='bic'):
             # diagH(e1) = -(dn-2) * trace(M1(nz2,nz1)*M2(nz1,nz2))/2;
 
         logdetHdiag = sum(np.log(-diagH))
-        lognormconst = dof * np.log(2 * np.pi) / 2 + logh - logdetHdiag / 2.
-        score = lognormconst - GWprior.lognormconst - \
-            n_samples * n_dim * np.log(2 * np.pi) / 2
+        lognormconst = dof * np.log(2 * np.pi) / 2 + logh - logdetHdiag / 2.0
+        score = lognormconst - GWprior.lognormconst - n_samples * n_dim * np.log(2 * np.pi) / 2
         GWpost.lognormconst = lognormconst
 
-    elif score_method == 'laplace':
+    elif score_method == "laplace":
         # Full laplace approximation
         H = np.empty((dof, dof))
         for e1 in range(dof):
@@ -306,20 +289,19 @@ def compute_score(X, G, P, S, GWprior=None, score_method='bic'):
                 # tmp2 = A[0, :].dot(B[:, 0]) + A[1, :].dot(B[:, 1])
                 # tmp2 = np.trace(A.dot(B))
                 tmp2 = (A * B.T).sum()
-                H[e2, e1] = H[e1, e2] = -(dn - 2) * tmp2 / 2.
+                H[e2, e1] = H[e1, e2] = -(dn - 2) * tmp2 / 2.0
 
         # neg Hessian will be posdef
         logdetH = 2 * sum(np.log(np.diag(linalg.cholesky(-H))))
-        lognormconst = dof * np.log(2 * np.pi) / 2 + logh - logdetH / 2.
-        score = lognormconst - GWprior.lognormconst - \
-            n_samples * n_dim * np.log(2 * np.pi) / 2
+        lognormconst = dof * np.log(2 * np.pi) / 2 + logh - logdetH / 2.0
+        score = lognormconst - GWprior.lognormconst - n_samples * n_dim * np.log(2 * np.pi) / 2
         GWpost.lognormconst = lognormconst
 
     GWpost.score = score
     return GWpost
 
 
-def GWishartScore(X, G, d0=3, S0=None, score_method='bic', mode='covsel'):
+def GWishartScore(X, G, d0=3, S0=None, score_method="bic", mode="covsel"):
     """Compute score of G-Wishart distribution."""
     # %Initialize GW prior structure
     n_samples, n_dim = X.shape
@@ -329,13 +311,11 @@ def GWishartScore(X, G, d0=3, S0=None, score_method='bic', mode='covsel'):
     GWprior = Bunch(d0=d0, S0=S0, lognormconst=0, lognormconstDiag=0)
 
     # %If method is laplace, compute laplace approximation to denominator
-    if score_method in ['laplace', 'diaglaplace']:
+    if score_method in ["laplace", "diaglaplace"]:
         noData = np.zeros((0, n_dim))
 
         P0, S_noData = GWishartFit(noData, G, GWprior)
-        GWtemp = compute_score(
-            noData, G, P0, S_noData, GWprior=GWprior,
-            score_method=score_method)
+        GWtemp = compute_score(noData, G, P0, S_noData, GWprior=GWprior, score_method=score_method)
         GWprior.lognormconst = GWtemp.lognormconst
 
     # Compute the map precision matrix P
@@ -347,8 +327,16 @@ def GWishartScore(X, G, d0=3, S0=None, score_method='bic', mode='covsel'):
 
 
 def bayesian_graphical_lasso(
-        X, tol=1e-8, alphas=None, n_resampling=200, mode='gl', top_n=1,
-        scoring='diaglaplace', assume_centered=False, max_iter=100):
+    X,
+    tol=1e-8,
+    alphas=None,
+    n_resampling=200,
+    mode="gl",
+    top_n=1,
+    scoring="diaglaplace",
+    assume_centered=False,
+    max_iter=100,
+):
     """Bayesian graphical lasso."""
     n_samples, n_dim = X.shape
 
@@ -356,16 +344,13 @@ def bayesian_graphical_lasso(
         alphas = np.logspace(-2, 0, 20)
 
     # get a series of Markov blankets for vaiours alphas
-    mdl = GraphicalLasso(
-        assume_centered=assume_centered, tol=tol, max_iter=max_iter,
-        verbose=False)
+    mdl = GraphicalLasso(assume_centered=assume_centered, tol=tol, max_iter=max_iter, verbose=False)
     precisions = [mdl.set_params(alpha=a).fit(X).precision_ for a in alphas]
     mblankets = markov_blankets(precisions, tol=tol, unique=True)
 
     normalized_scores = score_blankets(mblankets, X=X, alphas=[0.01, 0.5, 1])
 
-    graphs = _get_graphs(
-        mblankets, normalized_scores, n_dim=n_dim, n_resampling=n_resampling)
+    graphs = _get_graphs(mblankets, normalized_scores, n_dim=n_dim, n_resampling=n_resampling)
 
     nonzeros_all = [np.triu(g, 1) + np.eye(n_dim, dtype=bool) for g in graphs]
 
@@ -376,10 +361,7 @@ def bayesian_graphical_lasso(
     # Find non-zero elements of upper triangle of G
     # make sure diagonal is non-zero
     # G = nonzeros_all[1] # probably can discard if all zeros?
-    res = [
-        GWishartScore(X, G, d0=d0, S0=S0, mode=mode, score_method=scoring)
-        for G in nonzeros_all
-    ]
+    res = [GWishartScore(X, G, d0=d0, S0=S0, mode=mode, score_method=scoring) for G in nonzeros_all]
 
     top_n = [x.P for x in sorted(res, key=lambda x: x.score)[::-1][:top_n]]
     return np.mean(top_n, axis=0)
@@ -444,12 +426,21 @@ class BayesianGraphicalLasso(GraphicalLasso):
     """
 
     def __init__(
-            self, alpha=0.01, max_iter=100, alphas=None, n_resampling=200,
-            tol=1e-4, verbose=False, assume_centered=False, mode='gl',
-            scoring='diaglaplace', top_n=1):
+        self,
+        alpha=0.01,
+        max_iter=100,
+        alphas=None,
+        n_resampling=200,
+        tol=1e-4,
+        verbose=False,
+        assume_centered=False,
+        mode="gl",
+        scoring="diaglaplace",
+        top_n=1,
+    ):
         super(GraphicalLasso, self).__init__(
-            alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
-            assume_centered=assume_centered, mode=mode)
+            alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose, assume_centered=assume_centered, mode=mode
+        )
         self.alphas = alphas
         self.n_resampling = n_resampling
         self.scoring = scoring
@@ -466,15 +457,20 @@ class BayesianGraphicalLasso(GraphicalLasso):
 
         """
         # Covariance does not make sense for a single feature
-        X = check_array(
-            X, ensure_min_features=2, ensure_min_samples=2, estimator=self)
+        X = check_array(X, ensure_min_features=2, ensure_min_samples=2, estimator=self)
 
         if self.alphas is None:
             self.alphas = np.logspace(-2, 0, 20)
 
         self.precision_ = bayesian_graphical_lasso(
-            X, tol=self.tol, alphas=self.alphas,
-            n_resampling=self.n_resampling, mode=self.mode,
-            scoring=self.scoring, assume_centered=self.assume_centered,
-            max_iter=self.max_iter, top_n=self.top_n)
+            X,
+            tol=self.tol,
+            alphas=self.alphas,
+            n_resampling=self.n_resampling,
+            mode=self.mode,
+            scoring=self.scoring,
+            assume_centered=self.assume_centered,
+            max_iter=self.max_iter,
+            top_n=self.top_n,
+        )
         return self

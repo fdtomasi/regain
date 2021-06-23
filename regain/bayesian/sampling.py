@@ -38,13 +38,11 @@ from regain.bayesian.stats import lognstat
 
 def GWP_construct(umat, L):
     """Build the sample from the GWP."""
-    M = np.matmul(
-        np.matmul(L, np.matmul(umat.T, umat.transpose(2, 0, 1))), L.T)
+    M = np.matmul(np.matmul(L, np.matmul(umat.T, umat.transpose(2, 0, 1))), L.T)
     return M.T
 
 
-def elliptical_slice(
-        current_state, prior, likelihood=None, angle_range=0, max_iter=20):
+def elliptical_slice(current_state, prior, likelihood=None, angle_range=0, max_iter=20):
     """Markov chain update for a distribution with a Gaussian "prior" factored out.
 
     A Markov chain update is applied to the D-element array xx leaving a
@@ -82,9 +80,7 @@ def elliptical_slice(
     Intelligence and Statistics (AISTATS), JMLR W&CP 9:541-548, 2010.
     """
     if likelihood is None:
-        raise ValueError(
-            "`likelihood` parameter is None, should be a "
-            "function to evaluate likelihood")
+        raise ValueError("`likelihood` parameter is None, should be a " "function to evaluate likelihood")
     initial_theta = current_state.xx
     v, p, N = initial_theta.shape
     D = v * p * N
@@ -105,11 +101,8 @@ def elliptical_slice(
     else:
         #  User specified Cholesky of prior covariance:
         if prior.shape != (D, D):
-            raise ValueError(
-                'Prior must be given by a D-element sample '
-                'or DxD chol(Sigma)')
-        nu = np.reshape(
-            prior.T.dot(np.random.normal(size=D)), initial_theta.shape)
+            raise ValueError("Prior must be given by a D-element sample " "or DxD chol(Sigma)")
+        nu = np.reshape(prior.T.dot(np.random.normal(size=D)), initial_theta.shape)
 
     hh = 0.001 * np.log(np.random.uniform()) + current_logp
 
@@ -144,8 +137,7 @@ def elliptical_slice(
         elif phi < 0:
             phi_min = phi
         else:
-            raise RuntimeError(
-                'BUG: Shrunk to current position and still not acceptable.')
+            raise RuntimeError("BUG: Shrunk to current position and still not acceptable.")
 
         # Propose new angle difference
         phi = np.random.uniform() * (phi_max - phi_min) + phi_min
@@ -154,15 +146,14 @@ def elliptical_slice(
 
     if update_state:
         # update with new point
-        current_state['xx'] = proposal
-        current_state['V'] = V
-        current_state['log_likelihood'] = current_logp
+        current_state["xx"] = proposal
+        current_state["V"] = V
+        current_state["log_likelihood"] = current_logp
 
     return current_state
 
 
-def sample_hyper_kernel(
-        initial_theta, var_proposal, ustack, kern, prior_distr):
+def sample_hyper_kernel(initial_theta, var_proposal, ustack, kern, prior_distr):
     """Metropolis-Hastings for sampling the posterior of the kernel
     hyperparameter.
 
@@ -180,15 +171,12 @@ def sample_hyper_kernel(
     mu, sigma = lognstat(initial_theta, var_proposal)
     proposal = np.random.lognormal(mu, sigma)
     # log_qzastztau = lognormal_logpdf(proposal, mu=mu, sigma=sigma)
-    log_qzastztau = stats.lognorm.logpdf(
-        proposal, loc=0, s=sigma, scale=np.exp(mu))
+    log_qzastztau = stats.lognorm.logpdf(proposal, loc=0, s=sigma, scale=np.exp(mu))
 
     # Criterion to choose whether to accept the proposed sample or not
     def logp_post(inverse_width):
         K = kern(inverse_width=inverse_width)
-        logp = stats.multivariate_normal(
-            ustack.mean(axis=0), cov=K,
-            allow_singular=True).logpdf(ustack).sum()
+        logp = stats.multivariate_normal(ustack.mean(axis=0), cov=K, allow_singular=True).logpdf(ustack).sum()
         logp_prior = prior_distr.logpdf(inverse_width)
         return logp + logp_prior
 
@@ -196,8 +184,7 @@ def sample_hyper_kernel(
 
     mu, sigma = lognstat(proposal, var_proposal)
     # log_qztauzast = lognormal_logpdf(initial_theta, mu=mu, sigma=sigma)
-    log_qztauzast = stats.lognorm.logpdf(
-        initial_theta, loc=0, s=sigma, scale=np.exp(mu))
+    log_qztauzast = stats.lognorm.logpdf(initial_theta, loc=0, s=sigma, scale=np.exp(mu))
 
     # Now we decide whether to accept zast or use the previous value
     log_acceptance_proba = min(0, logp_diff + log_qztauzast - log_qzastztau)
@@ -230,8 +217,8 @@ def sample_ell(Ltau, var_proposal, umat, prior_distr, likelihood=None):
 
     for i in range(free_elements):
         L_proposal[i] = _sample_ell_comp(
-            Ltau, i, sigma_proposal=sigma_proposal[i], prior_distr=prior_distr,
-            likelihood=get_logp)
+            Ltau, i, sigma_proposal=sigma_proposal[i], prior_distr=prior_distr, likelihood=get_logp
+        )
         Ltau[i] = L_proposal[i]
 
     return L_proposal
@@ -239,7 +226,7 @@ def sample_ell(Ltau, var_proposal, umat, prior_distr, likelihood=None):
 
 def _sample_ell_comp(Ltaug, i, sigma_proposal, prior_distr, likelihood=None):
     """Sample a single element for L.
-    
+
     likelihood: function to compute likelihood of ell.
     """
     # Propose a sample

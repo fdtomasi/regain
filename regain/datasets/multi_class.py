@@ -37,9 +37,15 @@ from regain.datasets.poisson import poisson_sampler
 
 
 def make_multiclass_dataset(
-        n_samples=100, n_dim_obs=100, n_classes=5, _type='scale-free',
-        random_state=None, n_edges=2, probability=0.2,
-        distribution='gaussian'):
+    n_samples=100,
+    n_dim_obs=100,
+    n_classes=5,
+    _type="scale-free",
+    random_state=None,
+    n_edges=2,
+    probability=0.2,
+    distribution="gaussian",
+):
     """Generate a synthetic dataset.
 
     Parameters
@@ -83,17 +89,26 @@ def make_multiclass_dataset(
         List of binarised version of the random networks.
     """
     res = generate_multiple_class_dataset(
-        n_dim_obs=n_dim_obs, n_edges=n_edges, probability=probability,
-        n_classes=n_classes, _type=_type, distribution=distribution,
-        random_state=random_state)
-    return sample(n_dim_obs=n_dim_obs, n_classes=n_classes,
-                  n_samples=n_samples, networks=res), res['binary']
+        n_dim_obs=n_dim_obs,
+        n_edges=n_edges,
+        probability=probability,
+        n_classes=n_classes,
+        _type=_type,
+        distribution=distribution,
+        random_state=random_state,
+    )
+    return sample(n_dim_obs=n_dim_obs, n_classes=n_classes, n_samples=n_samples, networks=res), res["binary"]
 
 
-def generate_multiple_class_dataset(n_dim_obs=10, n_edges=2, probability=0.2,
-                                    n_classes=5, _type='scale-free',
-                                    distribution='gaussian',
-                                    random_state=None):
+def generate_multiple_class_dataset(
+    n_dim_obs=10,
+    n_edges=2,
+    probability=0.2,
+    n_classes=5,
+    _type="scale-free",
+    distribution="gaussian",
+    random_state=None,
+):
     """Generate networks for a multi-class problem.
 
     Parameters
@@ -125,25 +140,20 @@ def generate_multiple_class_dataset(n_dim_obs=10, n_edges=2, probability=0.2,
         shape=(n_dim_obs, n_dim_obs), plus the binarised version of the
         networks.
     """
-    if _type == 'scale-free':
-        graph = nx.random_graphs.barabasi_albert_graph(n=n_dim_obs, m=n_edges,
-                                                       seed=random_state)
+    if _type == "scale-free":
+        graph = nx.random_graphs.barabasi_albert_graph(n=n_dim_obs, m=n_edges, seed=random_state)
     else:
-        graph = nx.random_graphs.erdos_renyi_graph(n=n_dim_obs, p=probability,
-                                                   seed=random_state)
+        graph = nx.random_graphs.erdos_renyi_graph(n=n_dim_obs, p=probability, seed=random_state)
 
     binaries = [nx.adjacency_matrix(graph).todense()]
     zeros = np.where(binaries[0] == 0)
     nonzero = np.where(binaries[0] != 0)
-    to_add = int(0.1*zeros[0].shape[0])
-    to_remove = int(0.1*nonzero[0].shape[0])
-    for i in range(n_classes-1):
+    to_add = int(0.1 * zeros[0].shape[0])
+    to_remove = int(0.1 * nonzero[0].shape[0])
+    for i in range(n_classes - 1):
         K_new = binaries[0].copy()
-        _to_add = np.random.choice(np.arange(zeros[0].shape[0]), to_add,
-                                   replace=False)
-        _to_remove = np.random.choice(np.arange(nonzero[0].shape[0]),
-                                      to_remove,
-                                      replace=False)
+        _to_add = np.random.choice(np.arange(zeros[0].shape[0]), to_add, replace=False)
+        _to_remove = np.random.choice(np.arange(nonzero[0].shape[0]), to_remove, replace=False)
         for ta in _to_add:
             a = np.random.choice([0, 1], p=[0.2, 0.8])
             K_new[zeros[0][i], zeros[1][i]] = a
@@ -155,27 +165,27 @@ def generate_multiple_class_dataset(n_dim_obs=10, n_edges=2, probability=0.2,
         binaries.append(K_new)
 
     res = {}
-    if 'gaussian' in distribution:
+    if "gaussian" in distribution:
         Ks_gaussian = [b.copy().astype(np.float32) for b in binaries]
-        A = np.random.rand(n_dim_obs, n_dim_obs)-0.5
-        A = (A+A.T)/2
+        A = np.random.rand(n_dim_obs, n_dim_obs) - 0.5
+        A = (A + A.T) / 2
         for b, k in zip(binaries, Ks_gaussian):
             k[np.where(b != 0)] = A[np.where(b != 0)]
             np.fill_diagonal(k, 1)
-        res['gaussian'] = Ks_gaussian
+        res["gaussian"] = Ks_gaussian
 
-    if 'poisson' in distribution:
-        res['poisson'] = [b.copy().astype(np.float32) for b in binaries]
+    if "poisson" in distribution:
+        res["poisson"] = [b.copy().astype(np.float32) for b in binaries]
 
-    if 'ising' in distribution:
+    if "ising" in distribution:
         Ks_ising = [b.copy().astype(np.float32) for b in binaries]
-        A = np.random.rand(n_dim_obs, n_dim_obs)-0.5
-        A = np.sign((A+A.T))
+        A = np.random.rand(n_dim_obs, n_dim_obs) - 0.5
+        A = np.sign((A + A.T))
         for b, k in zip(binaries, Ks_ising):
             k[np.where(b != 0)] = A[np.where(b != 0)]
             np.fill_diagonal(k, 1)
-        res['ising'] = Ks_ising
-    res['binary'] = binaries
+        res["ising"] = Ks_ising
+    res["binary"] = binaries
 
     return res
 
@@ -211,42 +221,35 @@ def sample(n_dim_obs=10, n_classes=5, n_samples=100, networks=dict()):
             to which class it belongs.
         )
     """
+
     def _gaussian(networks):
         sigmas = list(map(np.linalg.inv, networks))
-        data = np.array([
-          np.random.multivariate_normal(
-              np.zeros(n_dim_obs), sigma, size=n_samples) for sigma in sigmas
-        ])
+        data = np.array(
+            [np.random.multivariate_normal(np.zeros(n_dim_obs), sigma, size=n_samples) for sigma in sigmas]
+        )
         X = np.vstack(data)
         y = np.repeat(range(n_classes), n_samples).astype(int)
         return Bunch(data=data, thetas=np.array(networks), X=X, y=y)
 
     def _ising(networks):
-        data = np.array([ising_sampler(t, np.zeros(n_dim_obs), n=n_samples,
-                                       responses=[-1, 1])
-                        for t in networks])
+        data = np.array([ising_sampler(t, np.zeros(n_dim_obs), n=n_samples, responses=[-1, 1]) for t in networks])
         X = np.vstack(data)
         y = np.repeat(range(n_classes), n_samples).astype(int)
 
         return Bunch(data=data, thetas=np.array(networks), X=X, y=y)
 
     def _poisson(networks):
-        data = np.array([poisson_sampler(t, variances=np.zeros(n_dim_obs),
-                                         n_samples=n_samples)
-                         for t in networks])
+        data = np.array([poisson_sampler(t, variances=np.zeros(n_dim_obs), n_samples=n_samples) for t in networks])
         X = np.vstack(data)
         y = np.repeat(range(n_classes), n_samples).astype(int)
 
         return Bunch(data=data, thetas=np.array(networks), X=X, y=y)
 
-    generation = {
-        'gaussian': lambda x: _gaussian(x),
-        'ising': lambda x: _ising(x),
-        'poisson': lambda x: _poisson(x)}
+    generation = {"gaussian": lambda x: _gaussian(x), "ising": lambda x: _ising(x), "poisson": lambda x: _poisson(x)}
 
     res = {}
     for k in networks.keys():
-        if k == 'binary':
+        if k == "binary":
             continue
         res[k] = generation[k](networks[k])
 

@@ -94,7 +94,7 @@ def group_lasso_feat_split(A, b, lamda=1.0, ni=2, rho=1.0, alpha=1.0):
     Ats = []
     # % pre-factor
     for i in range(N):
-        Ai = A[:, i * ni:(i + 1) * ni]
+        Ai = A[:, i * ni : (i + 1) * ni]
         Di, Vi = np.linalg.eig(Ai.T.dot(Ai))
         Vis.append(Vi)
         Dis.append(Di)
@@ -104,15 +104,14 @@ def group_lasso_feat_split(A, b, lamda=1.0, ni=2, rho=1.0, alpha=1.0):
     for k in range(MAX_ITER):
         # % x-update (to be done in parallel)
         for i in range(N):
-            Ai = A[:, i * ni:(i + 1) * ni]
-            xx = x_update(
-                Ai, Aixi[:, i] + z - Axbar - u, lamda / rho, Vis[i], Dis[i])
+            Ai = A[:, i * ni : (i + 1) * ni]
+            xx = x_update(Ai, Aixi[:, i] + z - Axbar - u, lamda / rho, Vis[i], Dis[i])
             x[:, i] = xx
             Aixi[:, i] = Ai.dot(x[:, i])
 
         # % z-update
         zold = z
-        Axbar = 1. / N * A.dot(x.ravel())
+        Axbar = 1.0 / N * A.dot(x.ravel())
 
         Axbar_hat = alpha * Axbar + (1 - alpha) * zold
         z = (b + rho * (Axbar_hat + u)) / (N + rho)
@@ -128,10 +127,9 @@ def group_lasso_feat_split(A, b, lamda=1.0, ni=2, rho=1.0, alpha=1.0):
         zs += Aixi - Axbar.reshape(-1, 1).dot(np.ones((1, N)))
         for i in range(N):
             # % dual residual norm square
-            s = s + np.linalg.norm(
-                -rho * Ats[i].dot((zs[:, i] - zsold[:, i])))**2
+            s = s + np.linalg.norm(-rho * Ats[i].dot((zs[:, i] - zsold[:, i]))) ** 2
             # % dual residual epsilon
-            q = q + np.linalg.norm(rho * Ats[i].dot(u))**2
+            q = q + np.linalg.norm(rho * Ats[i].dot(u)) ** 2
 
         # % diagnostics, reporting, termination checks
         history = []
@@ -139,9 +137,7 @@ def group_lasso_feat_split(A, b, lamda=1.0, ni=2, rho=1.0, alpha=1.0):
         history.append(np.sqrt(N) * np.linalg.norm(z - Axbar))
         history.append(np.sqrt(s))
 
-        history.append(
-            np.sqrt(n) * ABSTOL + RELTOL *
-            max(np.linalg.norm(Aixi, 'fro'), np.linalg.norm(-zs, 'fro')))
+        history.append(np.sqrt(n) * ABSTOL + RELTOL * max(np.linalg.norm(Aixi, "fro"), np.linalg.norm(-zs, "fro")))
         history.append(np.sqrt(n) * ABSTOL + RELTOL * np.sqrt(q))
 
         hist.append(history)
@@ -161,7 +157,7 @@ def x_update(A, b, kappa, V, D):
         lower = 0
         upper = 1e10
         for _ in range(100):
-            t = (upper + lower) / 2.
+            t = (upper + lower) / 2.0
 
             x = V.dot(V.T.dot(q) / (D + t))
             if t > kappa / np.linalg.norm(x):

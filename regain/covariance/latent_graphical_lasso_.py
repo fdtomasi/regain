@@ -46,14 +46,25 @@ from regain.utils import convergence
 def objective(emp_cov, R, K, L, alpha, tau):
     """Objective function for latent graphical lasso."""
     obj = obj_gl(emp_cov, R, K, alpha=alpha)
-    obj += tau * np.linalg.norm(L, ord='nuc')
+    obj += tau * np.linalg.norm(L, ord="nuc")
     return obj
 
 
 def latent_graphical_lasso(
-        emp_cov, alpha=1., tau=1., rho=1., max_iter=100, verbose=False,
-        tol=1e-4, rtol=1e-2, return_history=False, return_n_iter=True,
-        update_rho_options=None, compute_objective=True, init='empirical'):
+    emp_cov,
+    alpha=1.0,
+    tau=1.0,
+    rho=1.0,
+    max_iter=100,
+    verbose=False,
+    tol=1e-4,
+    rtol=1e-2,
+    return_history=False,
+    return_n_iter=True,
+    update_rho_options=None,
+    compute_objective=True,
+    init="empirical",
+):
     r"""Latent variable graphical lasso solver via ADMM.
 
     Solves the following problem:
@@ -115,44 +126,42 @@ def latent_graphical_lasso(
         # update R
         A = K - L - U
         A += A.T
-        A /= 2.
-        R = prox_logdet(emp_cov - rho * A, lamda=1. / rho)
+        A /= 2.0
+        R = prox_logdet(emp_cov - rho * A, lamda=1.0 / rho)
 
         A = L + R + U
         K = soft_thresholding(A, lamda=alpha / rho)
 
         A = K - R - U
         A += A.T
-        A /= 2.
+        A /= 2.0
         L = prox_trace_indicator(A, lamda=tau / rho)
 
         # update residuals
         U += R - K + L
 
         # diagnostics, reporting, termination checks
-        obj = objective(emp_cov, R, K, L, alpha, tau) \
-            if compute_objective else np.nan
+        obj = objective(emp_cov, R, K, L, alpha, tau) if compute_objective else np.nan
         rnorm = np.linalg.norm(R - K + L)
         snorm = rho * np.linalg.norm(R - R_old)
         check = convergence(
-            obj=obj, rnorm=rnorm, snorm=snorm, e_pri=np.sqrt(R.size) * tol +
-            rtol * max(np.linalg.norm(R), np.linalg.norm(K - L)),
-            e_dual=np.sqrt(R.size) * tol + rtol * rho * np.linalg.norm(U))
+            obj=obj,
+            rnorm=rnorm,
+            snorm=snorm,
+            e_pri=np.sqrt(R.size) * tol + rtol * max(np.linalg.norm(R), np.linalg.norm(K - L)),
+            e_dual=np.sqrt(R.size) * tol + rtol * rho * np.linalg.norm(U),
+        )
         R_old = R.copy()
 
         if verbose:
-            print(
-                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
+            print("obj: %.4f, rnorm: %.4f, snorm: %.4f," "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
         if check.obj == np.inf:
             break
-        rho_new = update_rho(
-            rho, rnorm, snorm, iteration=iteration_,
-            **(update_rho_options or {}))
+        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {}))
         # scaled dual variables should be also rescaled
         U *= rho / rho_new
         rho = rho_new
@@ -234,14 +243,33 @@ class LatentGraphicalLasso(GraphicalLasso):
     """
 
     def __init__(
-            self, alpha=0.01, tau=1., rho=1., tol=1e-4, rtol=1e-4,
-            max_iter=100, verbose=False, assume_centered=False, mode='admm',
-            update_rho_options=None, compute_objective=True, init='empirical'):
+        self,
+        alpha=0.01,
+        tau=1.0,
+        rho=1.0,
+        tol=1e-4,
+        rtol=1e-4,
+        max_iter=100,
+        verbose=False,
+        assume_centered=False,
+        mode="admm",
+        update_rho_options=None,
+        compute_objective=True,
+        init="empirical",
+    ):
         super(LatentGraphicalLasso, self).__init__(
-            alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
-            verbose=verbose, assume_centered=assume_centered, mode=mode,
+            alpha=alpha,
+            rho=rho,
+            tol=tol,
+            rtol=rtol,
+            max_iter=max_iter,
+            verbose=verbose,
+            assume_centered=assume_centered,
+            mode=mode,
             update_rho_options=update_rho_options,
-            compute_objective=compute_objective, init=init)
+            compute_objective=compute_objective,
+            init=init,
+        )
         self.tau = tau
 
     def get_precision(self):
@@ -265,12 +293,19 @@ class LatentGraphicalLasso(GraphicalLasso):
             Empirical covariance of data.
 
         """
-        self.precision_, self.latent_, self.covariance_, self.n_iter_ = \
-            latent_graphical_lasso(
-                emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
-                tol=self.tol, rtol=self.rtol,
-                max_iter=self.max_iter, verbose=self.verbose,
-                return_n_iter=True, return_history=False,
-                update_rho_options=self.update_rho_options,
-                compute_objective=self.compute_objective, init=self.init)
+        self.precision_, self.latent_, self.covariance_, self.n_iter_ = latent_graphical_lasso(
+            emp_cov,
+            alpha=self.alpha,
+            tau=self.tau,
+            rho=self.rho,
+            tol=self.tol,
+            rtol=self.rtol,
+            max_iter=self.max_iter,
+            verbose=self.verbose,
+            return_n_iter=True,
+            return_history=False,
+            update_rho_options=self.update_rho_options,
+            compute_objective=self.compute_objective,
+            init=self.init,
+        )
         return self

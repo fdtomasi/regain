@@ -45,7 +45,7 @@ def loss(X, theta):
     n, d = X.shape
     objective = 0
     if not np.all(theta == theta.T):
-        return np.float('inf')
+        return np.float("inf")
     for r in range(d):
         selector = [i for i in range(d) if i != r]
         for i in range(n):
@@ -54,16 +54,16 @@ def loss(X, theta):
             EXT = np.exp(XT)
             E_XT = np.exp(-XT)
             objective += np.log(EXT + E_XT) - XXT
-    return (1/n)*objective
+    return (1 / n) * objective
 
 
 def objective(X, theta, alpha):
     n, _ = X.shape
     objective = loss(X, theta)
-    return objective + alpha*l1_od_norm(theta)
+    return objective + alpha * l1_od_norm(theta)
 
 
-def _gradient_ising(X, theta,  n, A=None, rho=1, T=0):
+def _gradient_ising(X, theta, n, A=None, rho=1, T=0):
     n, d = X.shape
     theta_new = np.zeros_like(theta)
 
@@ -73,22 +73,36 @@ def _gradient_ising(X, theta,  n, A=None, rho=1, T=0):
             XT = X[i, selector].dot(theta[selector, r])
             EXT = np.exp(XT)
             E_XT = np.exp(-XT)
-            sum_ += (1/n)*X[i, selector]*((EXT - E_XT)/(EXT + E_XT) - X[i, r])
+            sum_ += (1 / n) * X[i, selector] * ((EXT - E_XT) / (EXT + E_XT) - X[i, r])
             return sum_
+
     for ix in range(theta.shape[0]):
         selector = [i for i in range(d) if i != ix]
-        theta_new[ix, selector] = gradient(
-                                    X, theta, ix, selector, n, A, rho, T)
+        theta_new[ix, selector] = gradient(X, theta, ix, selector, n, A, rho, T)
     if A is not None:
-        theta_new += (rho*T)*(theta - A)
+        theta_new += (rho * T) * (theta - A)
 
     return theta_new
 
 
-def _fit(X, alpha=1e-2, gamma=1e-3, tol=1e-3, max_iter=1000, verbose=0,
-         return_history=True, compute_objective=True, warm_start=None,
-         return_n_iter=False, adjust_gamma=False, A=None, T=0, rho=1,
-         update_gamma=0.5, line_search=False):
+def _fit(
+    X,
+    alpha=1e-2,
+    gamma=1e-3,
+    tol=1e-3,
+    max_iter=1000,
+    verbose=0,
+    return_history=True,
+    compute_objective=True,
+    warm_start=None,
+    return_n_iter=False,
+    adjust_gamma=False,
+    A=None,
+    T=0,
+    rho=1,
+    update_gamma=0.5,
+    line_search=False,
+):
     n, d = X.shape
     if warm_start is None:
         theta = np.zeros((d, d))
@@ -101,47 +115,46 @@ def _fit(X, alpha=1e-2, gamma=1e-3, tol=1e-3, max_iter=1000, verbose=0,
     for iter_ in range(max_iter):
         theta_old = thetas[-1]
         if not line_search:
-            grad = _gradient_ising(X, theta,  n, A, rho, T)
-            theta_new = theta - gamma*grad
-            theta = (theta_new + theta_new.T)/2
-            theta = soft_thresholding_od(theta, alpha*gamma)
+            grad = _gradient_ising(X, theta, n, A, rho, T)
+            theta_new = theta - gamma * grad
+            theta = (theta_new + theta_new.T) / 2
+            theta = soft_thresholding_od(theta, alpha * gamma)
         else:
             while True:
-                grad = _gradient_ising(X, theta,  n, A, rho, T)
-                theta_new = theta - gamma*grad
-                theta = (theta_new + theta_new.T)/2
-                theta = soft_thresholding_od(theta, alpha*gamma)
+                grad = _gradient_ising(X, theta, n, A, rho, T)
+                theta_new = theta - gamma * grad
+                theta = (theta_new + theta_new.T) / 2
+                theta = soft_thresholding_od(theta, alpha * gamma)
                 print(theta)
                 loss_new = loss(X, theta)
                 loss_old = loss(X, theta_old)
                 # Line search
-                diff_theta2 = np.linalg.norm(theta_old - theta)**2
+                diff_theta2 = np.linalg.norm(theta_old - theta) ** 2
                 grad_diff = np.trace(grad.dot(theta_old - theta))
-                diff = loss_old - grad_diff + (diff_theta2/(2*gamma))
+                diff = loss_old - grad_diff + (diff_theta2 / (2 * gamma))
 
                 if loss_new > diff or np.isinf(loss_new) or np.isnan(loss_new):
                     gamma = update_gamma * gamma
                     theta = theta_old - gamma * grad
-                    theta = soft_thresholding_od(theta, alpha*gamma)
+                    theta = soft_thresholding_od(theta, alpha * gamma)
                     loss_new = loss(X, theta)
-                    diff = loss_old - grad_diff + (diff_theta2/(2*gamma))
+                    diff = loss_old - grad_diff + (diff_theta2 / (2 * gamma))
                 else:
                     break
         thetas.append(theta)
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            check = convergence(iter=iter_,
-                                obj=objective(X, theta, alpha),
-                                iter_norm=np.linalg.norm(thetas[-2]-thetas[-1]),
-                                iter_r_norm=(np.linalg.norm(thetas[-2] -
-                                                            thetas[-1]) /
-                                             np.linalg.norm(thetas[-1])))
+            check = convergence(
+                iter=iter_,
+                obj=objective(X, theta, alpha),
+                iter_norm=np.linalg.norm(thetas[-2] - thetas[-1]),
+                iter_r_norm=(np.linalg.norm(thetas[-2] - thetas[-1]) / np.linalg.norm(thetas[-1])),
+            )
         checks.append(check)
         # if adjust_gamma: # TODO multiply or divide
         if verbose:
-            print('Iter: %d, objective: %.4f, iter_norm %.4f' %
-                  (check[0], check[1], check[2]))
+            print("Iter: %d, objective: %.4f, iter_norm %.4f" % (check[0], check[1], check[2]))
 
         if np.abs(check[2]) < tol:
             break
@@ -209,13 +222,25 @@ class IsingGraphicalModel(GLM_GM, BaseEstimator):
         Number of iterations run.
 
     """
-    def __init__(self, alpha=0.01, tol=1e-4, rtol=1e-4, reconstruction='union',
-                 mode='symmetric_fbs', rho=1, max_iter=100,
-                 verbose=False, return_history=True, return_n_iter=False,
-                 compute_objective=True, gamma=1):
+
+    def __init__(
+        self,
+        alpha=0.01,
+        tol=1e-4,
+        rtol=1e-4,
+        reconstruction="union",
+        mode="symmetric_fbs",
+        rho=1,
+        max_iter=100,
+        verbose=False,
+        return_history=True,
+        return_n_iter=False,
+        compute_objective=True,
+        gamma=1,
+    ):
         super(IsingGraphicalModel, self).__init__(
-            alpha, tol, rtol, max_iter, verbose, return_history, return_n_iter,
-            compute_objective)
+            alpha, tol, rtol, max_iter, verbose, return_history, return_n_iter, compute_objective
+        )
         self.reconstruction = reconstruction
         self.mode = mode
         self.rho = rho
@@ -233,14 +258,12 @@ class IsingGraphicalModel(GLM_GM, BaseEstimator):
             Step size of the proximal gradient descent.
         """
         X = check_array(X)
-        if self.mode.lower() == 'symmetric_fbs':
-            res = _fit(X, self.alpha, tol=self.tol, gamma=self.gamma,
-                       max_iter=self.max_iter,
-                       verbose=self.verbose)
+        if self.mode.lower() == "symmetric_fbs":
+            res = _fit(X, self.alpha, tol=self.tol, gamma=self.gamma, max_iter=self.max_iter, verbose=self.verbose)
             self.precision_ = res[0]
             self.history = res[1:]
-        elif self.mode.lower() == 'coordinate_descent':
-            raise ValueError('Not implemented')
+        elif self.mode.lower() == "coordinate_descent":
+            raise ValueError("Not implemented")
             # thetas_pred = []
             # historys = []
             # for ix in range(X.shape[1]):
@@ -252,23 +275,26 @@ class IsingGraphicalModel(GLM_GM, BaseEstimator):
             # self.precision_ = build_adjacency_matrix(thetas_pred,
             #                                          how=self.reconstruction)
             # self.history = historys
-        elif self.mode.lower() == 'logistic_regression':
+        elif self.mode.lower() == "logistic_regression":
             thetas_pred = []
             for ix in range(X.shape[1]):
-                verbose = min(0, self.verbose-1)
+                verbose = min(0, self.verbose - 1)
                 selector = np.array([i for i in range(X.shape[1]) if i != ix])
-                print('pd')
-                res = LogisticRegression(C=1/self.alpha, penalty='l1',
-                                         solver='liblinear',
-                                         verbose=verbose, random_state=0).fit(
-                    X[:, selector], X[:, ix]).coef_
+                print("pd")
+                res = (
+                    LogisticRegression(
+                        C=1 / self.alpha, penalty="l1", solver="liblinear", verbose=verbose, random_state=0
+                    )
+                    .fit(X[:, selector], X[:, ix])
+                    .coef_
+                )
                 thetas_pred.append(res)
-            self.precision_ = build_adjacency_matrix(thetas_pred,
-                                                     how=self.reconstruction)
+            self.precision_ = build_adjacency_matrix(thetas_pred, how=self.reconstruction)
         else:
-            raise ValueError('Unknown optimization mode. Found ' + self.mode +
-                             ". Options are 'coordiante_descent', "
-                             "'symmetric_fbs'")
+            raise ValueError(
+                "Unknown optimization mode. Found " + self.mode + ". Options are 'coordiante_descent', "
+                "'symmetric_fbs'"
+            )
         return self
 
     def score(self, X, y=None):
