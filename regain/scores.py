@@ -39,8 +39,7 @@ def log_likelihood(emp_cov, precision):
 
 def BIC(emp_cov, precision):
     """Bayesian Information Criterion for Gaussian models"""
-    return log_likelihood(
-        emp_cov, precision) - (np.sum(precision != 0) - precision.shape[0])
+    return log_likelihood(emp_cov, precision) - (np.sum(precision != 0) - precision.shape[0])
 
 
 def EBIC(emp_cov, precision, n=100, epsilon=0.5):
@@ -52,8 +51,7 @@ def EBIC(emp_cov, precision, n=100, epsilon=0.5):
 
     likelihood = log_likelihood(emp_cov, precision)
     of_nonzero = np.sum(precision != 0) - precision.shape[0]
-    penalty = np.log(n)/n*of_nonzero + \
-        4 * epsilon * np.log(precision.shape[0])/n * of_nonzero
+    penalty = np.log(n) / n * of_nonzero + 4 * epsilon * np.log(precision.shape[0]) / n * of_nonzero
     return likelihood - penalty
 
 
@@ -66,8 +64,7 @@ def EBIC_m(emp_cov, precision, n=100, epsilon=0.5):
     likelihood = log_likelihood(emp_cov, precision)
     of_nonzero = np.sum(precision != 0) - precision.shape[0]
     p = precision.shape[0]
-    penalty = np.log(n)/n*of_nonzero + \
-        4 * epsilon * np.log(p*(p-1)/2)/n * of_nonzero
+    penalty = np.log(n) / n * of_nonzero + 4 * epsilon * np.log(p * (p - 1) / 2) / n * of_nonzero
     return likelihood - penalty
 
 
@@ -83,8 +80,7 @@ def BIC_t(emp_cov, precision):
     """Bayesian Information Criterion for Gaussian models in time."""
 
     precision = np.array(precision)
-    return log_likelihood_t(emp_cov, precision) - \
-        (np.sum(precision != 0) - precision.shape[1]*precision.shape[0])
+    return log_likelihood_t(emp_cov, precision) - (np.sum(precision != 0) - precision.shape[1] * precision.shape[0])
 
 
 def EBIC_t(emp_cov, precision, n=100, epsilon=0.5):
@@ -96,8 +92,7 @@ def EBIC_t(emp_cov, precision, n=100, epsilon=0.5):
     likelihood = log_likelihood_t(emp_cov, precision)
     n_variables = precision.shape[1] * precision.shape[0]
     of_nonzero = np.sum(precision != 0) - n_variables
-    penalty = np.log(n)/n*of_nonzero + \
-        4 * epsilon * np.log(n_variables)/n * of_nonzero
+    penalty = np.log(n) / n * of_nonzero + 4 * epsilon * np.log(n_variables) / n * of_nonzero
     return likelihood - penalty
 
 
@@ -110,6 +105,5 @@ def EBIC_m_t(emp_cov, precision, n=100, epsilon=0.5):
     likelihood = log_likelihood_t(emp_cov, precision)
     n_variables = precision.shape[1] * precision.shape[0]
     of_nonzero = np.sum(precision != 0) - n_variables
-    penalty = np.log(n)/n*of_nonzero + \
-        4 * epsilon * np.log(n_variables*(n_variables-1)/2)/n * of_nonzero
+    penalty = np.log(n) / n * of_nonzero + 4 * epsilon * np.log(n_variables * (n_variables - 1) / 2) / n * of_nonzero
     return likelihood - penalty

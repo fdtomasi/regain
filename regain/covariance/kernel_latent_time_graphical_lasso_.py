@@ -45,10 +45,8 @@ from sklearn.gaussian_process import kernels
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_is_fitted
 
-from regain.covariance.kernel_time_graphical_lasso_ import (
-    KernelTimeGraphicalLasso, init_precision)
-from regain.covariance.kernel_time_graphical_lasso_ import \
-    objective as obj_ktgl
+from regain.covariance.kernel_time_graphical_lasso_ import KernelTimeGraphicalLasso, init_precision
+from regain.covariance.kernel_time_graphical_lasso_ import objective as obj_ktgl
 from regain.covariance.kernel_time_graphical_lasso_ import precision_similarity
 from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
@@ -56,31 +54,44 @@ from regain.utils import convergence
 from regain.validation import check_norm_prox
 
 
-def objective(
-        S, n_samples, R, Z_0, Z_M, W_0, W_M, alpha, tau, kernel_psi,
-        kernel_phi, psi, phi):
+def objective(S, n_samples, R, Z_0, Z_M, W_0, W_M, alpha, tau, kernel_psi, kernel_phi, psi, phi):
     """Objective function for latent variable time-varying graphical lasso."""
     obj = obj_ktgl(n_samples, S, R, Z_0, Z_M, alpha, kernel_psi, psi)
     if isinstance(tau, np.ndarray):
-        obj += sum(np.linalg.norm(t * w, ord='nuc') for t, w in zip(tau, W_0))
+        obj += sum(np.linalg.norm(t * w, ord="nuc") for t, w in zip(tau, W_0))
     else:
-        obj += tau * sum(map(partial(np.linalg.norm, ord='nuc'), W_0))
+        obj += tau * sum(map(partial(np.linalg.norm, ord="nuc"), W_0))
 
     for m in range(1, W_0.shape[0]):
         # all possible markovians jumps
         W_L, W_R = W_M[m]
-        obj += np.sum(
-            np.array(list(map(phi, W_R - W_L))) * np.diag(kernel_phi, m))
+        obj += np.sum(np.array(list(map(phi, W_R - W_L))) * np.diag(kernel_phi, m))
 
     return obj
 
 
 def kernel_latent_time_graphical_lasso(
-        emp_cov, alpha=0.01, tau=1., rho=1., kernel_psi=None, kernel_phi=None,
-        max_iter=100, verbose=False, psi='laplacian', phi='laplacian',
-        mode='admm', tol=1e-4, rtol=1e-4, assume_centered=False,
-        n_samples=None, return_history=False, return_n_iter=True,
-        update_rho_options=None, compute_objective=True, init="empirical"):
+    emp_cov,
+    alpha=0.01,
+    tau=1.0,
+    rho=1.0,
+    kernel_psi=None,
+    kernel_phi=None,
+    max_iter=100,
+    verbose=False,
+    psi="laplacian",
+    phi="laplacian",
+    mode="admm",
+    tol=1e-4,
+    rtol=1e-4,
+    assume_centered=False,
+    n_samples=None,
+    return_history=False,
+    return_n_iter=True,
+    update_rho_options=None,
+    compute_objective=True,
+    init="empirical",
+):
     r"""Time-varying latent variable graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -170,13 +181,12 @@ def kernel_latent_time_graphical_lasso(
         # update R
         A = Z_0 - W_0 - X_0
         A += A.transpose(0, 2, 1)
-        A /= 2.
+        A /= 2.0
         A *= -rho / n_samples[:, None, None]
         A += emp_cov
         # A = emp_cov / rho - A
 
-        R = np.array(
-            [prox_logdet(a, lamda=ni / rho) for a, ni in zip(A, n_samples)])
+        R = np.array([prox_logdet(a, lamda=ni / rho) for a, ni in zip(A, n_samples)])
 
         # update Z_0
         A = R + W_0 + X_0
@@ -195,10 +205,9 @@ def kernel_latent_time_graphical_lasso(
 
         A /= n_times
         A += A.transpose(0, 2, 1)
-        A /= 2.
+        A /= 2.0
 
-        W_0 = np.array(
-            [prox_trace_indicator(a, lamda=tau / (rho * n_times)) for a in A])
+        W_0 = np.array([prox_trace_indicator(a, lamda=tau / (rho * n_times)) for a in A])
 
         # update residuals
         X_0 += R - Z_0 + W_0
@@ -209,16 +218,18 @@ def kernel_latent_time_graphical_lasso(
             A_L = Z_0[:-m] + Y_L
             A_R = Z_0[m:] + Y_R
             if not psi_node_penalty:
-                prox_e = prox_psi(
-                    A_R - A_L,
-                    lamda=2. * np.diag(kernel_psi, m)[:, None, None] / rho)
-                Z_L = .5 * (A_L + A_R - prox_e)
-                Z_R = .5 * (A_L + A_R + prox_e)
+                prox_e = prox_psi(A_R - A_L, lamda=2.0 * np.diag(kernel_psi, m)[:, None, None] / rho)
+                Z_L = 0.5 * (A_L + A_R - prox_e)
+                Z_R = 0.5 * (A_L + A_R + prox_e)
             else:
                 Z_L, Z_R = prox_psi(
                     np.concatenate((A_L, A_R), axis=1),
-                    lamda=.5 * np.diag(kernel_psi, m)[:, None, None] / rho,
-                    rho=rho, tol=tol, rtol=rtol, max_iter=max_iter)
+                    lamda=0.5 * np.diag(kernel_psi, m)[:, None, None] / rho,
+                    rho=rho,
+                    tol=tol,
+                    rtol=rtol,
+                    max_iter=max_iter,
+                )
             Z_M[m] = (Z_L, Z_R)
 
             # update other residuals
@@ -230,16 +241,18 @@ def kernel_latent_time_graphical_lasso(
             A_L = W_0[:-m] + U_L
             A_R = W_0[m:] + U_R
             if not phi_node_penalty:
-                prox_e = prox_phi(
-                    A_R - A_L,
-                    lamda=2. * np.diag(kernel_phi, m)[:, None, None] / rho)
-                W_L = .5 * (A_L + A_R - prox_e)
-                W_R = .5 * (A_L + A_R + prox_e)
+                prox_e = prox_phi(A_R - A_L, lamda=2.0 * np.diag(kernel_phi, m)[:, None, None] / rho)
+                W_L = 0.5 * (A_L + A_R - prox_e)
+                W_R = 0.5 * (A_L + A_R + prox_e)
             else:
                 W_L, W_R = prox_phi(
                     np.concatenate((A_L, A_R), axis=1),
-                    lamda=.5 * np.diag(kernel_phi, m)[:, None, None] / rho,
-                    rho=rho, tol=tol, rtol=rtol, max_iter=max_iter)
+                    lamda=0.5 * np.diag(kernel_phi, m)[:, None, None] / rho,
+                    rho=rho,
+                    tol=tol,
+                    rtol=rtol,
+                    max_iter=max_iter,
+                )
             W_M[m] = (W_L, W_R)
 
             # update other residuals
@@ -248,44 +261,72 @@ def kernel_latent_time_graphical_lasso(
 
         # diagnostics, reporting, termination checks
         rnorm = np.sqrt(
-            squared_norm(R - Z_0 + W_0) + sum(
-                squared_norm(Z_0[:-m] - Z_M[m][0]) +
-                squared_norm(Z_0[m:] - Z_M[m][1]) +
-                squared_norm(W_0[:-m] - W_M[m][0]) +
-                squared_norm(W_0[m:] - W_M[m][1]) for m in range(1, n_times)))
+            squared_norm(R - Z_0 + W_0)
+            + sum(
+                squared_norm(Z_0[:-m] - Z_M[m][0])
+                + squared_norm(Z_0[m:] - Z_M[m][1])
+                + squared_norm(W_0[:-m] - W_M[m][0])
+                + squared_norm(W_0[m:] - W_M[m][1])
+                for m in range(1, n_times)
+            )
+        )
 
         snorm = rho * np.sqrt(
-            squared_norm(R - R_old) + sum(
-                squared_norm(Z_M[m][0] - Z_M_old[m][0]) +
-                squared_norm(Z_M[m][1] - Z_M_old[m][1]) +
-                squared_norm(W_M[m][0] - W_M_old[m][0]) +
-                squared_norm(W_M[m][1] - W_M_old[m][1])
-                for m in range(1, n_times)))
+            squared_norm(R - R_old)
+            + sum(
+                squared_norm(Z_M[m][0] - Z_M_old[m][0])
+                + squared_norm(Z_M[m][1] - Z_M_old[m][1])
+                + squared_norm(W_M[m][0] - W_M_old[m][0])
+                + squared_norm(W_M[m][1] - W_M_old[m][1])
+                for m in range(1, n_times)
+            )
+        )
 
-        obj = objective(emp_cov, n_samples, R, Z_0, Z_M, W_0, W_M,
-                        alpha, tau, kernel_psi, kernel_phi, psi, phi) \
-            if compute_objective else np.nan
+        obj = (
+            objective(emp_cov, n_samples, R, Z_0, Z_M, W_0, W_M, alpha, tau, kernel_psi, kernel_phi, psi, phi)
+            if compute_objective
+            else np.nan
+        )
 
         check = convergence(
-            obj=obj, rnorm=rnorm, snorm=snorm,
-            e_pri=n_features * np.sqrt(n_times * (2 * n_times - 1)) * tol +
-            rtol * max(
+            obj=obj,
+            rnorm=rnorm,
+            snorm=snorm,
+            e_pri=n_features * np.sqrt(n_times * (2 * n_times - 1)) * tol
+            + rtol
+            * max(
                 np.sqrt(
-                    squared_norm(R) + sum(
-                        squared_norm(Z_M[m][0]) + squared_norm(Z_M[m][1]) +
-                        squared_norm(W_M[m][0]) + squared_norm(W_M[m][1])
-                        for m in range(1, n_times))),
+                    squared_norm(R)
+                    + sum(
+                        squared_norm(Z_M[m][0])
+                        + squared_norm(Z_M[m][1])
+                        + squared_norm(W_M[m][0])
+                        + squared_norm(W_M[m][1])
+                        for m in range(1, n_times)
+                    )
+                ),
                 np.sqrt(
-                    squared_norm(Z_0 - W_0) + sum(
-                        squared_norm(Z_0[:-m]) + squared_norm(Z_0[m:]) +
-                        squared_norm(W_0[:-m]) + squared_norm(W_0[m:])
-                        for m in range(1, n_times)))),
-            e_dual=n_features * np.sqrt(n_times * (2 * n_times - 1)) * tol +
-            rtol * rho * np.sqrt(
-                squared_norm(X_0) + sum(
-                    squared_norm(Y_M[m][0]) + squared_norm(Y_M[m][1]) +
-                    squared_norm(U_M[m][0]) + squared_norm(U_M[m][1])
-                    for m in range(1, n_times))))
+                    squared_norm(Z_0 - W_0)
+                    + sum(
+                        squared_norm(Z_0[:-m]) + squared_norm(Z_0[m:]) + squared_norm(W_0[:-m]) + squared_norm(W_0[m:])
+                        for m in range(1, n_times)
+                    )
+                ),
+            ),
+            e_dual=n_features * np.sqrt(n_times * (2 * n_times - 1)) * tol
+            + rtol
+            * rho
+            * np.sqrt(
+                squared_norm(X_0)
+                + sum(
+                    squared_norm(Y_M[m][0])
+                    + squared_norm(Y_M[m][1])
+                    + squared_norm(U_M[m][0])
+                    + squared_norm(U_M[m][1])
+                    for m in range(1, n_times)
+                )
+            ),
+        )
 
         R_old = R.copy()
         for m in range(1, n_times):
@@ -293,17 +334,13 @@ def kernel_latent_time_graphical_lasso(
             W_M_old[m] = (W_M[m][0].copy(), W_M[m][1].copy())
 
         if verbose:
-            print(
-                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
+            print("obj: %.4f, rnorm: %.4f, snorm: %.4f," "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
 
-        rho_new = update_rho(
-            rho, rnorm, snorm, iteration=iteration_,
-            **(update_rho_options or {}))
+        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {}))
         # scaled dual variables should be also rescaled
         X_0 *= rho / rho_new
         for m in range(1, n_times):
@@ -400,18 +437,40 @@ class KernelLatentTimeGraphicalLasso(KernelTimeGraphicalLasso):
     """
 
     def __init__(
-            self, alpha=0.01, tau=1., kernel_psi=None, kernel_phi=None, rho=1.,
-            tol=1e-4, rtol=1e-4, psi='laplacian', phi='laplacian',
-            max_iter=100, verbose=False, assume_centered=False,
-            return_history=False, update_rho_options=None,
-            compute_objective=True, ker_psi_param=1, ker_phi_param=1,
-            init='empirical'):
+        self,
+        alpha=0.01,
+        tau=1.0,
+        kernel_psi=None,
+        kernel_phi=None,
+        rho=1.0,
+        tol=1e-4,
+        rtol=1e-4,
+        psi="laplacian",
+        phi="laplacian",
+        max_iter=100,
+        verbose=False,
+        assume_centered=False,
+        return_history=False,
+        update_rho_options=None,
+        compute_objective=True,
+        ker_psi_param=1,
+        ker_phi_param=1,
+        init="empirical",
+    ):
         super(KernelLatentTimeGraphicalLasso, self).__init__(
-            alpha=alpha, rho=rho, tol=tol, rtol=rtol, max_iter=max_iter,
-            verbose=verbose, assume_centered=assume_centered,
+            alpha=alpha,
+            rho=rho,
+            tol=tol,
+            rtol=rtol,
+            max_iter=max_iter,
+            verbose=verbose,
+            assume_centered=assume_centered,
             update_rho_options=update_rho_options,
-            compute_objective=compute_objective, return_history=return_history,
-            psi=psi, init=init)
+            compute_objective=compute_objective,
+            return_history=return_history,
+            psi=psi,
+            init=init,
+        )
         self.kernel_psi = kernel_psi
         self.kernel_phi = kernel_phi
         self.tau = tau
@@ -436,48 +495,54 @@ class KernelLatentTimeGraphicalLasso(KernelTimeGraphicalLasso):
         if callable(self.kernel_phi):
             try:
                 # this works if it is a ExpSineSquared or RBF kernel
-                kernel_phi = self.kernel_phi(length_scale=self.ker_phi_param)(
-                    self.classes_[:, None])
+                kernel_phi = self.kernel_phi(length_scale=self.ker_phi_param)(self.classes_[:, None])
             except TypeError:
                 # maybe it's a ConstantKernel
-                kernel_phi = self.kernel_phi(
-                    constant_value=self.ker_phi_param)(self.classes_[:, None])
+                kernel_phi = self.kernel_phi(constant_value=self.ker_phi_param)(self.classes_[:, None])
 
         else:
             kernel_phi = self.kernel_phi
             if kernel_phi.shape[0] != self.classes_.size:
                 raise ValueError(
                     "kernel_phi size does not match classes of samples, "
-                    "got {} classes and kernel_phi has shape {}".format(
-                        self.classes_.size, kernel_phi.shape[0]))
+                    "got {} classes and kernel_phi has shape {}".format(self.classes_.size, kernel_phi.shape[0])
+                )
         if callable(self.kernel_psi):
             try:
                 # this works if it is a ExpSineSquared kernel
-                kernel_psi = self.kernel_psi(length_scale=self.ker_psi_param)(
-                    self.classes_[:, None])
+                kernel_psi = self.kernel_psi(length_scale=self.ker_psi_param)(self.classes_[:, None])
             except TypeError:
                 # maybe it's a ConstantKernel
-                kernel_psi = self.kernel_psi(
-                    constant_value=self.ker_psi_param)(self.classes_[:, None])
+                kernel_psi = self.kernel_psi(constant_value=self.ker_psi_param)(self.classes_[:, None])
         else:
             kernel_psi = self.kernel_psi
             if kernel_psi.shape[0] != self.classes_.size:
                 raise ValueError(
                     "kernel_psi size does not match classes of samples, "
-                    "got {} classes and kernel_psi has shape {}".format(
-                        self.classes_.size, kernel_psi.shape[0]))
+                    "got {} classes and kernel_psi has shape {}".format(self.classes_.size, kernel_psi.shape[0])
+                )
 
         out = kernel_latent_time_graphical_lasso(
-            emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
-            kernel_phi=kernel_phi, kernel_psi=kernel_psi, n_samples=n_samples,
-            tol=self.tol, rtol=self.rtol, psi=self.psi, max_iter=self.max_iter,
-            verbose=self.verbose, return_n_iter=True,
+            emp_cov,
+            alpha=self.alpha,
+            tau=self.tau,
+            rho=self.rho,
+            kernel_phi=kernel_phi,
+            kernel_psi=kernel_psi,
+            n_samples=n_samples,
+            tol=self.tol,
+            rtol=self.rtol,
+            psi=self.psi,
+            max_iter=self.max_iter,
+            verbose=self.verbose,
+            return_n_iter=True,
             return_history=self.return_history,
             update_rho_options=self.update_rho_options,
-            compute_objective=self.compute_objective, init=self.init)
+            compute_objective=self.compute_objective,
+            init=self.init,
+        )
         if self.return_history:
-            self.precision_, self.latent_, self.covariance_, self.history_, \
-                self.n_iter_ = out
+            self.precision_, self.latent_, self.covariance_, self.history_, self.n_iter_ = out
         else:
             self.precision_, self.latent_, self.covariance_, self.n_iter_ = out
 
@@ -557,22 +622,51 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
     """
 
     def __init__(
-            self, alpha=0.01, beta=1., tau=1., eta=1., kernel_psi=None,
-            kernel_phi=None, rho=1., tol=1e-4, rtol=1e-4, psi='laplacian',
-            phi='laplacian', max_iter=100, verbose=False,
-            assume_centered=False, return_history=False,
-            update_rho_options=None, compute_objective=True, ker_psi_param=1,
-            ker_phi_param=1, max_iter_ext=100, init='empirical', eps=1e-6,
-            n_clusters=None):
+        self,
+        alpha=0.01,
+        beta=1.0,
+        tau=1.0,
+        eta=1.0,
+        kernel_psi=None,
+        kernel_phi=None,
+        rho=1.0,
+        tol=1e-4,
+        rtol=1e-4,
+        psi="laplacian",
+        phi="laplacian",
+        max_iter=100,
+        verbose=False,
+        assume_centered=False,
+        return_history=False,
+        update_rho_options=None,
+        compute_objective=True,
+        ker_psi_param=1,
+        ker_phi_param=1,
+        max_iter_ext=100,
+        init="empirical",
+        eps=1e-6,
+        n_clusters=None,
+    ):
         super(SimilarityLatentTimeGraphicalLasso, self).__init__(
-            alpha=alpha, tau=tau, phi=phi, psi=psi, rho=rho, tol=tol,
-            rtol=rtol, max_iter=max_iter, verbose=verbose,
+            alpha=alpha,
+            tau=tau,
+            phi=phi,
+            psi=psi,
+            rho=rho,
+            tol=tol,
+            rtol=rtol,
+            max_iter=max_iter,
+            verbose=verbose,
             assume_centered=assume_centered,
             update_rho_options=update_rho_options,
-            compute_objective=compute_objective, return_history=return_history,
-            kernel_psi=kernel_psi, kernel_phi=kernel_phi,
-            ker_psi_param=ker_psi_param, ker_phi_param=ker_phi_param,
-            init=init)
+            compute_objective=compute_objective,
+            return_history=return_history,
+            kernel_psi=kernel_psi,
+            kernel_phi=kernel_phi,
+            ker_psi_param=ker_psi_param,
+            ker_phi_param=ker_phi_param,
+            init=init,
+        )
         self.beta = beta
         self.eta = eta
         self.max_iter_ext = max_iter_ext
@@ -615,8 +709,7 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
 
             for i in range(self.max_iter_ext):
                 # E step - discover best kernel
-                theta = precision_similarity(
-                    self.get_precision(), psi)
+                theta = precision_similarity(self.get_precision(), psi)
 
                 # if i > 0 and np.linalg.norm(theta_old -
                 #                             theta) / theta.size < self.eps:
@@ -625,34 +718,39 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
                 # kernel_psi = theta * self.beta
                 kernel_psi = theta
                 labels_pred = AgglomerativeClustering(
-                    n_clusters=self.n_clusters, affinity='precomputed',
-                    linkage='complete').fit_predict(kernel_psi)
-                if i > 0 and np.linalg.norm(labels_pred - labels_pred_old
-                                            ) / labels_pred.size < self.eps:
+                    n_clusters=self.n_clusters, affinity="precomputed", linkage="complete"
+                ).fit_predict(kernel_psi)
+                if i > 0 and np.linalg.norm(labels_pred - labels_pred_old) / labels_pred.size < self.eps:
                     break
-                kernel_psi = kernels.RBF(0.0001)(
-                    labels_pred[:, None]) + kernels.RBF(self.beta)(
-                        np.arange(n_times)[:, None])
+                kernel_psi = kernels.RBF(0.0001)(labels_pred[:, None]) + kernels.RBF(self.beta)(
+                    np.arange(n_times)[:, None]
+                )
 
                 # M step - fix the kernel matrix
                 out = kernel_latent_time_graphical_lasso(
-                    emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
-                    kernel_phi=self.kernel_phi, kernel_psi=kernel_psi,
-                    n_samples=n_samples, tol=self.tol, rtol=self.rtol,
-                    psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
-                    return_n_iter=True, return_history=self.return_history,
+                    emp_cov,
+                    alpha=self.alpha,
+                    tau=self.tau,
+                    rho=self.rho,
+                    kernel_phi=self.kernel_phi,
+                    kernel_psi=kernel_psi,
+                    n_samples=n_samples,
+                    tol=self.tol,
+                    rtol=self.rtol,
+                    psi=self.psi,
+                    max_iter=self.max_iter,
+                    verbose=self.verbose,
+                    return_n_iter=True,
+                    return_history=self.return_history,
                     update_rho_options=self.update_rho_options,
                     compute_objective=self.compute_objective,
-                    init=self.precision_)
+                    init=self.precision_,
+                )
 
                 if self.return_history:
-                    (
-                        self.precision_, self.latent_, self.covariance_,
-                        self.history_, self.n_iter_) = out
+                    (self.precision_, self.latent_, self.covariance_, self.history_, self.n_iter_) = out
                 else:
-                    (
-                        self.precision_, self.latent_, self.covariance_,
-                        self.n_iter_) = out
+                    (self.precision_, self.latent_, self.covariance_, self.n_iter_) = out
                 theta_old = theta
                 labels_pred_old = labels_pred
             else:
@@ -662,62 +760,61 @@ class SimilarityLatentTimeGraphicalLasso(KernelLatentTimeGraphicalLasso):
             if callable(self.kernel_phi):
                 try:
                     # this works if it is a ExpSineSquared or RBF kernel
-                    kernel_phi = self.kernel_phi(
-                        length_scale=self.ker_phi_param)(
-                            self.classes_[:, None])
+                    kernel_phi = self.kernel_phi(length_scale=self.ker_phi_param)(self.classes_[:, None])
                 except TypeError:
                     # maybe it's a ConstantKernel
-                    kernel_phi = self.kernel_phi(
-                        constant_value=self.ker_phi_param)(
-                            self.classes_[:, None])
+                    kernel_phi = self.kernel_phi(constant_value=self.ker_phi_param)(self.classes_[:, None])
 
             else:
                 kernel_phi = self.kernel_phi
                 if kernel_phi.shape[0] != self.classes_.size:
                     raise ValueError(
                         "kernel_phi size does not match classes of samples, "
-                        "got {} classes and kernel_phi has shape {}".format(
-                            self.classes_.size, kernel_phi.shape[0]))
+                        "got {} classes and kernel_phi has shape {}".format(self.classes_.size, kernel_phi.shape[0])
+                    )
             if callable(self.kernel_psi):
                 try:
                     # this works if it is a ExpSineSquared kernel
-                    kernel_psi = self.kernel_psi(
-                        length_scale=self.ker_psi_param)(
-                            self.classes_[:, None])
+                    kernel_psi = self.kernel_psi(length_scale=self.ker_psi_param)(self.classes_[:, None])
                 except TypeError:
                     # maybe it's a ConstantKernel
-                    kernel_psi = self.kernel_psi(
-                        constant_value=self.ker_psi_param)(
-                            self.classes_[:, None])
+                    kernel_psi = self.kernel_psi(constant_value=self.ker_psi_param)(self.classes_[:, None])
             else:
                 kernel_psi = self.kernel_psi
                 if kernel_psi.shape[0] != self.classes_.size:
                     raise ValueError(
                         "kernel_psi size does not match classes of samples, "
-                        "got {} classes and kernel_psi has shape {}".format(
-                            self.classes_.size, kernel_psi.shape[0]))
+                        "got {} classes and kernel_psi has shape {}".format(self.classes_.size, kernel_psi.shape[0])
+                    )
 
             out = kernel_latent_time_graphical_lasso(
-                emp_cov, alpha=self.alpha, tau=self.tau, rho=self.rho,
-                kernel_phi=kernel_phi, kernel_psi=kernel_psi,
-                n_samples=n_samples, tol=self.tol, rtol=self.rtol,
-                psi=self.psi, max_iter=self.max_iter, verbose=self.verbose,
-                return_n_iter=True, return_history=self.return_history,
+                emp_cov,
+                alpha=self.alpha,
+                tau=self.tau,
+                rho=self.rho,
+                kernel_phi=kernel_phi,
+                kernel_psi=kernel_psi,
+                n_samples=n_samples,
+                tol=self.tol,
+                rtol=self.rtol,
+                psi=self.psi,
+                max_iter=self.max_iter,
+                verbose=self.verbose,
+                return_n_iter=True,
+                return_history=self.return_history,
                 update_rho_options=self.update_rho_options,
-                compute_objective=self.compute_objective, init=self.init)
+                compute_objective=self.compute_objective,
+                init=self.init,
+            )
             if self.return_history:
-                (
-                    self.precision_, self.latent_, self.covariance_,
-                    self.history_, self.n_iter_) = out
+                (self.precision_, self.latent_, self.covariance_, self.history_, self.n_iter_) = out
             else:
-                (
-                    self.precision_, self.latent_, self.covariance_,
-                    self.n_iter_) = out
+                (self.precision_, self.latent_, self.covariance_, self.n_iter_) = out
 
         return self
 
     def transform(self, X, y=None):
         """Possibility to add in a Pipeline."""
-        check_is_fitted(self, ['similarity_matrix_'])
+        check_is_fitted(self, ["similarity_matrix_"])
 
         return self.similarity_matrix_

@@ -52,13 +52,16 @@ def l1_od_norm(precision):
 def node_penalty(X):
     """Node penalty. See Hallac for details."""
     cons = (
-        {'type': 'eq',
-         'fun': lambda x: np.array((x.reshape(X.shape) + x.reshape(X.shape).T - X).sum()), 'jac': lambda x: np.full(X.size, 2)},
+        {
+            "type": "eq",
+            "fun": lambda x: np.array((x.reshape(X.shape) + x.reshape(X.shape).T - X).sum()),
+            "jac": lambda x: np.full(X.size, 2),
+        },
     )
     try:
         res = minimize(
-            lambda x: np.sum(np.linalg.norm(x.reshape(X.shape), axis=0)),
-            np.random.randn(X.size), constraints=cons).fun
+            lambda x: np.sum(np.linalg.norm(x.reshape(X.shape), axis=0)), np.random.randn(X.size), constraints=cons
+        ).fun
     except ValueError:
         res = np.nan
 

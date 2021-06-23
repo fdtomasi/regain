@@ -44,19 +44,18 @@ def loss_single_variable(X, theta, n, r, selector):
         XXT = X[i, r] * X[i, selector].dot(theta)
         expXT = np.exp(X[i, selector].dot(theta))
         objective += expXT - XXT
-    return (1/n)*objective
+    return (1 / n) * objective
 
 
 def objective(X, theta, alpha):
     n, d = X.shape
     objective = 0
     if not np.all(theta == theta.T):
-        return np.float('inf')
+        return np.float("inf")
     for r in range(d):
         selector = [i for i in range(d) if i != r]
-        objective += objective_single_variable(X, theta[r, selector], n, r,
-                                               selector, 0)
-    return objective + alpha*l1_od_norm(theta)
+        objective += objective_single_variable(X, theta[r, selector], n, r, selector, 0)
+    return objective + alpha * l1_od_norm(theta)
 
 
 def objective_single_variable(X, theta, n, r, selector, alpha):
@@ -65,16 +64,28 @@ def objective_single_variable(X, theta, n, r, selector, alpha):
         XXT = X[i, r] * X[i, selector].dot(theta)
         expXT = np.exp(X[i, selector].dot(theta))
         objective += expXT - XXT
-    return (1/n) * objective + alpha*np.linalg.norm(theta, 1)
+    return (1 / n) * objective + alpha * np.linalg.norm(theta, 1)
 
 
-def fit_each_variable(X, ix, alpha=1e-2, gamma=1, tol=1e-3,
-                      max_iter=100, verbose=0, update_gamma=0.5,
-                      return_history=True, compute_objective=True,
-                      return_n_iter=False, adjust_gamma=False, A=None,
-                      T=0, rho=1):
+def fit_each_variable(
+    X,
+    ix,
+    alpha=1e-2,
+    gamma=1,
+    tol=1e-3,
+    max_iter=100,
+    verbose=0,
+    update_gamma=0.5,
+    return_history=True,
+    compute_objective=True,
+    return_n_iter=False,
+    adjust_gamma=False,
+    A=None,
+    T=0,
+    rho=1,
+):
     n, d = X.shape
-    theta = np.zeros(d-1)
+    theta = np.zeros(d - 1)
     selector = [i for i in range(d) if i != ix]
 
     def gradient(X, theta, r, selector, n, A, T, rho):
@@ -82,8 +93,8 @@ def fit_each_variable(X, ix, alpha=1e-2, gamma=1, tol=1e-3,
         EXK = X[:, selector].T.dot(np.exp(X[:, selector].dot(theta)))
         to_add = 0
         if A is not None:
-            to_add = (rho*T)*(theta - A[r, selector])/n
-        return -(1/n)*(XTX - EXK) + to_add
+            to_add = (rho * T) * (theta - A[r, selector]) / n
+        return -(1 / n) * (XTX - EXK) + to_add
 
     thetas = [theta]
     checks = []
@@ -91,38 +102,38 @@ def fit_each_variable(X, ix, alpha=1e-2, gamma=1, tol=1e-3,
         theta_old = thetas[-1]
         grad = gradient(X, theta, ix, selector, n, A, T, rho)
         while True:
-            theta_new = theta - gamma*grad
-            theta = soft_thresholding(theta_new, alpha*gamma)
+            theta_new = theta - gamma * grad
+            theta = soft_thresholding(theta_new, alpha * gamma)
             loss_new = loss_single_variable(X, theta, n, ix, selector)
-            loss_old = loss_single_variable(X, theta_old, n,  ix, selector)
+            loss_old = loss_single_variable(X, theta_old, n, ix, selector)
             # Line search
-            diff_theta2 = np.linalg.norm(theta_old - theta)**2
+            diff_theta2 = np.linalg.norm(theta_old - theta) ** 2
             grad_diff = grad.dot(theta_old - theta)
-            diff = loss_old - grad_diff + (diff_theta2/(2*gamma))
+            diff = loss_old - grad_diff + (diff_theta2 / (2 * gamma))
 
             if loss_new > diff or np.isinf(loss_new) or np.isnan(loss_new):
                 gamma = update_gamma * gamma
                 theta = theta_old - gamma * grad
-                theta = soft_thresholding(theta, alpha*gamma)
+                theta = soft_thresholding(theta, alpha * gamma)
                 loss_new = loss_single_variable(X, theta, n, ix, selector)
-                diff = loss_old - grad_diff + (diff_theta2/(2*gamma))
+                diff = loss_old - grad_diff + (diff_theta2 / (2 * gamma))
             else:
                 break
         thetas.append(theta)
         if iter_ > 0:
-            check = convergence(iter=iter_,
-                                obj=objective_single_variable(X, theta, n, ix,
-                                                              selector, alpha),
-                                iter_norm=np.linalg.norm(thetas[-2]-thetas[-1]),
-                                iter_r_norm=(np.linalg.norm(thetas[-2] -
-                                                            thetas[-1]) /
-                                             np.linalg.norm(thetas[-2])))
+            check = convergence(
+                iter=iter_,
+                obj=objective_single_variable(X, theta, n, ix, selector, alpha),
+                iter_norm=np.linalg.norm(thetas[-2] - thetas[-1]),
+                iter_r_norm=(np.linalg.norm(thetas[-2] - thetas[-1]) / np.linalg.norm(thetas[-2])),
+            )
             checks.append(check)
             # if adjust_gamma: # TODO multiply or divide
             if verbose:
-                print('Iter: %d, objective: %.4f, iter_norm %.4f,'
-                      ' iter_norm_normalized: %.4f' %
-                      (check[0], check[1], check[2], check[3]))
+                print(
+                    "Iter: %d, objective: %.4f, iter_norm %.4f,"
+                    " iter_norm_normalized: %.4f" % (check[0], check[1], check[2], check[3])
+                )
 
             if np.abs(check[2]) < tol:
                 break
@@ -200,14 +211,25 @@ class PoissonGraphicalModel(GLM_GM, BaseEstimator):
         Number of iterations run.
 
     """
-    def __init__(self, alpha=0.01, tol=1e-4, rtol=1e-4, reconstruction='union',
-                 mode='coordinate_descent', max_iter=100, gamma=0.1,
-                 intercept=False,
-                 verbose=False, return_history=True, return_n_iter=False,
-                 compute_objective=True):
+
+    def __init__(
+        self,
+        alpha=0.01,
+        tol=1e-4,
+        rtol=1e-4,
+        reconstruction="union",
+        mode="coordinate_descent",
+        max_iter=100,
+        gamma=0.1,
+        intercept=False,
+        verbose=False,
+        return_history=True,
+        return_n_iter=False,
+        compute_objective=True,
+    ):
         super(PoissonGraphicalModel, self).__init__(
-            alpha, tol, rtol, max_iter, verbose, return_history, return_n_iter,
-            compute_objective)
+            alpha, tol, rtol, max_iter, verbose, return_history, return_n_iter, compute_objective
+        )
         self.reconstruction = reconstruction
         self.mode = mode
         self.gamma = gamma
@@ -225,28 +247,27 @@ class PoissonGraphicalModel(GLM_GM, BaseEstimator):
             Step size of the proximal gradient descent.
         """
         X = check_array(X)
-        if self.mode.lower() == 'symmetric_fbs':
-            raise ValueError('Not implemented.')
+        if self.mode.lower() == "symmetric_fbs":
+            raise ValueError("Not implemented.")
 
-        elif self.mode.lower() == 'coordinate_descent':
-            print('sono qui')
+        elif self.mode.lower() == "coordinate_descent":
+            print("sono qui")
             thetas_pred = []
             historys = []
             if self.intercept:
                 X = np.hstack((X, np.ones((X.shape[0], 1))))
             for ix in range(X.shape[1]):
-                verbose = max(0, self.verbose-1)
-                res = fit_each_variable(X, ix, self.alpha, tol=self.tol,
-                                        verbose=verbose)
+                verbose = max(0, self.verbose - 1)
+                res = fit_each_variable(X, ix, self.alpha, tol=self.tol, verbose=verbose)
                 thetas_pred.append(res[0])
                 historys.append(res[1:])
-            self.precision_ = build_adjacency_matrix(thetas_pred,
-                                                     how=self.reconstruction)
+            self.precision_ = build_adjacency_matrix(thetas_pred, how=self.reconstruction)
             self.history = historys
         else:
-            raise ValueError('Unknown optimization mode. Found ' + self.mode +
-                             ". Options are 'coordiante_descent', "
-                             "'symmetric_fbs'")
+            raise ValueError(
+                "Unknown optimization mode. Found " + self.mode + ". Options are 'coordiante_descent', "
+                "'symmetric_fbs'"
+            )
         return self
 
     def score(self, X, y=None):

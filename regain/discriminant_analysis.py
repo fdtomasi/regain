@@ -84,6 +84,7 @@ class DiscriminantAnalysis(QuadraticDiscriminantAnalysis):
         of the Gaussian distributions along its principal axes, i.e. the
         variance in the rotated coordinate system.
     """
+
     def __init__(self, estimator, ensure_posdef=False, priors=None):
         self.estimator = estimator
         self.priors = np.asarray(priors) if priors is not None else None
@@ -109,9 +110,7 @@ class DiscriminantAnalysis(QuadraticDiscriminantAnalysis):
         n_samples, n_features = X.shape
         n_classes = len(self.classes_)
         if n_classes < 2:
-            raise ValueError(
-                'The number of classes has to be greater than'
-                ' one; got %d class' % (n_classes))
+            raise ValueError("The number of classes has to be greater than" " one; got %d class" % (n_classes))
         if self.priors is None:
             self.priors_ = np.bincount(y) / float(n_samples)
         else:
@@ -123,8 +122,8 @@ class DiscriminantAnalysis(QuadraticDiscriminantAnalysis):
             # means.append(meang)
             if len(Xg) == 1:
                 raise ValueError(
-                    'y has only 1 sample in class %s, covariance '
-                    'is ill defined.' % str(self.classes_[ind]))
+                    "y has only 1 sample in class %s, covariance " "is ill defined." % str(self.classes_[ind])
+                )
             # data.append(Xg)
 
         self.estimator.fit(X, y)
@@ -133,21 +132,18 @@ class DiscriminantAnalysis(QuadraticDiscriminantAnalysis):
         if hasattr(self.estimator, "covariance_"):
             self.covariance_ = self.estimator.covariance_
         elif not self.ensure_posdef:
-            self.covariance_ = np.array(
-                [linalg.pinvh(p) for p in self.precision_])
+            self.covariance_ = np.array([linalg.pinvh(p) for p in self.precision_])
 
         if self.ensure_posdef:
             # replace diagonal
             ensure_posdef(self.precision_, inplace=True)
-            self.covariance_ = np.array(
-                [linalg.pinvh(p) for p in self.precision_])
+            self.covariance_ = np.array([linalg.pinvh(p) for p in self.precision_])
         self.means_ = self.estimator.location_
         return self
 
-    @deprecated(
-        "it will be removed in v0.2.0. Use `_decision_function` instead")
+    @deprecated("it will be removed in v0.2.0. Use `_decision_function` instead")
     def _decision_function2(self, X):
-        check_is_fitted(self, 'classes_')
+        check_is_fitted(self, "classes_")
 
         X = check_array(X)
         precisions = self.get_observed_precision()
@@ -159,7 +155,7 @@ class DiscriminantAnalysis(QuadraticDiscriminantAnalysis):
             norm2.append(np.diag(X2))
         norm2 = np.array(norm2).T  # shape = [len(X), n_classes]
         u = np.asarray([-fast_logdet(s) for s in precisions])
-        return (-0.5 * (norm2 + u) + np.log(self.priors_))
+        return -0.5 * (norm2 + u) + np.log(self.priors_)
 
     def _decision_function(self, X):
         rotations, scalings = [], []
@@ -196,6 +192,7 @@ class DiscriminantAnalysis(QuadraticDiscriminantAnalysis):
 
         """
         from sklearn.metrics import accuracy_score
+
         return accuracy_score(y, self.predict(X), sample_weight=sample_weight)
 
 

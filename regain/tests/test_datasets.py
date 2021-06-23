@@ -42,10 +42,10 @@ def test_quickstart():
 
 def test_make_dataset_gaussian():
     """Test default make_dataset with Gaussian distribution."""
-    data = datasets.make_dataset(update_ell='l1', update_theta='l1')
-    data = datasets.make_dataset(update_ell='l2', update_theta='l1')
-    data = datasets.make_dataset(update_ell='l1', update_theta='l2')
-    data = datasets.make_dataset(update_ell='l2', update_theta='l2')
+    data = datasets.make_dataset(update_ell="l1", update_theta="l1")
+    data = datasets.make_dataset(update_ell="l2", update_theta="l1")
+    data = datasets.make_dataset(update_ell="l1", update_theta="l2")
+    data = datasets.make_dataset(update_ell="l2", update_theta="l2")
     data.X, data.y, data.thetas
 
 
@@ -62,43 +62,43 @@ def test_make_dataset_gaussian():
 
 def test_make_dataset_gaussian_sin():
     """Test Gaussian make_dataset (sin)."""
-    data = datasets.make_dataset(mode='sin')
+    data = datasets.make_dataset(mode="sin")
     data.X, data.y, data.thetas
 
 
 def test_make_dataset_gaussian_fixed_sparsity():
     """Test Gaussian make_dataset (fixed_sparsity)."""
-    data = datasets.make_dataset(mode='fixed_sparsity')
+    data = datasets.make_dataset(mode="fixed_sparsity")
     data.X, data.y, data.thetas
 
 
 def test_make_dataset_gaussian_sincos():
     """Test Gaussian make_dataset (sincos)."""
-    data = datasets.make_dataset(mode='sincos')
+    data = datasets.make_dataset(mode="sincos")
     data.X, data.y, data.thetas
 
 
 def test_make_dataset_gaussian_gp():
     """Test Gaussian make_dataset (gp)."""
-    data = datasets.make_dataset(mode='gp')
+    data = datasets.make_dataset(mode="gp")
     data.X, data.y, data.thetas
 
 
 def test_make_dataset_gaussian_fede():
     """Test Gaussian make_dataset (fede)."""
-    data = datasets.make_dataset(mode='fede')
+    data = datasets.make_dataset(mode="fede")
     data.X, data.y, data.thetas
 
 
 def test_make_dataset_gaussian_sklearn():
     """Test Gaussian make_dataset (sklearn)."""
-    data = datasets.make_dataset(mode='sklearn')
+    data = datasets.make_dataset(mode="sklearn")
     data.X, data.y, data.thetas
 
 
 def test_make_dataset_gaussian_ma():
     """Test Gaussian make_dataset (ma)."""
-    data = datasets.make_dataset(mode='ma')
+    data = datasets.make_dataset(mode="ma")
     data.X, data.y, data.thetas
 
 
@@ -115,14 +115,13 @@ def test_make_dataset_gaussian_ma():
 
 def test_make_dataset_ising():
     """Test default make_dataset with Ising distribution."""
-    data = datasets.make_dataset(
-        distribution='ising', n_samples=10, n_dim_obs=3, n_dim_lat=1, T=1)
+    data = datasets.make_dataset(distribution="ising", n_samples=10, n_dim_obs=3, n_dim_lat=1, T=1)
     data.X, data.y, data.thetas
 
 
 def test_make_dataset_poisson():
     """Test default make_dataset with Poisson distribution."""
     data = datasets.make_dataset(
-        distribution='poisson', update_theta='l1', n_samples=10, n_dim_obs=3,
-        n_dim_lat=1, T=1)
+        distribution="poisson", update_theta="l1", n_samples=10, n_dim_obs=3, n_dim_lat=1, T=1
+    )
     data.X, data.y, data.thetas

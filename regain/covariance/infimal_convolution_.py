@@ -47,14 +47,24 @@ def objective(S, R, K, L, alpha, tau):
     """Objective function for latent graphical lasso."""
     obj = 0.5 * squared_norm(S - R)
     obj += alpha * l1_od_norm(K)
-    obj += tau * np.linalg.norm(L, ord='nuc')
+    obj += tau * np.linalg.norm(L, ord="nuc")
     return obj
 
 
 def infimal_convolution(
-        S, alpha=1., tau=1., rho=1., max_iter=100,
-        verbose=False, tol=1e-4, rtol=1e-2, return_history=False,
-        return_n_iter=True, update_rho_options=None, compute_objective=True):
+    S,
+    alpha=1.0,
+    tau=1.0,
+    rho=1.0,
+    max_iter=100,
+    verbose=False,
+    tol=1e-4,
+    rtol=1e-2,
+    return_history=False,
+    return_n_iter=True,
+    update_rho_options=None,
+    compute_objective=True,
+):
     r"""Latent variable graphical lasso solver.
 
     Solves the following problem via ADMM:
@@ -108,44 +118,42 @@ def infimal_convolution(
         # update R
         A = K - L - U
         A += A.T
-        A /= 2.
-        R = prox_laplacian(S + rho * A, lamda=rho / 2.)
+        A /= 2.0
+        R = prox_laplacian(S + rho * A, lamda=rho / 2.0)
 
         A = L + R + U
         K = soft_thresholding(A, lamda=alpha / rho)
 
         A = K - R - U
         A += A.T
-        A /= 2.
+        A /= 2.0
         L = prox_trace_indicator(A, lamda=tau / rho)
 
         # update residuals
         U += R - K + L
 
         # diagnostics, reporting, termination checks
-        obj = objective(S, R, K, L, alpha, tau) \
-            if compute_objective else np.nan
+        obj = objective(S, R, K, L, alpha, tau) if compute_objective else np.nan
         rnorm = np.linalg.norm(R - K + L)
         snorm = rho * np.linalg.norm(R - R_old)
         check = convergence(
-            obj=obj, rnorm=rnorm, snorm=snorm,
-            e_pri=np.sqrt(R.size) * tol + rtol * max(
-                np.linalg.norm(R), np.linalg.norm(K - L)),
-            e_dual=np.sqrt(R.size) * tol + rtol * rho * np.linalg.norm(U)
+            obj=obj,
+            rnorm=rnorm,
+            snorm=snorm,
+            e_pri=np.sqrt(R.size) * tol + rtol * max(np.linalg.norm(R), np.linalg.norm(K - L)),
+            e_dual=np.sqrt(R.size) * tol + rtol * rho * np.linalg.norm(U),
         )
         R_old = R.copy()
 
         if verbose:
-            print("obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                  "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
+            print("obj: %.4f, rnorm: %.4f, snorm: %.4f," "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
         if check.obj == np.inf:
             break
-        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_,
-                             **(update_rho_options or {}))
+        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {}))
         # scaled dual variables should be also rescaled
         U *= rho / rho_new
         rho = rho_new

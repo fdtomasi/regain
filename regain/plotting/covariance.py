@@ -84,6 +84,7 @@ def plot_cov_ellipse(pos, cov, nstd=2, ax=None, **kwargs):
     -------
     A matplotlib ellipse artist
     """
+
     def eigsorted(cov):
         vals, vecs = np.linalg.eigh(cov)
         order = vals.argsort()[::-1]

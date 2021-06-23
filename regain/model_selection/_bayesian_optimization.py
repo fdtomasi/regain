@@ -51,7 +51,9 @@ try:
     from GPyOpt.optimization.acquisition_optimizer import AcquisitionOptimizer
 except ImportError:
     raise ImportError(
-        "Module GPyOpt is missing. Cannot use bayesian optimization")
+        "Module GPyOpt is missing. Cannot use bayesian optimization"
+    )
+
 
 @deprecated()
 class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
@@ -62,15 +64,35 @@ class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
     """
 
     def __init__(
-            self, estimator, domain=None, constraints=None,
-            cost_withGradients=None, model_type='GP', X=None, Y=None,
-            initial_design_numdata=5, initial_design_type='random',
-            acquisition_type='EI', normalize_Y=True, exact_feval=False,
-            acquisition_optimizer_type='lbfgs', model_update_interval=1,
-            evaluator_type='sequential', batch_size=1, num_cores=1,
-            verbosity_model=False, verbosity=False, de_duplication=False,
-            max_iter=50, refit=True, cv=None, scoring=None, n_jobs=1,
-            verbose=False, **kwargs):
+        self,
+        estimator,
+        domain=None,
+        constraints=None,
+        cost_withGradients=None,
+        model_type="GP",
+        X=None,
+        Y=None,
+        initial_design_numdata=5,
+        initial_design_type="random",
+        acquisition_type="EI",
+        normalize_Y=True,
+        exact_feval=False,
+        acquisition_optimizer_type="lbfgs",
+        model_update_interval=1,
+        evaluator_type="sequential",
+        batch_size=1,
+        num_cores=1,
+        verbosity_model=False,
+        verbosity=False,
+        de_duplication=False,
+        max_iter=50,
+        refit=True,
+        cv=None,
+        scoring=None,
+        n_jobs=1,
+        verbose=False,
+        **kwargs
+    ):
         """Initialise the estimator."""
         # super(BayesianOptimization, self).__init__(
         #     f=f, domain=domain, constraints=constraints,
@@ -102,7 +124,7 @@ class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
         self.space = Design_space(self.domain, self.constraints)
 
         # --- CHOOSE objective function
-        self.objective_name = kwargs.get('objective_name', '') or 'no_name'
+        self.objective_name = kwargs.get("objective_name", "") or "no_name"
         self.batch_size = batch_size
         self.num_cores = num_cores
         # self.maximize = True
@@ -123,12 +145,13 @@ class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
         self.exact_feval = exact_feval
         self.normalize_Y = normalize_Y
 
-        if 'model' in self.kwargs and isinstance(kwargs['model'],
-                                                 GPyOpt.models.base.BOModel):
-            self.model = kwargs['model']
-            self.model_type = 'User defined model used.'
+        if "model" in self.kwargs and isinstance(
+            kwargs["model"], GPyOpt.models.base.BOModel
+        ):
+            self.model = kwargs["model"]
+            self.model_type = "User defined model used."
             if self.verbose:
-                print('Using a model defined by the used.')
+                print("Using a model defined by the used.")
         else:
             self.model = self._model_chooser()
 
@@ -136,16 +159,18 @@ class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
         # This states how the discrete variables are handled (exact search or rounding)
         self.acquisition_optimizer_type = acquisition_optimizer_type
         self.acquisition_optimizer = AcquisitionOptimizer(
-            self.space, self.acquisition_optimizer_type, model=self.model)
+            self.space, self.acquisition_optimizer_type, model=self.model
+        )
 
         # --- CHOOSE acquisition function. If an instance of an acquisition is passed (possibly user defined), it is used.
         self.acquisition_type = acquisition_type
-        if 'acquisition' in self.kwargs and isinstance(
-                kwargs['acquisition'], GPyOpt.acquisitions.AcquisitionBase):
-            self.acquisition = kwargs['acquisition']
-            self.acquisition_type = 'User defined acquisition used.'
+        if "acquisition" in self.kwargs and isinstance(
+            kwargs["acquisition"], GPyOpt.acquisitions.AcquisitionBase
+        ):
+            self.acquisition = kwargs["acquisition"]
+            self.acquisition_type = "User defined acquisition used."
             if self.verbose:
-                print('Using an acquisition defined by the used.')
+                print("Using an acquisition defined by the used.")
         else:
             self.acquisition = self._acquisition_chooser()
 
@@ -155,7 +180,7 @@ class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
 
         # --- Create optimization space
         self.cost = CostModel(self.cost)
-        self.normalization_type = 'stats'  # not added in the API
+        self.normalization_type = "stats"  # not added in the API
 
         self.estimator = estimator
         self.cv = cv
@@ -167,7 +192,7 @@ class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
 
     @property
     def param_names(self):
-        return [element['name'] for element in self.domain]
+        return [element["name"] for element in self.domain]
 
     def fit(self, X, y=None, groups=None, **fit_params):
         """Run fit with all sets of parameters.
@@ -193,33 +218,47 @@ class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
         cv = check_cv(self.cv, y, classifier=is_classifier(self.estimator))
 
         scorers, self.multimetric_ = _check_multimetric_scoring(
-            self.estimator, scoring=self.scoring)
+            self.estimator, scoring=self.scoring
+        )
 
         score_function = partial(
-            cross_val_score, X=X, y=y, groups=groups, scoring=self.scoring,
-            cv=cv, n_jobs=self.n_jobs, verbose=self.verbose,
-            fit_params=fit_params)
+            cross_val_score,
+            X=X,
+            y=y,
+            groups=groups,
+            scoring=self.scoring,
+            cv=cv,
+            n_jobs=self.n_jobs,
+            verbose=self.verbose,
+            fit_params=fit_params,
+        )
         self.f = partial(
-            _fit_score, mdl=self.estimator, param_names=self.param_names,
-            score_function=score_function)
+            _fit_score,
+            mdl=self.estimator,
+            param_names=self.param_names,
+            score_function=score_function,
+        )
 
         self.objective = SingleObjective(
-            self.f, self.batch_size, self.objective_name)
+            self.f, self.batch_size, self.objective_name
+        )
         self._init_design_chooser()
 
         self.run_optimization(max_iter=self.max_iter, verbosity=self.verbosity)
 
         self.best_index_ = self.Y.argmin()
         self.best_params_ = dict(
-            zip(self.param_names, 10**self.X[self.best_index_]))
+            zip(self.param_names, 10 ** self.X[self.best_index_])
+        )
         self.best_score_ = self.Y[self.Y.argmin()]
 
         # Store the only scorer not as a dict for single metric evaluation
-        self.scorer_ = scorers if self.multimetric_ else scorers['score']
+        self.scorer_ = scorers if self.multimetric_ else scorers["score"]
 
         if self.refit:
-            self.best_estimator_ = clone(
-                self.estimator).set_params(**self.best_params_)
+            self.best_estimator_ = clone(self.estimator).set_params(
+                **self.best_params_
+            )
             if y is not None:
                 self.best_estimator_.fit(X, y, **fit_params)
             else:
@@ -232,16 +271,18 @@ class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
         # remove inf, to avoid error in plot_acquisition
         self.X = self.X[~np.isinf(self.Y).ravel()]
         self.Y = self.Y[~np.isinf(self.Y).ravel()]
-        super(BayesianOptimization, self).plot_acquisition()
+        super(_BayesianOptimization, self).plot_acquisition()
         # restore original X and Y
         self.X, self.Y = old_X, old_Y
 
 
 def _fit_score(x, score_function, mdl=None, param_names=None):
-    x = 10**np.atleast_2d(x)
+    x = 10 ** np.atleast_2d(x)
     return -np.array(
         [
             np.mean(
-                score_function(mdl.set_params(**dict(zip(param_names, pars)))))
+                score_function(mdl.set_params(**dict(zip(param_names, pars))))
+            )
             for pars in x
-        ])[:, None]
+        ]
+    )[:, None]

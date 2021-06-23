@@ -33,11 +33,11 @@ from sklearn.utils.extmath import fast_logdet
 
 
 def h(D, K, delta=5):
-    return - 0.5 * (np.trace(K.T.dot(D)) - (delta - 2) * fast_logdet(K))
+    return -0.5 * (np.trace(K.T.dot(D)) - (delta - 2) * fast_logdet(K))
 
 
 def first_derivative_h(D, K, delta=5):
-    return - 0.5 * (D - (delta - 2) * linalg.pinvh(K))
+    return -0.5 * (D - (delta - 2) * linalg.pinvh(K))
 
 
 # def second_derivative_h(D, K, delta=5):
@@ -50,9 +50,9 @@ def first_derivative_h_version2(D, K, delta=5):
     for i in range(D.shape[0]):
         for j in range(D.shape[1]):
             ones = np.zeros_like(D)
-            ones[i, j] = ones[j, i] = 1.
+            ones[i, j] = ones[j, i] = 1.0
             res[i, j] = np.trace((D - (delta - 2) * linalg.pinvh(K)).dot(ones))
-    return - res / 2.
+    return -res / 2.0
 
 
 def second_derivative_h_version2(D, K, delta=5):
@@ -92,4 +92,4 @@ def second_derivative_h_version2(D, K, delta=5):
             # assert np.allclose((A * B.T).sum(), const * (A2 * B2.T).sum())
             H[ei, ej] = H[ej, ei] = (A * B.T).sum()
             # H2[ei, ej] = H2[ej, ei] = (A2 * B2.T).sum()
-    return - H * (delta - 2) / 2.
+    return -H * (delta - 2) / 2.0

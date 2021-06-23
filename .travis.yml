@@ -1,10 +1,7 @@
 language: python
 python:
-- '2.7'
 - '3.6'
 - '3.7'
-- '3.8'
-- '3.9'
 os:
 - linux
 branches:
@@ -41,7 +38,7 @@ deploy:
   on:
     repo: fdtomasi/regain
     tags: true
-    python: '2.7'
+    python: '3.6'
 - provider: releases
   api_key:
     secure: "iQG9e/v02CbVHD9T4guu9s5Yw37ltKIXb354iHNvyiojXvb4WPywnt9xESoFxeh98fHPVkVBlfDsivGoayao1r2FJO4D4VvVe2RvxXKAupz7qQwX822hfc16dx+UVQ9u5XwhZA9TRJY9aZ3b2Rzu5WkYH9tPDxS/qCue7xTLq6WEjqIq21jK8b9UpjcIOuCQrDuLcozij16S2O+7bLgrGWbTS60R9RtkoDmTAvyET5jmBZAgWSGlApWo5N3QbZQkHY9KELoadgQ4+sEm4A10bAm7hRwcKd2IUgDJvRNPXwGahr5LRdeX8MJMnonVL0QkNrJoxtnUif1WxnMa9eoMn+0xZ7hjHSFp0uE7Ow4E0NyCL7a4zJwiOX3XGDDRsF2iPmhQMwyudutjwEofQgal1ltUHvrxZzx25swY5e6pGvogWhEx6N5VYR8/8qQAd3XCx0bslK2gB9nH+iCeN0oAOXXI3Y6f4gPb3PSGgRkjI3UhzQz3TiAYtDrGQWYhEoVLv17vaoTzsX08RD7yYRNENqXF3iLBPuARxmsEx5PnWL1EU2I9MPT4TTHaYEEOdrkzKJIr6/nAsFH48hrZomYhzJJViBrIDRtYR8B6tB/diMEokC/R49Jb1zgHOsBwC0IKQQlQICdW3hCYmZUK5EKq7wdVvglOiT/kAWkHu/FKe4s="

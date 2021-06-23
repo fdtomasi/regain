@@ -43,8 +43,7 @@ def test_ltgl_zero():
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        mdl = LatentTimeGraphicalLasso(
-            max_iter=1, assume_centered=True).fit(x, y)
+        mdl = LatentTimeGraphicalLasso(max_iter=1, assume_centered=True).fit(x, y)
 
     for p in mdl.precision_:
         # remove the diagonal
@@ -52,8 +51,7 @@ def test_ltgl_zero():
 
     assert_array_equal(mdl.precision_, np.zeros((3, 3, 3)))
     assert_array_equal(mdl.latent_, np.zeros((3, 3, 3)))
-    assert_array_equal(
-        mdl.get_observed_precision(), mdl.precision_ - mdl.latent_)
+    assert_array_equal(mdl.get_observed_precision(), mdl.precision_ - mdl.latent_)
 
 
 def test_ltgl_prox_l1():
@@ -63,8 +61,7 @@ def test_ltgl_prox_l1():
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        mdl = LatentTimeGraphicalLasso(
-            psi='l2', phi='node', max_iter=1, assume_centered=True).fit(x, y)
+        mdl = LatentTimeGraphicalLasso(psi="l2", phi="node", max_iter=1, assume_centered=True).fit(x, y)
 
     for p in mdl.precision_:
         # remove the diagonal
@@ -72,5 +69,4 @@ def test_ltgl_prox_l1():
 
     assert_array_equal(mdl.precision_, np.zeros((3, 3, 3)))
     assert_array_equal(mdl.latent_, np.zeros((3, 3, 3)))
-    assert_array_equal(
-        mdl.get_observed_precision(), mdl.precision_ - mdl.latent_)
+    assert_array_equal(mdl.get_observed_precision(), mdl.precision_ - mdl.latent_)

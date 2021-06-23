@@ -65,19 +65,19 @@ def objective(emp_cov, x, z, alpha):
     return -logl(emp_cov, x) + l1_od_norm(alpha * z)
 
 
-def init_precision(emp_cov, mode='empirical'):
+def init_precision(emp_cov, mode="empirical"):
     """Initialize the precision matrix given the empirical covariance."""
-    if mode == 'empirical':
+    if mode == "empirical":
         covariance_ = emp_cov.copy()
         covariance_ *= 0.95
         n_features = emp_cov.shape[-1]
         if emp_cov.ndim == 2:
-            covariance_.flat[::n_features + 1] = emp_cov.flat[::n_features + 1]
+            covariance_.flat[:: n_features + 1] = emp_cov.flat[:: n_features + 1]
             K = linalg.pinvh(covariance_)
         else:
             K = np.empty_like(emp_cov)
             for i, (c, e) in enumerate(zip(covariance_, emp_cov)):
-                c.flat[::n_features + 1] = e.flat[::n_features + 1]
+                c.flat[:: n_features + 1] = e.flat[:: n_features + 1]
                 K[i] = linalg.pinvh(c)
     elif isinstance(mode, np.ndarray):
         K = mode
@@ -88,9 +88,20 @@ def init_precision(emp_cov, mode='empirical'):
 
 
 def graphical_lasso(
-        emp_cov, alpha=0.01, rho=1, over_relax=1, max_iter=100, verbose=False,
-        tol=1e-4, rtol=1e-4, return_history=False, return_n_iter=True,
-        update_rho_options=None, compute_objective=True, init='empirical'):
+    emp_cov,
+    alpha=0.01,
+    rho=1,
+    over_relax=1,
+    max_iter=100,
+    verbose=False,
+    tol=1e-4,
+    rtol=1e-4,
+    return_history=False,
+    return_n_iter=True,
+    update_rho_options=None,
+    compute_objective=True,
+    init="empirical",
+):
     r"""Graphical lasso solver via ADMM.
 
     Solves the following problem:
@@ -153,8 +164,8 @@ def graphical_lasso(
         # x-update
         A = Z - U
         A += A.T
-        A /= 2.
-        K = prox_logdet(emp_cov - rho * A, lamda=1. / rho)
+        A /= 2.0
+        K = prox_logdet(emp_cov - rho * A, lamda=1.0 / rho)
 
         # z-update with relaxation
         K_hat = over_relax * K - (1 - over_relax) * Z
@@ -165,26 +176,25 @@ def graphical_lasso(
 
         # diagnostics, reporting, termination checks
         obj = objective(emp_cov, K, Z, alpha) if compute_objective else np.nan
-        rnorm = np.linalg.norm(K - Z, 'fro')
-        snorm = rho * np.linalg.norm(Z - Z_old, 'fro')
+        rnorm = np.linalg.norm(K - Z, "fro")
+        snorm = rho * np.linalg.norm(Z - Z_old, "fro")
         check = convergence(
-            obj=obj, rnorm=rnorm, snorm=snorm, e_pri=np.sqrt(K.size) * tol +
-            rtol * max(np.linalg.norm(K, 'fro'), np.linalg.norm(Z, 'fro')),
-            e_dual=np.sqrt(K.size) * tol + rtol * rho * np.linalg.norm(U))
+            obj=obj,
+            rnorm=rnorm,
+            snorm=snorm,
+            e_pri=np.sqrt(K.size) * tol + rtol * max(np.linalg.norm(K, "fro"), np.linalg.norm(Z, "fro")),
+            e_dual=np.sqrt(K.size) * tol + rtol * rho * np.linalg.norm(U),
+        )
 
         Z_old = Z.copy()
         if verbose:
-            print(
-                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
+            print("obj: %.4f, rnorm: %.4f, snorm: %.4f," "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
 
-        rho_new = update_rho(
-            rho, rnorm, snorm, iteration=iteration_,
-            **(update_rho_options or {}))
+        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {}))
         # scaled dual variables should be also rescaled
         U *= rho / rho_new
         rho = rho_new
@@ -258,12 +268,23 @@ class GraphicalLasso(GraphLasso):
     """
 
     def __init__(
-            self, alpha=0.01, rho=1., over_relax=1., max_iter=100, mode='admm',
-            tol=1e-4, rtol=1e-4, verbose=False, assume_centered=False,
-            update_rho_options=None, compute_objective=True, init='empirical'):
+        self,
+        alpha=0.01,
+        rho=1.0,
+        over_relax=1.0,
+        max_iter=100,
+        mode="admm",
+        tol=1e-4,
+        rtol=1e-4,
+        verbose=False,
+        assume_centered=False,
+        update_rho_options=None,
+        compute_objective=True,
+        init="empirical",
+    ):
         super(GraphicalLasso, self).__init__(
-            alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose,
-            assume_centered=assume_centered, mode=mode)
+            alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose, assume_centered=assume_centered, mode=mode
+        )
         self.rho = rho
         self.rtol = rtol
         self.over_relax = over_relax
@@ -281,11 +302,20 @@ class GraphicalLasso(GraphLasso):
 
         """
         self.precision_, self.covariance_, self.n_iter_ = graphical_lasso(
-            emp_cov, alpha=self.alpha, tol=self.tol, rtol=self.rtol,
-            max_iter=self.max_iter, over_relax=self.over_relax, rho=self.rho,
-            verbose=self.verbose, return_n_iter=True, return_history=False,
+            emp_cov,
+            alpha=self.alpha,
+            tol=self.tol,
+            rtol=self.rtol,
+            max_iter=self.max_iter,
+            over_relax=self.over_relax,
+            rho=self.rho,
+            verbose=self.verbose,
+            return_n_iter=True,
+            return_history=False,
             update_rho_options=self.update_rho_options,
-            compute_objective=self.compute_objective, init=self.init)
+            compute_objective=self.compute_objective,
+            init=self.init,
+        )
         return self
 
     def fit(self, X, y=None):
@@ -299,8 +329,7 @@ class GraphicalLasso(GraphLasso):
 
         """
         # Covariance does not make sense for a single feature
-        X = check_array(
-            X, ensure_min_features=2, ensure_min_samples=2, estimator=self)
+        X = check_array(X, ensure_min_features=2, ensure_min_samples=2, estimator=self)
         if self.assume_centered:
             self.location_ = np.zeros(X.shape[1])
         else:
