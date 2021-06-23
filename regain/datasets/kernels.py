@@ -54,9 +54,7 @@ def make_exp_sine_squared(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
     length_scale = kwargs.get("length_scale", 2)
     epsilon = kwargs.get("epsilon", 0.5)
     sparse = kwargs.get("sparse", True)
-    temporal_kernel = kernels.ExpSineSquared(
-        periodicity=periodicity, length_scale=length_scale
-    )(np.arange(T)[:, None])
+    temporal_kernel = kernels.ExpSineSquared(periodicity=periodicity, length_scale=length_scale)(np.arange(T)[:, None])
 
     u = samplegp(temporal_kernel, p=n_dim_obs * (n_dim_obs - 1) // 2)[0]
     K, K_obs = [], []
@@ -88,9 +86,9 @@ def make_RBF(n_dim_obs=5, n_dim_lat=0, T=1, **kwargs):
     length_scale_bounds = kwargs.get("length_scale_bounds", (1e-05, 100000.0))
     epsilon = kwargs.get("epsilon", 0.8)
     sparse = kwargs.get("sparse", True)
-    temporal_kernel = kernels.RBF(
-        length_scale=length_scale, length_scale_bounds=length_scale_bounds
-    )(np.arange(T)[:, None])
+    temporal_kernel = kernels.RBF(length_scale=length_scale, length_scale_bounds=length_scale_bounds)(
+        np.arange(T)[:, None]
+    )
 
     n = n_dim_obs + n_dim_lat
     u = samplegp(temporal_kernel, p=n * (n - 1) // 2)[0]
@@ -143,11 +141,7 @@ def genInvCov(size, low=0.3, upper=0.6, portion=0.2, symmetric=True):
     n_edges = int((size * (size - 1)) * portion)
     G = nx.gnm_random_graph(size, n_edges)
     for src, dest in G.edges:
-        S[src, dest] = (
-            (np.random.randint(2) - 0.5)
-            * 2
-            * (low + (upper - low) * np.random.rand(1)[0])
-        )
+        S[src, dest] = (np.random.randint(2) - 0.5) * 2 * (low + (upper - low) * np.random.rand(1)[0])
     if symmetric:
         S += S.T
     # vals = alg.eigvalsh(S)
@@ -161,23 +155,12 @@ def genRandInv(size, low=0.3, upper=0.6, portion=0.2):
     for i in range(size):
         for j in range(size):
             if np.random.rand() < portion:
-                value = (
-                    (np.random.randint(2) - 0.5)
-                    * 2
-                    * (low + (upper - low) * np.random.rand(1)[0])
-                )
+                value = (np.random.randint(2) - 0.5) * 2 * (low + (upper - low) * np.random.rand(1)[0])
                 S[i, j] = value
     return S
 
 
-def make_ticc(
-    num_blocks=5,
-    n_dim_obs=5,
-    n_dim_lat=0,
-    sparsity_inv_matrix=0.5,
-    rand_seed=None,
-    **kwargs
-):
+def make_ticc(num_blocks=5, n_dim_obs=5, n_dim_lat=0, sparsity_inv_matrix=0.5, rand_seed=None, **kwargs):
     if n_dim_lat != 0:
         raise ValueError("not supported")
 
@@ -194,9 +177,7 @@ def make_ticc(
                 symmetric=(block == 0),
             )
         else:
-            block_matrices[block] = genRandInv(
-                size=size_blocks, portion=sparsity_inv_matrix
-            )
+            block_matrices[block] = genRandInv(size=size_blocks, portion=sparsity_inv_matrix)
 
     # Initialize the inverse matrix
     inv_matrix = np.zeros([num_blocks * size_blocks, num_blocks * size_blocks])
@@ -209,9 +190,7 @@ def make_ticc(
                 block_i * size_blocks : (block_i + 1) * size_blocks,
                 block_j * size_blocks : (block_j + 1) * size_blocks,
             ] = (
-                block_matrices[block_num]
-                if block_i > block_j
-                else np.transpose(block_matrices[block_num])
+                block_matrices[block_num] if block_i > block_j else np.transpose(block_matrices[block_num])
             )
 
     # print out all the eigenvalues
@@ -298,21 +277,16 @@ def make_ticc_dataset(
             Sig21Theta11 = Sig21.dot(linalg.pinvh(Sig11))
             cov_tom = Sig22 - Sig21Theta11.dot(Sig12)  # sigma2|1
 
-            mean = cluster_mean + Sig21Theta11.dot(
-                X[:i].flatten() - cluster_mean_stack[: i * n_dim]
-            )
+            mean = cluster_mean + Sig21Theta11.dot(X[:i].flatten() - cluster_mean_stack[: i * n_dim])
 
         else:
             cov = covs[label][: w_size * n, : w_size * n]
-            Sig11, Sig22, Sig21, Sig12 = _block_matrix(
-                cov, (w_size - 1) * n, (w_size - 1) * n
-            )
+            Sig11, Sig22, Sig21, Sig12 = _block_matrix(cov, (w_size - 1) * n, (w_size - 1) * n)
             Sig21Theta11 = Sig21.dot(linalg.pinvh(Sig11))
             cov_tom = Sig22 - Sig21Theta11.dot(Sig12)  # sigma2|1
 
             mean = cluster_mean + Sig21Theta11.dot(
-                X[i - w_size + 1 : i].flatten()
-                - cluster_mean_stack[: (w_size - 1) * n_dim]
+                X[i - w_size + 1 : i].flatten() - cluster_mean_stack[: (w_size - 1) * n_dim]
             )
 
         X[i] = np.random.multivariate_normal(mean, cov_tom)
@@ -377,9 +351,7 @@ def make_ticc_dataset_new(
                     symmetric=True,
                 )
                 if block == 0
-                else (
-                    genRandInv(size=size_blocks, portion=sparsity_inv_matrix)
-                )
+                else (genRandInv(size=size_blocks, portion=sparsity_inv_matrix))
                 if block < w_size + 1
                 else np.zeros((n_dim, n_dim))
             )
@@ -390,11 +362,7 @@ def make_ticc_dataset_new(
         return np.block(
             [
                 [
-                    (
-                        bmc[r].get(i, np.zeros((n_dim, n_dim))).T
-                        if col > j
-                        else bmc[r].get(i, np.zeros((n_dim, n_dim)))
-                    )
+                    (bmc[r].get(i, np.zeros((n_dim, n_dim))).T if col > j else bmc[r].get(i, np.zeros((n_dim, n_dim))))
                     for col, i in enumerate(range(j, num_blocks + j))
                 ]
                 for j in range(1, num_blocks + 1)
@@ -409,9 +377,7 @@ def make_ticc_dataset_new(
             [
                 [
                     (bmc[r][i] if col > j else bmc[r][i].T)
-                    for col, i in enumerate(
-                        chain(range(j, 0, -1), range(num_blocks - j))
-                    )
+                    for col, i in enumerate(chain(range(j, 0, -1), range(num_blocks - j)))
                 ]
                 for j in range(num_blocks)
             ]
@@ -445,9 +411,7 @@ def make_ticc_dataset_new(
         ]
 
         # conditional covariance and mean
-        Sig11, Sig22, Sig21, Sig12 = _block_matrix(
-            cov, min(i, w_size) * n_dim, min(i, w_size) * n_dim
-        )
+        Sig11, Sig22, Sig21, Sig12 = _block_matrix(cov, min(i, w_size) * n_dim, min(i, w_size) * n_dim)
         T11, T22, T21, T12 = _block_matrix(
             inv[
                 max(i - w_size, 0) * n_dim : (i + 1) * n_dim,
@@ -459,14 +423,11 @@ def make_ticc_dataset_new(
         # print(Sig11.shape, Sig22.shape, Sig21.shape, Sig12.shape)
 
         # when i = 0, Sig11 has shape (0,0), causing an error in pinvh
-        Sig21Theta11 = Sig21.dot(
-            linalg.pinvh(Sig11) if Sig11.size > 0 else Sig11
-        )
+        Sig21Theta11 = Sig21.dot(linalg.pinvh(Sig11) if Sig11.size > 0 else Sig11)
         cov_tom = Sig22 - Sig21Theta11.dot(Sig12)  # sigma2|1
 
         mean = cluster_mean + Sig21Theta11.dot(
-            X[max(i - w_size, 0) : i].flatten()
-            - cluster_mean_stack[max(i - w_size, 0) : i].flatten()
+            X[max(i - w_size, 0) : i].flatten() - cluster_mean_stack[max(i - w_size, 0) : i].flatten()
         )
 
         X[i] = np.random.multivariate_normal(mean, cov_tom)
@@ -533,9 +494,7 @@ def make_ticc_dataset_v3(
                     symmetric=True,
                 )
                 if block == 0
-                else (
-                    genRandInv(size=size_blocks, portion=sparsity_inv_matrix)
-                )
+                else (genRandInv(size=size_blocks, portion=sparsity_inv_matrix))
                 if block < w_size + 1
                 else np.zeros((n_dim, n_dim))
             )
@@ -546,11 +505,7 @@ def make_ticc_dataset_v3(
         return np.block(
             [
                 [
-                    (
-                        bmc[r].get(i, np.zeros((n_dim, n_dim))).T
-                        if col > j
-                        else bmc[r].get(i, np.zeros((n_dim, n_dim)))
-                    )
+                    (bmc[r].get(i, np.zeros((n_dim, n_dim))).T if col > j else bmc[r].get(i, np.zeros((n_dim, n_dim))))
                     for col, i in enumerate(range(j, num_blocks + j))
                 ]
                 for j in range(1, num_blocks + 1)
@@ -565,9 +520,7 @@ def make_ticc_dataset_v3(
             [
                 [
                     (bmc[r][i] if col > j else bmc[r][i].T)
-                    for col, i in enumerate(
-                        chain(range(j, 0, -1), range(num_blocks - j))
-                    )
+                    for col, i in enumerate(chain(range(j, 0, -1), range(num_blocks - j)))
                 ]
                 for j in range(num_blocks)
             ]
@@ -601,9 +554,7 @@ def make_ticc_dataset_v3(
         ]
 
         # conditional covariance and mean
-        Sig11, Sig22, Sig21, Sig12 = _block_matrix(
-            cov, min(i, w_size) * n_dim, min(i, w_size) * n_dim
-        )
+        Sig11, Sig22, Sig21, Sig12 = _block_matrix(cov, min(i, w_size) * n_dim, min(i, w_size) * n_dim)
         _, T22, _, _ = _block_matrix(
             inv[
                 max(i - w_size, 0) * n_dim : (i + 1) * n_dim,
@@ -615,19 +566,14 @@ def make_ticc_dataset_v3(
         # print(Sig11.shape, Sig22.shape, Sig21.shape, Sig12.shape)
 
         # when i = 0, Sig11 has shape (0,0), causing an error in pinvh
-        Sig21Theta11 = Sig21.dot(
-            linalg.pinvh(Sig11) if Sig11.size > 0 else Sig11
-        )
+        Sig21Theta11 = Sig21.dot(linalg.pinvh(Sig11) if Sig11.size > 0 else Sig11)
         cov_tom = Sig22 - Sig21Theta11.dot(Sig12)  # sigma2|1
 
         mean = cluster_mean + Sig21Theta11.dot(
-            X[max(i - w_size, 0) : i].flatten()
-            - cluster_mean_stack[max(i - w_size, 0) : i].flatten()
+            X[max(i - w_size, 0) : i].flatten() - cluster_mean_stack[max(i - w_size, 0) : i].flatten()
         )
 
-        X[i * n_samples : (i + 1) * n_samples] = np.random.multivariate_normal(
-            mean, cov_tom, size=n_samples
-        )
+        X[i * n_samples : (i + 1) * n_samples] = np.random.multivariate_normal(mean, cov_tom, size=n_samples)
         precs.append(linalg.pinvh(cov_tom))
         sparse_precs.append(T22)
 
@@ -675,9 +621,7 @@ def make_cluster_representative(
     pos = list(pos) + [T - 1]
 
     if cluster_series is None:
-        cluster_series = np.tile(
-            range(n_clusters), (len(pos) // n_clusters) + 1
-        )[: len(pos)]
+        cluster_series = np.tile(range(n_clusters), (len(pos) // n_clusters) + 1)[: len(pos)]
         if shuffle:
             np.random.shuffle(cluster_series)
         # print(pos)
@@ -704,9 +648,7 @@ def make_cluster_representative(
             if diff == ():
                 break
             if i == 0:
-                edges_per_change = int(
-                    (np.nonzero(diffs)[0].shape[0] / 2) // (how_many + 1)
-                )
+                edges_per_change = int((np.nonzero(diffs)[0].shape[0] / 2) // (how_many + 1))
                 if edges_per_change == 0:
                     edges_per_change += 1
             ixs = np.arange(diff[0].shape[0])
@@ -726,17 +668,10 @@ def make_cluster_representative(
         thetas += new_list
     thetas.append(target)
     covs = [linalg.pinvh(t) for t in thetas]
-    X = np.vstack(
-        [
-            np.random.multivariate_normal(np.zeros(n_dim), c, size=n_samples)
-            for c in covs
-        ]
-    )
+    X = np.vstack([np.random.multivariate_normal(np.zeros(n_dim), c, size=n_samples) for c in covs])
     y = np.repeat(np.arange(len(covs)), n_samples)
 
-    distances = squareform(
-        [l1_od_norm(t1 - t2) for t1, t2 in combinations(thetas, 2)]
-    )
+    distances = squareform([l1_od_norm(t1 - t2) for t1, t2 in combinations(thetas, 2)])
     distances /= np.max(distances)
     labels_pred = AgglomerativeClustering(
         n_clusters=n_clusters, affinity="precomputed", linkage="complete"

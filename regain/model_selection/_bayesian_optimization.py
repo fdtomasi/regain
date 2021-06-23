@@ -50,9 +50,7 @@ try:
     from GPyOpt.util.arguments_manager import ArgumentsManager
     from GPyOpt.optimization.acquisition_optimizer import AcquisitionOptimizer
 except ImportError:
-    raise ImportError(
-        "Module GPyOpt is missing. Cannot use bayesian optimization"
-    )
+    raise ImportError("Module GPyOpt is missing. Cannot use bayesian optimization")
 
 
 @deprecated()
@@ -145,9 +143,7 @@ class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
         self.exact_feval = exact_feval
         self.normalize_Y = normalize_Y
 
-        if "model" in self.kwargs and isinstance(
-            kwargs["model"], GPyOpt.models.base.BOModel
-        ):
+        if "model" in self.kwargs and isinstance(kwargs["model"], GPyOpt.models.base.BOModel):
             self.model = kwargs["model"]
             self.model_type = "User defined model used."
             if self.verbose:
@@ -164,9 +160,7 @@ class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
 
         # --- CHOOSE acquisition function. If an instance of an acquisition is passed (possibly user defined), it is used.
         self.acquisition_type = acquisition_type
-        if "acquisition" in self.kwargs and isinstance(
-            kwargs["acquisition"], GPyOpt.acquisitions.AcquisitionBase
-        ):
+        if "acquisition" in self.kwargs and isinstance(kwargs["acquisition"], GPyOpt.acquisitions.AcquisitionBase):
             self.acquisition = kwargs["acquisition"]
             self.acquisition_type = "User defined acquisition used."
             if self.verbose:
@@ -217,9 +211,7 @@ class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
         """
         cv = check_cv(self.cv, y, classifier=is_classifier(self.estimator))
 
-        scorers, self.multimetric_ = _check_multimetric_scoring(
-            self.estimator, scoring=self.scoring
-        )
+        scorers, self.multimetric_ = _check_multimetric_scoring(self.estimator, scoring=self.scoring)
 
         score_function = partial(
             cross_val_score,
@@ -239,26 +231,20 @@ class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
             score_function=score_function,
         )
 
-        self.objective = SingleObjective(
-            self.f, self.batch_size, self.objective_name
-        )
+        self.objective = SingleObjective(self.f, self.batch_size, self.objective_name)
         self._init_design_chooser()
 
         self.run_optimization(max_iter=self.max_iter, verbosity=self.verbosity)
 
         self.best_index_ = self.Y.argmin()
-        self.best_params_ = dict(
-            zip(self.param_names, 10 ** self.X[self.best_index_])
-        )
+        self.best_params_ = dict(zip(self.param_names, 10 ** self.X[self.best_index_]))
         self.best_score_ = self.Y[self.Y.argmin()]
 
         # Store the only scorer not as a dict for single metric evaluation
         self.scorer_ = scorers if self.multimetric_ else scorers["score"]
 
         if self.refit:
-            self.best_estimator_ = clone(self.estimator).set_params(
-                **self.best_params_
-            )
+            self.best_estimator_ = clone(self.estimator).set_params(**self.best_params_)
             if y is not None:
                 self.best_estimator_.fit(X, y, **fit_params)
             else:
@@ -278,11 +264,4 @@ class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
 
 def _fit_score(x, score_function, mdl=None, param_names=None):
     x = 10 ** np.atleast_2d(x)
-    return -np.array(
-        [
-            np.mean(
-                score_function(mdl.set_params(**dict(zip(param_names, pars))))
-            )
-            for pars in x
-        ]
-    )[:, None]
+    return -np.array([np.mean(score_function(mdl.set_params(**dict(zip(param_names, pars))))) for pars in x])[:, None]
