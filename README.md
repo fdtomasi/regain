@@ -45,7 +45,7 @@ from regain.datasets import make_dataset
 from regain.utils import error_norm_time
 
 np.random.seed(42)
-data = make_dataset(n_dim_lat=1, n_dim_obs=10)
+data = make_dataset(n_dim_lat=1, n_dim_obs=5)
 X = data.X
 y = data.y
 theta = data.thetas
