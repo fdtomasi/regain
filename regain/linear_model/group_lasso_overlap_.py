@@ -36,7 +36,7 @@ import six
 from scipy import sparse
 from six.moves import range
 from sklearn.base import RegressorMixin
-from sklearn.linear_model.base import LinearClassifierMixin, LinearModel, _pre_fit
+from sklearn.linear_model._base import LinearClassifierMixin, LinearModel, _pre_fit # noqa
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.utils import check_array, check_X_y, deprecated
 from sklearn.utils.extmath import safe_sparse_dot
@@ -106,7 +106,7 @@ def group_lasso_overlap(A, b, lamda=1.0, groups=None, rho=1.0, max_iter=100, tol
     lamda : float, optional
         Regularisation parameter.
     groups : list
-        Groups of variables.
+        Groups of variables in the form list-of-lists.
     rho : float, optional
         Augmented Lagrangian parameter.
     alpha : float, optional
@@ -202,10 +202,20 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
         mode="admm",
         matlab_engine=None,
     ):
+        # TODO(Add documentation.)
+        """Group Lasso class.
+
+        Parameters
+        -----------
+        ...
+        groups: list
+            List of list of variables to group. For example, groups=[[1,2]].
+            Default None.
+        """
         self.alpha = alpha
         self.coef_ = None
         self.fit_intercept = fit_intercept
-        self.groups = groups
+        self.groups = groups or []
         self.rho = rho
         self.verbose = verbose
         self.normalize = normalize
@@ -513,7 +523,7 @@ def _overlapping_group_lasso(A, b, lamda=1.0, groups=None, rho=1.0, alpha=1.0, m
         P_star_xk_bar = P_star_x_bar_function(x)
         for i, g in enumerate(groups):
             # x update; update each local x
-            x[i] = prox(x[i] + (z - P_star_xk_bar - y / rho)[g], lamda / rho)
+            x[i] = soft_thresholding(x[i] + (z - P_star_xk_bar - y / rho)[g], lamda / rho)
 
         P_star_xk1_bar = P_star_x_bar_function(x)
         z = inverse.dot(Atb + rho * P_star_xk1_bar + y)

@@ -39,12 +39,14 @@ from six.moves import map, range, zip
 from sklearn.covariance.graph_lasso_ import alpha_max
 from sklearn.utils.extmath import squared_norm
 
-from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso, init_precision
-from regain.covariance.time_graphical_lasso_ import loss as loss_tgl
+from regain.covariance.time_graphical_lasso_ import (
+    TimeGraphicalLasso,
+    init_precision,
+    loss as loss_tgl,
+)
 from regain.norm import l1_od_norm, vector_p_norm
 from regain.prox import prox_FL, soft_thresholding_od
 from regain.utils import convergence
-
 from .forward_backward import _scalar_product, choose_gamma, choose_lamda, upper_diag_3d
 
 
@@ -75,7 +77,9 @@ def penalty(precision, alpha, beta, psi):
     else:
         obj = alpha * sum(map(l1_od_norm, precision))
     if isinstance(beta, np.ndarray):
-        obj += sum(b[0][0] * m for b, m in zip(beta, map(psi, precision[1:] - precision[:-1])))
+        obj += sum(
+            b[0][0] * m for b, m in zip(beta, map(psi, precision[1:] - precision[:-1]))
+        )
     else:
         obj += beta * psi(precision[1:] - precision[:-1])
     return obj
@@ -122,7 +126,9 @@ def penalty_laplacian(precision, alpha):
 
 def objective_laplacian(n_samples, emp_cov, precision, alpha, beta, vareps=0):
     """Objective function for TGL with Laplacian penalty."""
-    obj = loss_laplacian(emp_cov, precision, beta=beta, n_samples=n_samples, vareps=vareps)
+    obj = loss_laplacian(
+        emp_cov, precision, beta=beta, n_samples=n_samples, vareps=vareps
+    )
     obj += penalty_laplacian(precision, alpha)
     return obj
 
@@ -222,25 +228,46 @@ def tgl_forward_backward(
     """
     available_choose = ("gamma", "lamda", "fixed", "both")
     if choose not in available_choose:
-        raise ValueError("`choose` parameter must be one of %s." % available_choose)
+        raise ValueError(f"`choose` parameter must be one of {available_choose}.")
 
     n_times, _, n_features = emp_cov.shape
     K = init_precision(emp_cov, mode=init)
 
     if laplacian_penalty:
         obj_partial = partial(
-            objective_laplacian, n_samples=n_samples, emp_cov=emp_cov, alpha=alpha, beta=beta, vareps=vareps
+            objective_laplacian,
+            n_samples=n_samples,
+            emp_cov=emp_cov,
+            alpha=alpha,
+            beta=beta,
+            vareps=vareps,
         )
-        function_f = partial(loss_laplacian, beta=beta, n_samples=n_samples, S=emp_cov, vareps=vareps)
-        gradient_f = partial(grad_loss_laplacian, emp_cov=emp_cov, beta=beta, n_samples=n_samples, vareps=vareps)
+        function_f = partial(
+            loss_laplacian, beta=beta, n_samples=n_samples, S=emp_cov, vareps=vareps
+        )
+        gradient_f = partial(
+            grad_loss_laplacian,
+            emp_cov=emp_cov,
+            beta=beta,
+            n_samples=n_samples,
+            vareps=vareps,
+        )
         function_g = partial(penalty_laplacian, alpha=alpha)
     else:
         psi = partial(vector_p_norm, p=time_norm)
         obj_partial = partial(
-            objective, n_samples=n_samples, emp_cov=emp_cov, alpha=alpha, beta=beta, psi=psi, vareps=vareps
+            objective,
+            n_samples=n_samples,
+            emp_cov=emp_cov,
+            alpha=alpha,
+            beta=beta,
+            psi=psi,
+            vareps=vareps,
         )
         function_f = partial(loss, n_samples=n_samples, S=emp_cov, vareps=vareps)
-        gradient_f = partial(grad_loss, emp_cov=emp_cov, n_samples=n_samples, vareps=vareps)
+        gradient_f = partial(
+            grad_loss, emp_cov=emp_cov, n_samples=n_samples, vareps=vareps
+        )
         function_g = partial(penalty, alpha=alpha, beta=beta, psi=psi)
 
     max_residual = -np.inf
@@ -274,7 +301,9 @@ def tgl_forward_backward(
             if laplacian_penalty:
                 y = soft_thresholding_od(x_hat, alpha * gamma)
             else:
-                y = prox_FL(x_hat, beta * gamma, alpha * gamma, p=time_norm, symmetric=True)
+                y = prox_FL(
+                    x_hat, beta * gamma, alpha * gamma, p=time_norm, symmetric=True
+                )
 
         if choose in ("lamda", "both"):
             lamda, n_ls = choose_lamda(
@@ -302,14 +331,23 @@ def tgl_forward_backward(
         check = convergence(
             obj=obj_partial(precision=K),
             rnorm=np.linalg.norm(upper_diag_3d(K) - upper_diag_3d(k_previous)),
-            snorm=np.linalg.norm(obj_partial(precision=K) - obj_partial(precision=k_previous)),
+            snorm=np.linalg.norm(
+                obj_partial(precision=K) - obj_partial(precision=k_previous)
+            ),
             e_pri=np.sqrt(upper_diag_3d(K).size) * tol
-            + tol * max(np.linalg.norm(upper_diag_3d(K)), np.linalg.norm(upper_diag_3d(k_previous))),
+            + tol
+            * max(
+                np.linalg.norm(upper_diag_3d(K)),
+                np.linalg.norm(upper_diag_3d(k_previous)),
+            ),
             e_dual=tol,
         )
 
         if verbose and iteration_ % (50 if verbose < 2 else 1) == 0:
-            print("obj: %.4f, rnorm: %.7f, snorm: %.4f," "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
+            print(
+                "obj: %.4f, rnorm: %.7f, snorm: %.4f,"
+                "eps_pri: %.4f, eps_dual: %.4f" % check[:5]
+            )
 
         if return_history:
             checks.append(check)
@@ -522,12 +560,23 @@ class TimeGraphicalLassoForwardBackward(TimeGraphicalLasso):
 
         if self.return_history:
             if self.return_n_linesearch:
-                self.precision_, self.covariance_, self.history_, self.n_iter_, self.n_linesearch_ = out
+                (
+                    self.precision_,
+                    self.covariance_,
+                    self.history_,
+                    self.n_iter_,
+                    self.n_linesearch_,
+                ) = out
             else:
                 self.precision_, self.covariance_, self.history_, self.n_iter_ = out
         else:
             if self.return_n_linesearch:
-                self.precision_, self.covariance_, self.n_iter_, self.n_linesearch_ = out
+                (
+                    self.precision_,
+                    self.covariance_,
+                    self.n_iter_,
+                    self.n_linesearch_,
+                ) = out
             else:
                 self.precision_, self.covariance_, self.n_iter_ = out
         return self

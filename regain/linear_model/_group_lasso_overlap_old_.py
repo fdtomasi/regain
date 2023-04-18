@@ -132,13 +132,14 @@ def group_lasso_feat_split(A, b, lamda=1.0, ni=2, rho=1.0, alpha=1.0):
             q = q + np.linalg.norm(rho * Ats[i].dot(u)) ** 2
 
         # % diagnostics, reporting, termination checks
-        history = []
-        history.append(objective(A, b, lamda, x, z))
-        history.append(np.sqrt(N) * np.linalg.norm(z - Axbar))
-        history.append(np.sqrt(s))
-
-        history.append(np.sqrt(n) * ABSTOL + RELTOL * max(np.linalg.norm(Aixi, "fro"), np.linalg.norm(-zs, "fro")))
-        history.append(np.sqrt(n) * ABSTOL + RELTOL * np.sqrt(q))
+        history = [
+            objective(A, b, lamda, x, z),
+            np.sqrt(N) * np.linalg.norm(z - Axbar),
+            np.sqrt(s),
+            np.sqrt(n) * ABSTOL
+            + RELTOL * max(np.linalg.norm(Aixi, "fro"), np.linalg.norm(-zs, "fro")),
+            np.sqrt(n) * ABSTOL + RELTOL * np.sqrt(q),
+        ]
 
         hist.append(history)
         if history[1] < history[3] and history[2] < history[4]:

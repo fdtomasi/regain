@@ -33,13 +33,14 @@ This module to port GPyOpt in a `sklearn-usable` way has been deprecated
 in favor of scikit-optimize, which natively offer a Bayesian replacement
 for the GridSearchCV.
 """
-import numpy as np
 from functools import partial
-from sklearn.base import is_classifier, clone
-from sklearn.metrics.scorer import _check_multimetric_scoring
+
+import numpy as np
+from sklearn.base import clone, is_classifier
+from sklearn.metrics._scorer import _check_multimetric_scoring
 from sklearn.model_selection import cross_val_score
-from sklearn.model_selection._split import check_cv
 from sklearn.model_selection._search import BaseSearchCV
+from sklearn.model_selection._split import check_cv
 from sklearn.utils import deprecated
 
 try:
@@ -143,7 +144,9 @@ class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
         self.exact_feval = exact_feval
         self.normalize_Y = normalize_Y
 
-        if "model" in self.kwargs and isinstance(kwargs["model"], GPyOpt.models.base.BOModel):
+        if "model" in self.kwargs and isinstance(
+            kwargs["model"], GPyOpt.models.base.BOModel
+        ):
             self.model = kwargs["model"]
             self.model_type = "User defined model used."
             if self.verbose:
@@ -158,9 +161,12 @@ class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
             self.space, self.acquisition_optimizer_type, model=self.model
         )
 
-        # --- CHOOSE acquisition function. If an instance of an acquisition is passed (possibly user defined), it is used.
+        # --- CHOOSE acquisition function.
+        # If an instance of an acquisition is passed (possibly user defined), it is used.
         self.acquisition_type = acquisition_type
-        if "acquisition" in self.kwargs and isinstance(kwargs["acquisition"], GPyOpt.acquisitions.AcquisitionBase):
+        if "acquisition" in self.kwargs and isinstance(
+            kwargs["acquisition"], GPyOpt.acquisitions.AcquisitionBase
+        ):
             self.acquisition = kwargs["acquisition"]
             self.acquisition_type = "User defined acquisition used."
             if self.verbose:
@@ -211,7 +217,9 @@ class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
         """
         cv = check_cv(self.cv, y, classifier=is_classifier(self.estimator))
 
-        scorers, self.multimetric_ = _check_multimetric_scoring(self.estimator, scoring=self.scoring)
+        scorers, self.multimetric_ = _check_multimetric_scoring(
+            self.estimator, scoring=self.scoring
+        )
 
         score_function = partial(
             cross_val_score,
@@ -264,4 +272,9 @@ class _BayesianOptimization(GPyOpt.methods.BayesianOptimization, BaseSearchCV):
 
 def _fit_score(x, score_function, mdl=None, param_names=None):
     x = 10 ** np.atleast_2d(x)
-    return -np.array([np.mean(score_function(mdl.set_params(**dict(zip(param_names, pars))))) for pars in x])[:, None]
+    return -np.array(
+        [
+            np.mean(score_function(mdl.set_params(**dict(zip(param_names, pars)))))
+            for pars in x
+        ]
+    )[:, None]

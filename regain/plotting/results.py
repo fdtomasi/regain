@@ -59,7 +59,9 @@ def plot_roc_curves(true, preds, ax=None, fontsize=15):
         tprs[-1][0] = 0.0
         roc_auc = auc(fpr, tpr)
         aucs.append(roc_auc)
-        ax.plot(fpr, tpr, lw=1, alpha=0.3, label="ROC fold %d (AUC = %0.2f)" % (i, roc_auc))
+        ax.plot(
+            fpr, tpr, lw=1, alpha=0.3, label="ROC fold %d (AUC = %0.2f)" % (i, roc_auc)
+        )
 
     mean_tpr = np.mean(tprs, axis=0)
     mean_tpr[-1] = 1.0
@@ -69,7 +71,7 @@ def plot_roc_curves(true, preds, ax=None, fontsize=15):
         mean_fpr,
         mean_tpr,
         color="b",
-        label=r"Mean ROC (AUC = %0.2f $\pm$ %0.2f)" % (mean_auc, std_auc),
+        label=rf"Mean ROC (AUC = {mean_auc:0.2f} $\pm$ {std_auc:0.2f})",
         lw=2,
         alpha=0.8,
     )
@@ -77,7 +79,14 @@ def plot_roc_curves(true, preds, ax=None, fontsize=15):
     std_tpr = np.std(tprs, axis=0)
     tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
     tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
-    ax.fill_between(mean_fpr, tprs_lower, tprs_upper, color="grey", alpha=0.2, label=r"$\pm$ 1 std. dev.")
+    ax.fill_between(
+        mean_fpr,
+        tprs_lower,
+        tprs_upper,
+        color="grey",
+        alpha=0.2,
+        label=r"$\pm$ 1 std. dev.",
+    )
 
     ax.set_xlim([-0.05, 1.05])
     ax.set_ylim([-0.05, 1.05])
@@ -87,7 +96,16 @@ def plot_roc_curves(true, preds, ax=None, fontsize=15):
     plt.show()
 
 
-def plot_curve(true, predictions, mode="roc", ax=None, filename=None, fontsize=15, colors=None, multiple_true=False):
+def plot_curve(
+    true,
+    predictions,
+    mode="roc",
+    ax=None,
+    filename=None,
+    fontsize=15,
+    colors=None,
+    multiple_true=False,
+):
     """Plot a validation curve.
 
     Parameters
@@ -100,7 +118,15 @@ def plot_curve(true, predictions, mode="roc", ax=None, filename=None, fontsize=1
     matplotlib.rcParams.update({"font.size": fontsize})
     if ax is None:
         fig, ax = plt.subplots(figsize=(15, 10))
-    ax.plot(([0, 1] if mode == "roc" else [1, 0]), [0, 1], linestyle="--", lw=2, color="k", label="Chance", alpha=0.8)
+    ax.plot(
+        ([0, 1] if mode == "roc" else [1, 0]),
+        [0, 1],
+        linestyle="--",
+        lw=2,
+        color="k",
+        label="Chance",
+        alpha=0.8,
+    )
     curve_func = roc_curve if mode == "roc" else precision_recall_curve
     for c, (key, preds) in enumerate(predictions.items()):
         if len(preds) == 1:
@@ -114,17 +140,29 @@ def plot_curve(true, predictions, mode="roc", ax=None, filename=None, fontsize=1
             kwargs = dict(lw=1, color=colors[c] if colors is not None else None)
             if mode == "roc":
                 roc_auc = auc(fpr, tpr)
-                ax.plot(fpr, tpr, label="%s %s (AUC = %0.2f)" % (mode, str(key), roc_auc), **kwargs)
+                ax.plot(
+                    fpr,
+                    tpr,
+                    label="%s %s (AUC = %0.2f)" % (mode, str(key), roc_auc),
+                    **kwargs,
+                )
             else:
                 roc_auc = auc(tpr, fpr)
-                ax.plot(tpr, fpr, label="%s %s (AUC = %0.2f)" % (mode, str(key), roc_auc), **kwargs)
+                ax.plot(
+                    tpr,
+                    fpr,
+                    label="%s %s (AUC = %0.2f)" % (mode, str(key), roc_auc),
+                    **kwargs,
+                )
         else:
             tprs = []
             aucs = []
             mean_fpr = np.linspace(0, 1, 100)
 
             if multiple_true:
-                true = [(~np.isclose(t, 0, rtol=1e-7)).astype(int).ravel() for t in true]
+                true = [
+                    (~np.isclose(t, 0, rtol=1e-7)).astype(int).ravel() for t in true
+                ]
             else:
                 true = (~np.isclose(true, 0, rtol=1e-7)).astype(int).ravel()
             preds = [p.ravel() for p in preds]
@@ -151,7 +189,8 @@ def plot_curve(true, predictions, mode="roc", ax=None, filename=None, fontsize=1
                 mean_fpr,
                 mean_tpr,
                 color=colors[c] if colors is not None else None,
-                label=r"Mean %s %s (AUC = %0.2f $\pm$ %0.2f)" % (mode, str(key), mean_auc, std_auc),
+                label=r"Mean %s %s (AUC = %0.2f $\pm$ %0.2f)"
+                % (mode, str(key), mean_auc, std_auc),
                 lw=2,
                 alpha=0.9,
             )
@@ -177,14 +216,40 @@ def plot_curve(true, predictions, mode="roc", ax=None, filename=None, fontsize=1
 
 
 @deprecated
-def plot_roc_comparison(true, predictions, ax=None, filename=None, fontsize=15, colors=("red", "blue", "yellow")):
-    return plot_curve(true, predictions, mode="roc", ax=ax, filename=filename, fontsize=fontsize, colors=colors)
+def plot_roc_comparison(
+    true,
+    predictions,
+    ax=None,
+    filename=None,
+    fontsize=15,
+    colors=("red", "blue", "yellow"),
+):
+    return plot_curve(
+        true,
+        predictions,
+        mode="roc",
+        ax=ax,
+        filename=filename,
+        fontsize=fontsize,
+        colors=colors,
+    )
 
 
 @deprecated
 def plot_precision_recall_comparison(
-    true, predictions, ax=None, filename=None, fontsize=15, colors=("red", "blue", "yellow")
+    true,
+    predictions,
+    ax=None,
+    filename=None,
+    fontsize=15,
+    colors=("red", "blue", "yellow"),
 ):
     return plot_curve(
-        true, predictions, mode="precision_recall", ax=ax, filename=filename, fontsize=fontsize, colors=colors
+        true,
+        predictions,
+        mode="precision_recall",
+        ax=ax,
+        filename=filename,
+        fontsize=fontsize,
+        colors=colors,
     )

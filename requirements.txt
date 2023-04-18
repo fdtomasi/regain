@@ -2,10 +2,11 @@ codecov
 nose
 numpy>=1.11
 scipy>=0.16.1,>=1.0.0
-scikit_learn>=0.17
+scikit_learn>=1.2
 setuptools
 six
 networkx
+pandas
 
 # Optional
 #prox_tv

@@ -30,13 +30,7 @@
 """Test LatentTimeGraphicalLasso."""
 import numpy as np
 from numpy.testing import assert_array_almost_equal
-
-try:
-    # sklean >= 0.20
-    from sklearn.covariance import GraphicalLasso as GL
-except ImportError:
-    # sklean < 0.20
-    from sklearn.covariance import GraphLasso as GL
+from sklearn.covariance import GraphicalLasso as GL
 
 from regain.covariance.graphical_lasso_ import GraphicalLasso
 

@@ -37,10 +37,7 @@ from scipy.spatial.distance import squareform
 from scipy.stats import norm
 from sklearn.utils import check_random_state
 
-from regain.utils import ensure_posdef
-from regain.utils import is_pos_def
-from regain.utils import is_pos_semidef
-from regain.utils import normalize_matrix
+from regain.utils import ensure_posdef, is_pos_def, is_pos_semidef, normalize_matrix
 
 
 def _compute_probabilities(locations, random_state, mask=None):
@@ -60,9 +57,11 @@ def _compute_probabilities(locations, random_state, mask=None):
 
 def _permute_locations(locations, random_state):
     new_locations = []
-    for l in locations:
+    for loc in locations:
         perm = random_state.uniform(low=-0.03, high=0.03, size=(1, 2))
-        new_locations.append(np.maximum(np.array(l) + np.array(perm), 0).flatten().tolist())
+        new_locations.append(
+            np.maximum(np.array(loc) + np.array(perm), 0).flatten().tolist()
+        )
     return new_locations
 
 
@@ -139,7 +138,9 @@ def data_Meinshausen_Yuan(p=198, h=2, n=200, T=10, random_state=None, **kwargs):
     return locations, thetas, thetas_observed, covariances, latent, sampless
 
 
-def data_Meinshausen_Yuan_sparse_latent(p=198, h=2, n=200, T=10, random_state=None, **kwargs):
+def data_Meinshausen_Yuan_sparse_latent(
+    p=198, h=2, n=200, T=10, random_state=None, **kwargs
+):
     random_state = check_random_state(random_state)
     nodes_locations = [list(random_state.uniform(size=2)) for i in range(p + h)]
     probs = _compute_probabilities(nodes_locations, random_state)
@@ -253,7 +254,9 @@ def make_ell(n_dim_obs=100, n_dim_lat=10):
     for i in range(n_dim_lat):
         percentage = int(n_dim_obs * 0.99)
         indices = np.random.randint(0, high=n_dim_obs, size=percentage)
-        K_HO[i, indices] = np.random.rand(percentage) * (0.98 / (n_dim_lat + n_dim_obs) / 2)
+        K_HO[i, indices] = np.random.rand(percentage) * (
+            0.98 / (n_dim_lat + n_dim_obs) / 2
+        )
 
     K_HO /= np.sum(K_HO, axis=1)[:, None] / 2.0
     L = K_HO.T.dot(K_HO)
@@ -276,7 +279,10 @@ def make_starting(n_dim_obs=100, n_dim_lat=10, degree=2, normalize=False, eps=1e
         for i in range(n_dim_obs):
             possible_idx = list(
                 set(range(n_dim_obs))
-                - (set(np.nonzero(theta[i, :])[0]) | set(np.where(np.count_nonzero(theta, axis=1) > degree)[0]))
+                - (
+                    set(np.nonzero(theta[i, :])[0])
+                    | set(np.where(np.count_nonzero(theta, axis=1) > degree)[0])
+                )
             )
             if not possible_idx:
                 continue
@@ -292,7 +298,10 @@ def make_starting(n_dim_obs=100, n_dim_lat=10, degree=2, normalize=False, eps=1e
         for i in range(n_dim_obs):
             possible_idx = list(
                 set(range(n_dim_obs))
-                - (set(np.nonzero(theta[i, :])[0]) | set(np.where(np.count_nonzero(theta, axis=1) > degree)[0]))
+                - (
+                    set(np.nonzero(theta[i, :])[0])
+                    | set(np.where(np.count_nonzero(theta, axis=1) > degree)[0])
+                )
             )
             if not possible_idx:
                 continue
@@ -309,7 +318,9 @@ def make_starting(n_dim_obs=100, n_dim_lat=10, degree=2, normalize=False, eps=1e
     return theta, theta - L, L, K_HO
 
 
-def _update_theta_l2(theta_old, n_dim_obs, degree, epsilon, keep_sparsity=False, indices=None):
+def _update_theta_l2(
+    theta_old, n_dim_obs, degree, epsilon, keep_sparsity=False, indices=None
+):
     addition = np.zeros_like(theta_old)
     for i in range(n_dim_obs):
         if keep_sparsity:
@@ -333,7 +344,9 @@ def _update_theta_l1(theta_init, no, n_dim_obs, eps=1e-2):
         rows = np.random.randint(0, n_dim_obs, no)
         cols = np.random.randint(0, n_dim_obs, no)
     for r, c in zip(rows, cols):
-        theta[r, c] = np.random.choice([0.12, 0, 0]) if theta[r, c] == 0 else 0.06  # np.random.rand(1) * .35
+        theta[r, c] = (
+            np.random.choice([0.12, 0, 0]) if theta[r, c] == 0 else 0.06
+        )  # np.random.rand(1) * .35
         theta[c, r] = theta[r, c]
     if not is_pos_def(theta):
         theta += np.diag(np.sum(theta, axis=1) + eps)
@@ -366,7 +379,9 @@ def make_covariance(
     """Generate a list of T covariances and sparse precisions."""
     no = int(np.ceil(n_dim_obs / 20)) if proportional else 1
 
-    theta, theta_observed, L, K_HO = make_starting(n_dim_obs, n_dim_lat, degree, normalize=normalize_starting_matrices)
+    theta, theta_observed, L, K_HO = make_starting(
+        n_dim_obs, n_dim_lat, degree, normalize=normalize_starting_matrices
+    )
 
     thetas = [theta]
     thetas_obs = [theta_observed]
@@ -377,10 +392,19 @@ def make_covariance(
     for i in range(1, T):
         if update_theta == "l1":
             if keep_sparsity:
-                warnings.warn("keep_sparsity is specified but is not " "implemented with l1.")
+                warnings.warn(
+                    "keep_sparsity is specified but is not " "implemented with l1."
+                )
             theta = _update_theta_l1(thetas[-1], no, n_dim_obs)
         elif update_theta == "l2":
-            theta = _update_theta_l2(thetas[-1], n_dim_obs, degree, epsilon, keep_sparsity=keep_sparsity, indices=idx)
+            theta = _update_theta_l2(
+                thetas[-1],
+                n_dim_obs,
+                degree,
+                epsilon,
+                keep_sparsity=keep_sparsity,
+                indices=idx,
+            )
         else:
             raise ValueError(update_theta)
 
@@ -423,7 +447,9 @@ def make_fixed_sparsity(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     degree = kwargs.get("degree", 2)
     epsilon = kwargs.get("epsilon", 1e-2)
     t = kwargs.get("changing_time", T / 2.0)
-    theta, theta_observed, L, K_HO = make_starting(n_dim_obs, n_dim_lat, degree, normalize=False)
+    theta, theta_observed, L, K_HO = make_starting(
+        n_dim_obs, n_dim_lat, degree, normalize=False
+    )
 
     theta = np.abs(theta)
     theta_observed = theta - L
@@ -441,7 +467,9 @@ def make_fixed_sparsity(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
         theta = np.abs(theta)
         theta = (theta + theta.T) / 2.0
         theta[theta < epsilon] = 0
-        theta.flat[:: n_dim_obs + 1] = np.sum(np.abs(theta), axis=1) + np.sum(np.abs(L), axis=1) + 0.1
+        theta.flat[:: n_dim_obs + 1] = (
+            np.sum(np.abs(theta), axis=1) + np.sum(np.abs(L), axis=1) + 0.1
+        )
         nonzeros = np.nonzero(theta - np.diag(theta))
 
         theta_observed = theta - L
@@ -452,7 +480,9 @@ def make_fixed_sparsity(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
     return thetas, thetas_obs, np.array([L] * T)
 
 
-def make_sin(n_dim_obs, n_dim_lat, T, shape="smooth", closeness=1, normalize=False, **kwargs):
+def make_sin(
+    n_dim_obs, n_dim_lat, T, shape="smooth", closeness=1, normalize=False, **kwargs
+):
     """Generate list of sparse precision matrices that change periodically."""
     upper_idx = np.triu_indices(n_dim_obs, 1)
     n_interactions = len(upper_idx[0])
@@ -469,7 +499,12 @@ def make_sin(n_dim_obs, n_dim_lat, T, shape="smooth", closeness=1, normalize=Fal
     # threshold
     y = np.maximum(y, 0)
 
-    Y = np.array([squareform(y[:, j]) + np.diag(np.sum(squareform(y[:, j]), axis=1)) for j in range(y.shape[1])])
+    Y = np.array(
+        [
+            squareform(y[:, j]) + np.diag(np.sum(squareform(y[:, j]), axis=1))
+            for j in range(y.shape[1])
+        ]
+    )
 
     if normalize:
         map(normalize_matrix, Y)  # in place
@@ -507,7 +542,7 @@ def make_sin_cos(n_dim_obs=100, n_dim_lat=10, T=10, **kwargs):
                 if r == c:
                     continue
                 if clip[r, c]:
-                    thetas[i, r, c] = np.sin((x[i] + phase[r, c]) / T ** 2)
+                    thetas[i, r, c] = np.sin((x[i] + phase[r, c]) / T**2)
                 else:
                     thetas[i, r, c] = np.sin((x[i] + phase[r, c]))
         thetas[i][clip == 1] = np.clip(thetas[i][clip == 1], 0, 1)
@@ -583,7 +618,9 @@ def make_sparse_low_rank(n_dim_obs=3, n_dim_lat=2, T=10, epsilon=1e-3, **kwargs)
     return Ks, Kobs, Ls
 
 
-def make_ma_xue_zou(n_dim_obs=12, n_latent=3, T=1, epsilon=1e-3, sparsity=0.1, **kwargs):
+def make_ma_xue_zou(
+    n_dim_obs=12, n_latent=3, T=1, epsilon=1e-3, sparsity=0.1, **kwargs
+):
     """Generate the dataset as in Ma, Xue, Zou (2012)."""
     # p = n_dim_obs + n_latent  # int(n_dim_obs * 0.05)
     p = n_dim_obs + int(n_dim_obs * 0.05)
@@ -622,7 +659,9 @@ def make_ma_xue_zou(n_dim_obs=12, n_latent=3, T=1, epsilon=1e-3, sparsity=0.1, *
     return [K_O] * T, [K_O_tilde] * T, [L] * T
 
 
-def make_ma_xue_zou_rand_k(n_dim_obs=12, n_latent=3, T=1, epsilon=1e-3, sparsity=0.1, **kwargs):
+def make_ma_xue_zou_rand_k(
+    n_dim_obs=12, n_latent=3, T=1, epsilon=1e-3, sparsity=0.1, **kwargs
+):
     """Generate the dataset as in Ma, Xue, Zou (2012)."""
     # p = n_dim_obs + n_latent  # int(n_dim_obs * 0.05)
     p = n_dim_obs + int(n_dim_obs * 0.05)
