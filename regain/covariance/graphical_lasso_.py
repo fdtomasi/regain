@@ -39,6 +39,7 @@ import warnings
 import numpy as np
 from scipy import linalg
 from six.moves import range
+from sklearn.covariance import GraphicalLasso as GraphLasso
 from sklearn.covariance import empirical_covariance
 from sklearn.utils.extmath import fast_logdet
 from sklearn.utils.validation import check_array
@@ -48,12 +49,6 @@ from regain.prox import prox_logdet, soft_thresholding_od
 from regain.update_rules import update_rho
 from regain.utils import convergence
 
-try:
-    # sklean >= 0.20
-    from sklearn.covariance import GraphicalLasso as GraphLasso
-except ImportError:
-    # sklearn < 0.20
-    from sklearn.covariance import GraphLasso
 
 
 def logl(emp_cov, precision):

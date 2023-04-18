@@ -29,12 +29,13 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import numpy as np
-
-
 from sklearn.utils import check_array
 
-
-from regain.generalized_linear_model.base import GLM_GM, convergence, build_adjacency_matrix
+from regain.generalized_linear_model.base import (
+    GLM_GM,
+    build_adjacency_matrix,
+    convergence,
+)
 from regain.prox import soft_thresholding
 
 
@@ -77,12 +78,17 @@ def fit_each_variable(
             iter=iter_,
             obj=objective(X, theta, n, ix, selector, alpha),
             iter_norm=np.linalg.norm(thetas[-2] - thetas[-1]),
-            iter_r_norm=(np.linalg.norm(thetas[-2] - thetas[-1]) / np.linalg.norm(thetas[-1])),
+            iter_r_norm=(
+                np.linalg.norm(thetas[-2] - thetas[-1]) / np.linalg.norm(thetas[-1])
+            ),
         )
         checks.append(check)
         # if adjust_gamma: # TODO multiply or divide
         if verbose:
-            print("Iter: %d, objective: %.4f, iter_norm %.4f" % (check[0], check[1], check[2]))
+            print(
+                "Iter: %d, objective: %.4f, iter_norm %.4f"
+                % (check[0], check[1], check[2])
+            )
 
         if check[-2] < tol:
             break
@@ -164,7 +170,14 @@ class Gaussian_GLM_GM(GLM_GM):
         compute_objective=True,
     ):
         super(Gaussian_GLM_GM, self).__init__(
-            alpha, tol, rtol, max_iter, verbose, return_history, return_n_iter, compute_objective
+            alpha,
+            tol,
+            rtol,
+            max_iter,
+            verbose,
+            return_history,
+            return_n_iter,
+            compute_objective,
         )
         self.reconstruction = reconstruction
 

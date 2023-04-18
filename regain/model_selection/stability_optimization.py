@@ -37,16 +37,15 @@ from itertools import product
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+from numpy.ma import MaskedArray
 from scipy.special import binom
 from scipy.stats import rankdata
 from sklearn.base import clone, is_classifier
-from sklearn.metrics.scorer import _check_multimetric_scoring
-from sklearn.model_selection import GridSearchCV, ParameterGrid, ShuffleSplit, StratifiedShuffleSplit
+from sklearn.metrics._scorer import _check_multimetric_scoring
+from sklearn.model_selection import GridSearchCV, StratifiedShuffleSplit
 from sklearn.model_selection._split import check_cv
 from sklearn.model_selection._validation import _aggregate_score_dicts, _fit_and_score
-from sklearn.utils import deprecated
 from sklearn.utils._joblib import Parallel, delayed
-from sklearn.utils.fixes import MaskedArray
 from sklearn.utils.validation import indexable
 
 warnings.simplefilter("ignore")
@@ -81,7 +80,9 @@ def global_instability(estimators):
         # for tri dimensional matrices
         n_times = precisions[0].shape[0]
         triu_idx = np.triu_indices_from(precisions[0][0], 1)
-        mean_connectivity = np.array([np.zeros_like(precisions[0][0])[triu_idx] for i in range(n_times)])
+        mean_connectivity = np.array(
+            [np.zeros_like(precisions[0][0])[triu_idx] for i in range(n_times)]
+        )
         for c in precisions:
             for i in range(n_times):
                 mean_connectivity[i] += (c[i][triu_idx].copy() != 0).astype(int)
@@ -119,7 +120,9 @@ def graphlet_instability(estimators):
         gdvs = []
         for p in precisions:
             g = nx.from_numpy_array(p - np.diag(np.diag(p)))
-            gdvs.append(graphlet_degree_vectors(list(g.nodes), list(g.edges), graphlet_size=4))
+            gdvs.append(
+                graphlet_degree_vectors(list(g.nodes), list(g.edges), graphlet_size=4)
+            )
         distances = []
         for i in range(len(gdvs)):
             for j in range(i + 1, len(gdvs)):
@@ -131,7 +134,11 @@ def graphlet_instability(estimators):
             times = []
             for t in range(n_times):
                 g = nx.from_numpy_array(p[t] - np.diag(np.diag(p[t])))
-                times.append(graphlet_degree_vectors(list(g.nodes), list(g.edges), graphlet_size=4))
+                times.append(
+                    graphlet_degree_vectors(
+                        list(g.nodes), list(g.edges), graphlet_size=4
+                    )
+                )
             gdvs.append(times)
 
         distances = []
@@ -156,7 +163,9 @@ def upper_bound(estimators):
         # for tri-dimensional matrices
         n_times = precisions[0].shape[0]
         triu_idx = np.triu_indices_from(precisions[0][0], 1)
-        mean_connectivity = np.array([np.zeros_like(precisions[0][0])[triu_idx] for i in range(n_times)])
+        mean_connectivity = np.array(
+            [np.zeros_like(precisions[0][0])[triu_idx] for i in range(n_times)]
+        )
         for c in precisions:
             for i in range(n_times):
                 mean_connectivity[i] += (c[i][triu_idx].copy() != 0).astype(int)
@@ -165,7 +174,11 @@ def upper_bound(estimators):
 
     p = precisions[0].shape[1]
     theta_hat = np.sum(xi_matrix)
-    theta_hat = theta_hat / (p * (p - 1) / 2) if precisions[0].ndim == 2 else theta_hat / (n_times * p * (p - 1) / 2)
+    theta_hat = (
+        theta_hat / (p * (p - 1) / 2)
+        if precisions[0].ndim == 2
+        else theta_hat / (n_times * p * (p - 1) / 2)
+    )
     return 4 * theta_hat * (1 - theta_hat)
 
 
@@ -311,11 +324,15 @@ class GraphicalModelStabilitySelection(GridSearchCV):
 
         if self.sampling_size is None:
             self.sampling_size = int(min(10 * np.sqrt(X.shape[0]), X.shape[0] - 10))
-            self.cv = StratifiedShuffleSplit(train_size=self.sampling_size, n_splits=self.n_repetitions)
+            self.cv = StratifiedShuffleSplit(
+                train_size=self.sampling_size, n_splits=self.n_repetitions
+            )
         if y is not None:
             n_classes = np.unique(y).shape[0]
             if self.sampling_size % n_classes != 0:
-                warnings.warn("Changing sampling size, divisible for the " "number of classes.")
+                warnings.warn(
+                    "Changing sampling size, divisible for the " "number of classes."
+                )
                 self.sampling_size = (self.sampling_size // n_classes) * n_classes
                 self.cv = StratifiedShuffleSplit(
                     n_splits=self.n_repetitions,
@@ -326,14 +343,17 @@ class GraphicalModelStabilitySelection(GridSearchCV):
             y = np.ones(X.shape[0])
         cv = check_cv(self.cv, y, classifier=is_classifier(estimator))
 
-        scorers, self.multimetric_ = _check_multimetric_scoring(self.estimator, scoring=self.scoring)
+        scorers, self.multimetric_ = _check_multimetric_scoring(
+            self.estimator, scoring=self.scoring
+        )
 
         if self.multimetric_:
             if (
                 self.refit is not False
                 and (
                     not isinstance(self.refit, str)
-                    or self.refit not in scorers  # This will work for both dict / list (tuple)
+                    or self.refit
+                    not in scorers  # This will work for both dict / list (tuple)
                 )
                 and not callable(self.refit)
             ):
@@ -357,7 +377,9 @@ class GraphicalModelStabilitySelection(GridSearchCV):
         n_splits = cv.get_n_splits(X, y, groups)
         base_estimator = clone(self.estimator)
 
-        parallel = Parallel(n_jobs=self.n_jobs, verbose=self.verbose, pre_dispatch=self.pre_dispatch)
+        parallel = Parallel(
+            n_jobs=self.n_jobs, verbose=self.verbose, pre_dispatch=self.pre_dispatch
+        )
 
         fit_and_score_kwargs = dict(
             scorer=scorers,
@@ -382,7 +404,9 @@ class GraphicalModelStabilitySelection(GridSearchCV):
                 if self.verbose > 0:
                     print(
                         "Fitting {0} folds for each of {1} candidates,"
-                        " totalling {2} fits".format(n_splits, n_candidates, n_candidates * n_splits)
+                        " totalling {2} fits".format(
+                            n_splits, n_candidates, n_candidates * n_splits
+                        )
                     )
 
                 out = parallel(
@@ -395,12 +419,16 @@ class GraphicalModelStabilitySelection(GridSearchCV):
                         parameters=parameters,
                         **fit_and_score_kwargs
                     )
-                    for parameters, (train, test) in product(candidate_params, cv.split(X, y, groups))
+                    for parameters, (train, test) in product(
+                        candidate_params, cv.split(X, y, groups)
+                    )
                 )
 
                 if len(out) < 1:
                     raise ValueError(
-                        "No fits were performed. " "Was the CV iterator empty? " "Were there no candidates?"
+                        "No fits were performed. "
+                        "Was the CV iterator empty? "
+                        "Were there no candidates?"
                     )
                 elif len(out) != n_candidates * n_splits:
                     raise ValueError(
@@ -413,7 +441,9 @@ class GraphicalModelStabilitySelection(GridSearchCV):
                 all_out.extend(out)
 
                 nonlocal results
-                results = self._format_results(all_candidate_params, scorers, n_splits, all_out)
+                results = self._format_results(
+                    all_candidate_params, scorers, n_splits, all_out
+                )
                 return results
 
             self._run_search(evaluate_candidates)
@@ -433,7 +463,9 @@ class GraphicalModelStabilitySelection(GridSearchCV):
             else:
                 self.best_index_ = results["rank_test_%s" % refit_metric].argmin()
                 print(self.best_index_)
-                self.best_score_ = results["mean_test_%s" % refit_metric][self.best_index_]
+                self.best_score_ = results["mean_test_%s" % refit_metric][
+                    self.best_index_
+                ]
             self.best_params_ = results["params"][self.best_index_]
 
         if self.refit:
@@ -459,9 +491,22 @@ class GraphicalModelStabilitySelection(GridSearchCV):
 
         # if one choose to see train score, "out" will contain train score info
         if self.return_train_score:
-            (train_score_dicts, test_score_dicts, test_sample_counts, fit_time, score_time, estimators) = zip(*out)
+            (
+                train_score_dicts,
+                test_score_dicts,
+                test_sample_counts,
+                fit_time,
+                score_time,
+                estimators,
+            ) = zip(*out)
         else:
-            (test_score_dicts, test_sample_counts, fit_time, score_time, estimators) = zip(*out)
+            (
+                test_score_dicts,
+                test_sample_counts,
+                fit_time,
+                score_time,
+                estimators,
+            ) = zip(*out)
 
         # test_score_dicts and train_score dicts are lists of dictionaries and
         # we make them into dict of lists
@@ -484,11 +529,17 @@ class GraphicalModelStabilitySelection(GridSearchCV):
             array_means = np.average(array, axis=1, weights=weights)
             results["mean_%s" % key_name] = array_means
             # Weighted std is not directly available in numpy
-            array_stds = np.sqrt(np.average((array - array_means[:, np.newaxis]) ** 2, axis=1, weights=weights))
+            array_stds = np.sqrt(
+                np.average(
+                    (array - array_means[:, np.newaxis]) ** 2, axis=1, weights=weights
+                )
+            )
             results["std_%s" % key_name] = array_stds
 
             if rank:
-                results["rank_%s" % key_name] = np.asarray(rankdata(-array_means, method="min"), dtype=np.int32)
+                results["rank_%s" % key_name] = np.asarray(
+                    rankdata(-array_means, method="min"), dtype=np.int32
+                )
 
         _store("fit_time", fit_time)
         _store("score_time", score_time)
@@ -521,7 +572,9 @@ class GraphicalModelStabilitySelection(GridSearchCV):
 
         if self.iid != "deprecated":
             warnings.warn(
-                "The parameter 'iid' is deprecated in 0.22 and will be " "removed in 0.24.", DeprecationWarning
+                "The parameter 'iid' is deprecated in 0.22 and will be "
+                "removed in 0.24.",
+                DeprecationWarning,
             )
             iid = self.iid
         else:
@@ -545,16 +598,22 @@ class GraphicalModelStabilitySelection(GridSearchCV):
         # monotonize instabilities - require ordered parameters,
         # from high sparsity to low
 
-        monotonized_instabilities = [array_means[0]] + [np.max(array_means[:i]) for i in range(1, array_means.size)]
+        monotonized_instabilities = [array_means[0]] + [
+            np.max(array_means[:i]) for i in range(1, array_means.size)
+        ]
         monotonized_instabilities = np.array(monotonized_instabilities)
         self.monotonized_instabilities = np.copy(monotonized_instabilities)
 
         if self.mode.lower() == "gstars":
-            graphlets_stability = np.array([graphlet_instability(e_split) for e_split in estimators])
+            graphlets_stability = np.array(
+                [graphlet_instability(e_split) for e_split in estimators]
+            )
             self.graphlets_instabilities = np.copy(graphlets_stability)
 
             upper_bounds = np.array([upper_bound(e_split) for e_split in estimators])
-            upper_bounds = [upper_bounds[0]] + [np.max(upper_bounds[:i]) for i in range(1, upper_bounds.size)]
+            upper_bounds = [upper_bounds[0]] + [
+                np.max(upper_bounds[:i]) for i in range(1, upper_bounds.size)
+            ]
             self.upper_bounds = np.array(upper_bounds)
             lb = np.where(np.array(monotonized_instabilities) <= 0.05)[0]
             ub = np.where(np.array(upper_bounds) <= 0.05)[0]
@@ -568,7 +627,9 @@ class GraphicalModelStabilitySelection(GridSearchCV):
             key_name = "test_instability"
             results["raw_%s" % key_name] = array_means
             results["mean_%s" % key_name] = monotonized_instabilities
-            results["rank_%s" % key_name] = np.asarray(rankdata(graphlets_stability, method="min"), dtype=np.int32)
+            results["rank_%s" % key_name] = np.asarray(
+                rankdata(graphlets_stability, method="min"), dtype=np.int32
+            )
         else:
             # discard high values
             monotonized_instabilities[monotonized_instabilities > 0.05] = -np.inf

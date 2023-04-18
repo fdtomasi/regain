@@ -34,10 +34,16 @@ except ImportError:
     # raise ImportError(
     #     "`matlab` package not found. "
     #     "Please note you will need Matlab >= 2016b to use it.")
-    pass
+    matlab = None
+
+try:
+    from oct2py import octave
+except:
+    octave = None
+
+import os
 
 import numpy as np
-import os
 
 matlab_engine = None  # matlab.engine.start_matlab()
 
@@ -52,7 +58,10 @@ def check_matlab_engine(verbose=False):
             matlab_engine = matlab.engine.start_matlab()
         except NameError as e:
             if "name 'matlab' is not defined" in str(e):
-                raise ValueError("`matlab` package not found. " "Please note you will need Matlab >= 2016b to use it.")
+                raise ValueError(
+                    "`matlab` package not found. "
+                    "Please note you will need Matlab >= 2016b to use it."
+                )
     # else:
     #     close_engine = False
 
@@ -63,17 +72,19 @@ def lvglasso(emp_cov, alpha, tau, rho=1, verbose=False, use_octave=True):
     If emp_cov.ndim > 2, then emp_cov.shape[0] == emp_cov.shape[1].
     In the temporal case, this means that the time is the last dimension.
     """
-    lvglasso_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "matlab", "lvglasso")
+    lvglasso_path = os.path.join(
+        os.path.abspath(os.path.dirname(__file__)), "matlab", "lvglasso"
+    )
     if use_octave:
-        from oct2py import octave
-
         octave.addpath(lvglasso_path, nout=0)
         result = octave.LVGLASSO(emp_cov, alpha, tau, rho)
     else:
         global matlab_engine
         check_matlab_engine(verbose=verbose)
         matlab_engine.addpath(lvglasso_path, nargout=0)
-        result = matlab_engine.LVGLASSO(matlab.double(emp_cov.tolist()), float(alpha), float(tau), float(rho))
+        result = matlab_engine.LVGLASSO(
+            matlab.double(emp_cov.tolist()), float(alpha), float(tau), float(rho)
+        )
     return result
 
 
@@ -119,7 +130,9 @@ def group_lasso_overlap_paspal(X, y, groups=(), lamda=0.1, verbose=False, **kwar
     global matlab_engine
     check_matlab_engine(verbose=verbose)
 
-    glopridu_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "GLO_PRIMAL_DUAL_TOOLBOX")
+    glopridu_path = os.path.join(
+        os.path.abspath(os.path.dirname(__file__)), "GLO_PRIMAL_DUAL_TOOLBOX"
+    )
     matlab_engine.addpath(glopridu_path, nargout=0)
 
     if verbose:
@@ -127,7 +140,9 @@ def group_lasso_overlap_paspal(X, y, groups=(), lamda=0.1, verbose=False, **kwar
     coef_ = matlab_engine.glopridu_algorithm(
         matlab.double(X.tolist()),
         matlab.double(y[:, None].tolist()),
-        [matlab.int32((np.array(x) + 1).tolist()) for x in groups],  # +1 because of the change of indices
+        [
+            matlab.int32((np.array(x) + 1).tolist()) for x in groups
+        ],  # +1 because of the change of indices
         float(lamda),
     )
 

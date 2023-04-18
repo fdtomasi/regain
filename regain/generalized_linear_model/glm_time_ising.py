@@ -42,9 +42,8 @@ from sklearn.gaussian_process import kernels
 
 from sklearn.utils.validation import check_is_fitted
 
-from regain.generalized_linear_model.ising import _fit
-from regain.generalized_linear_model.ising import loss
 from regain.covariance.time_graphical_lasso_ import init_precision
+from regain.generalized_linear_model.glm_ising import _fit
 from regain.norm import l1_od_norm
 from regain.utils import convergence
 from regain.update_rules import update_rho
