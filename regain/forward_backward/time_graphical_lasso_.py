@@ -36,7 +36,7 @@ from functools import partial
 import numpy as np
 from scipy import linalg
 from six.moves import map, range, zip
-from sklearn.covariance.graph_lasso_ import alpha_max
+from sklearn.covariance._graph_lasso import alpha_max  # noqa
 from sklearn.utils.extmath import squared_norm
 
 from regain.covariance.time_graphical_lasso_ import (
