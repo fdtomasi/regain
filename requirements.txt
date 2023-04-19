@@ -2,7 +2,7 @@ codecov
 nose
 numpy>=1.11
 scipy>=0.16.1,>=1.0.0
-scikit_learn>=1.2
+scikit_learn>=1.0
 setuptools
 six
 networkx
