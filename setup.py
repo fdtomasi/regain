@@ -118,8 +118,8 @@ setup(
     license="FreeBSD",
     packages=PACKAGES,
     include_package_data=True,
-    install_requires=read_requirements("requirements.txt"),
-    extras_require=dict(
-        dev=read_requirements("requirements-optional.txt"),
-    ),
+    # install_requires=read_requirements("requirements.txt"),
+    # extras_require=dict(
+    #     dev=read_requirements("requirements-optional.txt"),
+    # ),
 )
