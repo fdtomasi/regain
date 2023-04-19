@@ -2,15 +2,17 @@ name: publish_conda
 
 on:
   release:
-    types: [published]
-    
+    types: [ published ]
+
+  workflow_dispatch:
+
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    - name: publish-to-conda
-      uses: maxibor/conda-package-publish-action@v1.1
-      with:
-        subDir: 'conda'
-        AnacondaToken: ${{ secrets.ANACONDA_TOKEN }}
+      - uses: actions/checkout@v1
+      - name: publish-to-conda
+        uses: maxibor/conda-package-publish-action@v1.1
+        with:
+          subDir: 'conda'
+          AnacondaToken: ${{ secrets.ANACONDA_TOKEN }}
