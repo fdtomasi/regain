@@ -30,38 +30,96 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """regain setup script."""
 
+import codecs
+import os
+
 from setuptools import find_packages, setup
 
+HERE = os.path.abspath(os.path.dirname(__file__))
 from regain import __version__ as version
 
+
+def get_extra_requires(path, add_all=True):
+    import re
+    from collections import defaultdict
+
+    with open(path) as fp:
+        extra_deps = defaultdict(set)
+        for k in fp:
+            if k.strip() and not k.startswith("#"):
+                tags = set()
+                if ":" in k:
+                    k, v = k.split(":")
+                    tags.update(vv.strip() for vv in v.split(","))
+                tags.add(re.split("[<=>]", k)[0])
+                for t in tags:
+                    extra_deps[t].add(k)
+
+        # add tag `all` at the end
+        if add_all:
+            extra_deps["all"] = set(vv for v in extra_deps.values() for vv in v)
+
+    return extra_deps
+
+
+def read(*filenames, **kwargs):
+    """
+    Build an absolute path from ``*filenames``, and  return contents of
+    resulting file.  Defaults to UTF-8 encoding.
+    """
+    encoding = kwargs.get("encoding", "utf-8")
+    sep = kwargs.get("sep", "\n")
+    buf = []
+    for fl in filenames:
+        with codecs.open(os.path.join(HERE, fl), "rb", encoding) as f:
+            buf.append(f.read())
+    return sep.join(buf)
+
+
+def read_requirements(filename):
+    reqs_txt = read(filename)
+    parsed = reqs_txt.split("\n")
+    return [r for r in parsed if len(r) > 0 and not r.startswith("-")]
+
+
+NAME = "regain"
+PACKAGE_NAME = "regain"
+PACKAGES = find_packages(exclude=["*.__old", "*.tests"])
+
 setup(
-    name='regain',
+    name=NAME,
     version=version,
-    description=('REGAIN (Regularised Graph Inference)'),
-    long_description=open('README.md').read(),
-    long_description_content_type='text/markdown',
-    author='Federico Tomasi',
-    author_email='fdtomasi@gmail.com',
-    maintainer='Federico Tomasi',
-    maintainer_email='fdtomasi@gmail.com',
-    url='https://github.com/fdtomasi/regain',
-    download_url='https://github.com/fdtomasi/regain/archive/'
-    'v%s.tar.gz' % version,
-    keywords=['graph inference', 'latent variables'],
+    description=("REGAIN (Regularised Graph Inference)"),
+    long_description=open("README.md").read(),
+    long_description_content_type="text/markdown",
+    author="Federico Tomasi",
+    author_email="fdtomasi@gmail.com",
+    maintainer="Federico Tomasi",
+    maintainer_email="fdtomasi@gmail.com",
+    url="https://github.com/fdtomasi/regain",
+    download_url="https://github.com/fdtomasi/regain/archive/" "v%s.tar.gz" % version,
+    keywords=["graph inference", "latent variables"],
     classifiers=[
-        'Development Status :: 4 - Beta', 'Environment :: Console',
-        'Intended Audience :: Science/Research',
-        'Intended Audience :: Developers', 'Programming Language :: Python',
-        'License :: OSI Approved :: BSD License',
-        'Topic :: Software Development', 'Topic :: Scientific/Engineering',
-        'Natural Language :: English', 'Operating System :: POSIX',
-        'Operating System :: Unix', 'Operating System :: MacOS',
-        'Programming Language :: Python'
+        "Development Status :: 4 - Beta",
+        "Environment :: Console",
+        "Intended Audience :: Science/Research",
+        "Intended Audience :: Developers",
+        "Programming Language :: Python",
+        "License :: OSI Approved :: BSD License",
+        "Topic :: Software Development",
+        "Topic :: Scientific/Engineering",
+        "Natural Language :: English",
+        "Operating System :: POSIX",
+        "Operating System :: Unix",
+        "Operating System :: MacOS",
+        "Programming Language :: Python",
     ],
-    license='FreeBSD',
-    packages=find_packages(exclude=["*.__old", "*.tests"]),
+    license="FreeBSD",
+    packages=PACKAGES,
     include_package_data=True,
-    requires=[
-        'numpy (>=1.11)', 'scipy (>=0.16.1,>=1.0)', 'sklearn (>=0.17)', 'six'
-    ],
+    install_requires=read_requirements("requirements.txt"),
+    extras_require=dict(
+        dev=read_requirements("dev-requirements.txt"),
+        diffusion=read_requirements("diffusion-requirements.txt"),
+    ),
 )
