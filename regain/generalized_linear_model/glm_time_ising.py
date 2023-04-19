@@ -43,7 +43,7 @@ from sklearn.gaussian_process import kernels
 from sklearn.utils.validation import check_is_fitted
 
 from regain.covariance.time_graphical_lasso_ import init_precision
-from regain.generalized_linear_model.glm_ising import _fit
+from regain.generalized_linear_model.glm_ising import _fit, loss
 from regain.norm import l1_od_norm
 from regain.utils import convergence
 from regain.update_rules import update_rho
@@ -197,7 +197,9 @@ def _fit_time_ising_model(
             A_L = K[:-m] + U_L
             A_R = K[m:] + U_R
             if not psi_node_penalty:
-                prox_e = prox_psi(A_R - A_L, lamda=2.0 * np.diag(kernel, m)[:, None, None] / rho)
+                prox_e = prox_psi(
+                    A_R - A_L, lamda=2.0 * np.diag(kernel, m)[:, None, None] / rho
+                )
                 Z_L = 0.5 * (A_L + A_R - prox_e)
                 Z_R = 0.5 * (A_L + A_R + prox_e)
             else:
@@ -217,12 +219,16 @@ def _fit_time_ising_model(
 
         # diagnostics, reporting, termination checks
         rnorm = np.sqrt(
-            sum(squared_norm(K[:-m] - Z_M[m][0]) + squared_norm(K[m:] - Z_M[m][1]) for m in range(1, n_times))
+            sum(
+                squared_norm(K[:-m] - Z_M[m][0]) + squared_norm(K[m:] - Z_M[m][1])
+                for m in range(1, n_times)
+            )
         )
 
         snorm = rho * np.sqrt(
             sum(
-                squared_norm(Z_M[m][0] - Z_M_old[m][0]) + squared_norm(Z_M[m][1] - Z_M_old[m][1])
+                squared_norm(Z_M[m][0] - Z_M_old[m][0])
+                + squared_norm(Z_M[m][1] - Z_M_old[m][1])
                 for m in range(1, n_times)
             )
         )
@@ -236,17 +242,38 @@ def _fit_time_ising_model(
             e_pri=n_features * n_times * tol
             + rtol
             * max(
-                np.sqrt(sum(squared_norm(Z_M[m][0]) + squared_norm(Z_M[m][1]) for m in range(1, n_times))),
-                np.sqrt(squared_norm(K) + sum(squared_norm(K[:-m]) + squared_norm(K[m:]) for m in range(1, n_times))),
+                np.sqrt(
+                    sum(
+                        squared_norm(Z_M[m][0]) + squared_norm(Z_M[m][1])
+                        for m in range(1, n_times)
+                    )
+                ),
+                np.sqrt(
+                    squared_norm(K)
+                    + sum(
+                        squared_norm(K[:-m]) + squared_norm(K[m:])
+                        for m in range(1, n_times)
+                    )
+                ),
             ),
             e_dual=n_features * n_times * tol
-            + rtol * rho * np.sqrt(sum(squared_norm(U_M[m][0]) + squared_norm(U_M[m][1]) for m in range(1, n_times))),
+            + rtol
+            * rho
+            * np.sqrt(
+                sum(
+                    squared_norm(U_M[m][0]) + squared_norm(U_M[m][1])
+                    for m in range(1, n_times)
+                )
+            ),
         )
         for m in range(1, n_times):
             Z_M_old[m] = (Z_M[m][0].copy(), Z_M[m][1].copy())
 
         if verbose:
-            print("obj: %.4f, rnorm: %.4f, snorm: %.4f," "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
+            print(
+                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
+                "eps_pri: %.4f, eps_dual: %.4f" % check[:5]
+            )
 
         checks.append(check)
         if stop_at is not None:
@@ -256,7 +283,9 @@ def _fit_time_ising_model(
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
 
-        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {}))
+        rho_new = update_rho(
+            rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {})
+        )
         # scaled dual variables should be also rescaled
         # U_0 *= rho / rho_new
         for m in range(1, n_times):
@@ -388,13 +417,23 @@ class TemporalIsingModel(BaseEstimator):
 
     def fit(self, X, y):
         # Covariance does not make sense for a single feature
-        X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64, order="C", ensure_min_features=2, estimator=self)
+        X, y = check_X_y(
+            X,
+            y,
+            accept_sparse=False,
+            dtype=np.float64,
+            order="C",
+            ensure_min_features=2,
+            estimator=self,
+        )
 
         self.classes_, n_samples = np.unique(y, return_counts=True)
         self.data = X.copy()
         if np.unique(self.data).size != 2:
             raise ValueError(
-                "Using the ising distribution your data has " "to contain only two values, either 0 and 1 " "or -1, 1"
+                "Using the ising distribution your data has "
+                "to contain only two values, either 0 and 1 "
+                "or -1, 1"
             )
         X = np.array([X[y == cl] for cl in self.classes_])
 
@@ -411,7 +450,12 @@ class TemporalIsingModel(BaseEstimator):
                 # E step - discover best kernel parameter
                 theta = minimize_scalar(
                     objective_kernel,
-                    args=(self.precision_, self.psi, self.kernel, self.classes_[:, None]),
+                    args=(
+                        self.precision_,
+                        self.psi,
+                        self.kernel,
+                        self.classes_[:, None],
+                    ),
                     bounds=(0, X.shape[0]),
                     method="bounded",
                 ).x
@@ -456,16 +500,22 @@ class TemporalIsingModel(BaseEstimator):
             if callable(self.kernel):
                 try:
                     # this works if it is a ExpSineSquared or RBF kernel
-                    kernel = self.kernel(length_scale=self.ker_param)(self.classes_[:, None])
+                    kernel = self.kernel(length_scale=self.ker_param)(
+                        self.classes_[:, None]
+                    )
                 except TypeError:
                     # maybe it's a ConstantKernel
-                    kernel = self.kernel(constant_value=self.ker_param)(self.classes_[:, None])
+                    kernel = self.kernel(constant_value=self.ker_param)(
+                        self.classes_[:, None]
+                    )
             else:
                 kernel = self.kernel
                 if kernel.shape[0] != self.classes_.size:
                     raise ValueError(
                         "Kernel size does not match classes of samples, "
-                        "got {} classes and kernel has shape {}".format(self.classes_.size, kernel.shape[0])
+                        "got {} classes and kernel has shape {}".format(
+                            self.classes_.size, kernel.shape[0]
+                        )
                     )
             out = _fit_time_ising_model(
                 X,
@@ -507,7 +557,15 @@ class TemporalIsingModel(BaseEstimator):
             estimator of its covariance matrix.
         """
         # Covariance does not make sense for a single feature
-        X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64, order="C", ensure_min_features=2, estimator=self)
+        X, y = check_X_y(
+            X,
+            y,
+            accept_sparse=False,
+            dtype=np.float64,
+            order="C",
+            ensure_min_features=2,
+            estimator=self,
+        )
 
         # TO THINK
         return -99999999
@@ -518,7 +576,9 @@ def precision_similarity(precision, psi=None):
     from scipy.spatial.distance import squareform
     from itertools import combinations
 
-    distances = squareform([l1_od_norm(t1 - t2) for t1, t2 in combinations(precision, 2)])
+    distances = squareform(
+        [l1_od_norm(t1 - t2) for t1, t2 in combinations(precision, 2)]
+    )
     print(distances)
     distances /= np.max(distances)
     return 1 - distances
@@ -621,20 +681,32 @@ class SimilarityTemporalIsingModel(TemporalIsingModel):
         self.n_clusters = n_clusters
 
     def fit(self, X, y):
-        X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64, order="C", ensure_min_features=2, estimator=self)
+        X, y = check_X_y(
+            X,
+            y,
+            accept_sparse=False,
+            dtype=np.float64,
+            order="C",
+            ensure_min_features=2,
+            estimator=self,
+        )
 
         self.classes_, n_samples = np.unique(y, return_counts=True)
         self.data = X.copy()
         if np.unique(self.data).size != 2:
             raise ValueError(
-                "Using the ising distribution your data has " "to contain only two values, either 0 and 1 " "or -1, 1"
+                "Using the ising distribution your data has "
+                "to contain only two values, either 0 and 1 "
+                "or -1, 1"
             )
         X = np.array([X[y == cl] for cl in self.classes_])
         if self.kernel is None:
             # from scipy.optimize import minimize
             # discover best kernel parameter via EM
             # initialise precision matrices, as warm start
-            self.precision_ = np.random.rand(self.classes_.shape[0], X.shape[1], X.shape[1])
+            self.precision_ = np.random.rand(
+                self.classes_.shape[0], X.shape[1], X.shape[1]
+            )
             n_times = self.precision_.shape[0]
             kernel = np.eye(n_times)
 
@@ -664,14 +736,20 @@ class SimilarityTemporalIsingModel(TemporalIsingModel):
                 theta = precision_similarity(self.precision_, psi)
                 kernel = theta
                 labels_pred = AgglomerativeClustering(
-                    n_clusters=self.n_clusters, affinity="precomputed", linkage="complete"
+                    n_clusters=self.n_clusters,
+                    affinity="precomputed",
+                    linkage="complete",
                 ).fit_predict(kernel)
 
-                if i > 0 and np.linalg.norm(labels_pred - labels_pred_old) / labels_pred.size < self.eps:
+                if (
+                    i > 0
+                    and np.linalg.norm(labels_pred - labels_pred_old) / labels_pred.size
+                    < self.eps
+                ):
                     break
-                kernel = kernels.RBF(0.0001)(labels_pred[:, None]) + kernels.RBF(self.beta)(
-                    np.arange(n_times)[:, None]
-                )
+                kernel = kernels.RBF(0.0001)(labels_pred[:, None]) + kernels.RBF(
+                    self.beta
+                )(np.arange(n_times)[:, None])
                 print(kernel)
                 labels_pred_old = labels_pred
 
@@ -684,7 +762,9 @@ class SimilarityTemporalIsingModel(TemporalIsingModel):
             if kernel.shape[0] != self.classes_.size:
                 raise ValueError(
                     "Kernel size does not match classes of samples, "
-                    "got {} classes and kernel has shape {}".format(self.classes_.size, kernel.shape[0])
+                    "got {} classes and kernel has shape {}".format(
+                        self.classes_.size, kernel.shape[0]
+                    )
                 )
 
             out = _fit_time_ising_model(

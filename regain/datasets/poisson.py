@@ -49,7 +49,14 @@ def update_l1(G, how_many, n_dim_obs):
 
 
 def poisson_theta_generator(
-    n_dim_obs=10, T=10, mode="l1", random_graph="erdos-renyi", probability=0.2, degree=3, n_to_change=3, **kwargs
+    n_dim_obs=10,
+    T=10,
+    mode="l1",
+    random_graph="erdos-renyi",
+    probability=0.2,
+    degree=3,
+    n_to_change=3,
+    **kwargs
 ):
     """Generates adjacency matix for Ising graphical model.
 
@@ -89,7 +96,9 @@ def poisson_theta_generator(
     elif random_graph.lower() == "scale-free":
         graph = nx.random_graphs.barabasi_albert_graph(n=n_dim_obs, m=degree)
     elif random_graph.lower() == "small-world":
-        graph = nx.random_graphs.watts_strogatz_graph(n=n_dim_obs, k=degree, p=probability)
+        graph = nx.random_graphs.watts_strogatz_graph(
+            n=n_dim_obs, k=degree, p=probability
+        )
     else:
         graph = nx.random_graphs.gnm_random_graph(n=n_dim_obs, m=degree)
     graph = nx.adjacency_matrix(graph).todense()
@@ -189,7 +198,7 @@ def poisson_sampler(
         for iter_ in range(max_iter):
             for i in range(n_dim_obs):
                 selector = np.array([j for j in range(n_dim_obs) if j != i])
-                par = np.exp(variances[i] + X[:, selector].dot(theta[selector, j]))
+                par = np.exp(variances[i] + X[:, selector].dot(theta[selector, i]))
                 X[:, i] = np.array([np.random.poisson(p) for p in par])
 
     return X
