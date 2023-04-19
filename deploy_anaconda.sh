@@ -4,7 +4,6 @@
 # >>> anaconda login
 # >>> anaconda auth -c -n travis --max-age 307584000 --url https://anaconda.org/fdtomasi/$PACKAGENAME --scopes "api:write api:read"
 set -e
-ANACONDA_TOKEN="fd-61d74ee1-e208-4efe-a79d-80fa49b93e41"
 CONDA_BLD_PATH=$HOME/miniconda/conda-bld
 
 echo "Converting conda package..."
