@@ -35,8 +35,9 @@ import os
 
 from setuptools import find_packages, setup
 
-HERE = os.path.abspath(os.path.dirname(__file__))
 from regain import __version__ as version
+
+HERE = os.path.abspath(os.path.dirname(__file__))
 
 
 def get_extra_requires(path, add_all=True):
@@ -119,7 +120,6 @@ setup(
     include_package_data=True,
     install_requires=read_requirements("requirements.txt"),
     extras_require=dict(
-        dev=read_requirements("dev-requirements.txt"),
-        diffusion=read_requirements("diffusion-requirements.txt"),
+        dev=read_requirements("requirements-optional.txt"),
     ),
 )
