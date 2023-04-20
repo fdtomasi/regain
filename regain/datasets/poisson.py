@@ -185,8 +185,6 @@ def poisson_sampler(
         Y_lambda = np.concatenate([lambda_list, nonzero_sigma.reshape(-1)], axis=0)
         assert Y_lambda.shape[0] == n_dim_obs + nonzero_sigma.size
 
-        print("ciao", Y_lambda)
-
         Y = np.array([np.random.poisson(l, n_samples) for l in Y_lambda]).T
         X = Y.dot(A.T)
 
