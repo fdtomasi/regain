@@ -178,10 +178,14 @@ def poisson_sampler(
         A = _adjacency_to_A(theta, typ="scale-free")
         sigma = _lambda * theta
         ltri_sigma = sigma[np.tril_indices(sigma.shape[0], k=-1)]
-        ltri_sigma = ltri_sigma.reshape(1, -1)
         nonzero_sigma = ltri_sigma[np.where(ltri_sigma != 0)]
-        aux = [_lambda] * theta.shape[0]
-        Y_lambda = np.array(aux + nonzero_sigma.flatten().tolist())
+
+        # aux = [_lambda] * theta.shape[0]
+        lambda_list = np.full(n_dim_obs, fill_value=_lambda)
+        Y_lambda = np.concatenate([lambda_list, nonzero_sigma.reshape(-1)], axis=0)
+        assert Y_lambda.shape[0] == n_dim_obs + nonzero_sigma.size
+
+        print("ciao", Y_lambda)
 
         Y = np.array([np.random.poisson(l, n_samples) for l in Y_lambda]).T
         X = Y.dot(A.T)
