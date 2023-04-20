@@ -181,7 +181,10 @@ def poisson_sampler(
         ltri_sigma = ltri_sigma.reshape(1, -1)
         nonzero_sigma = ltri_sigma[np.where(ltri_sigma != 0)]
         aux = [_lambda] * theta.shape[0]
-        Y_lambda = np.array(aux + nonzero_sigma.ravel().tolist())
+        if len(nonzero_sigma.shape)==2:# for compatibility with python 3.7 and 3.8
+            Y_lambda = np.array(aux + nonzero_sigma.ravel().tolist()[0])
+        else:
+            Y_lambda = np.array(aux + nonzero_sigma.ravel().tolist())
 
         Y = np.array([np.random.poisson(l, n_samples) for l in Y_lambda]).T
         X = Y.dot(A.T)
