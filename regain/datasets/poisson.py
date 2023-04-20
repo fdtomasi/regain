@@ -178,7 +178,7 @@ def poisson_sampler(
         A = _adjacency_to_A(theta, typ="scale-free")
         sigma = _lambda * theta
         ltri_sigma = sigma[np.tril_indices(sigma.shape[0], k=-1)]
-        nonzero_sigma = ltri_sigma[np.where(ltri_sigma != 0)]
+        nonzero_sigma = np.array(ltri_sigma[np.where(ltri_sigma != 0)])
 
         # aux = [_lambda] * theta.shape[0]
         lambda_list = np.full(n_dim_obs, fill_value=_lambda)
