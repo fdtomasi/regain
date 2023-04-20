@@ -53,7 +53,7 @@ def poisson_theta_generator(
     T=10,
     mode="l1",
     random_graph="erdos-renyi",
-    probability=0.2,
+    probability=0.5,
     degree=3,
     n_to_change=3,
     **kwargs
@@ -178,9 +178,10 @@ def poisson_sampler(
         A = _adjacency_to_A(theta, typ="scale-free")
         sigma = _lambda * theta
         ltri_sigma = sigma[np.tril_indices(sigma.shape[0], k=-1)]
+        ltri_sigma = ltri_sigma.reshape(1, -1)
         nonzero_sigma = ltri_sigma[np.where(ltri_sigma != 0)]
         aux = [_lambda] * theta.shape[0]
-        Y_lambda = np.array(aux + nonzero_sigma.ravel().tolist()[0])
+        Y_lambda = np.array(aux + nonzero_sigma.ravel().tolist())
 
         Y = np.array([np.random.poisson(l, n_samples) for l in Y_lambda]).T
         X = Y.dot(A.T)
