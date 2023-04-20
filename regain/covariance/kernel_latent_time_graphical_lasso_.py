@@ -538,7 +538,7 @@ class KernelLatentTimeGraphicalLasso(KernelTimeGraphicalLasso):
                 )
 
         else:
-            kernel_phi = self.kernel_phi
+            kernel_phi = self.kernel_phi or np.identity(self.classes_.size)
             if kernel_phi.shape[0] != self.classes_.size:
                 raise ValueError(
                     "kernel_phi size does not match classes of samples, "
@@ -558,7 +558,7 @@ class KernelLatentTimeGraphicalLasso(KernelTimeGraphicalLasso):
                     self.classes_[:, None]
                 )
         else:
-            kernel_psi = self.kernel_psi
+            kernel_psi = self.kernel_psi or np.identity(self.classes_.size)
             if kernel_psi.shape[0] != self.classes_.size:
                 raise ValueError(
                     "kernel_psi size does not match classes of samples, "

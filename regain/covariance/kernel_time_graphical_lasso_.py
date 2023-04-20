@@ -32,8 +32,6 @@
 This adds the possibility to specify a temporal constraint with a kernel
 function.
 """
-from __future__ import division
-
 import warnings
 
 import numpy as np
@@ -54,6 +52,7 @@ from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence
 from regain.validation import check_norm_prox
+
 
 # from regain.clustering import graph_k_means
 
@@ -548,7 +547,7 @@ class KernelTimeGraphicalLasso(TimeGraphicalLasso):
                         self.classes_[:, None]
                     )
             else:
-                kernel = self.kernel
+                kernel = self.kernel or np.identity(self.classes_.size)
                 if kernel.shape[0] != self.classes_.size:
                     raise ValueError(
                         "Kernel size does not match classes of samples, "
