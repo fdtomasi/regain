@@ -28,20 +28,42 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Test LatentTimeGraphicalLasso."""
-import numpy as np
 import warnings
+
+import numpy as np
 from numpy.testing import assert_array_equal
 
 from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso
+from regain.forward_backward.time_graphical_lasso_ import (
+    TimeGraphicalLassoForwardBackward,
+)
 
 
-def test_ltgl_zero():
-    """Check that LatentTimeGraphicalLasso can handle zero data."""
+def test_tgl_zero():
+    """Check that TimeGraphicalLasso can handle zero data."""
     x = np.zeros((9, 3))
     y = [0, 0, 0, 1, 1, 1, 2, 2, 2]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         mdl = TimeGraphicalLasso(max_iter=1, assume_centered=True).fit(x, y)
+
+    for p in mdl.precision_:
+        # remove the diagonal
+        p.flat[::4] = 0
+
+    assert_array_equal(mdl.precision_, np.zeros((3, 3, 3)))
+    assert_array_equal(mdl.get_observed_precision(), mdl.precision_)
+
+
+def test_tgl_fb_zero():
+    """Check that TimeGraphicalLasso forwarb-backward can handle zero data."""
+    x = np.zeros((9, 3))
+    y = [0, 0, 0, 1, 1, 1, 2, 2, 2]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        mdl = TimeGraphicalLassoForwardBackward(max_iter=1, assume_centered=True).fit(
+            x, y
+        )
 
     for p in mdl.precision_:
         # remove the diagonal

@@ -42,3 +42,12 @@ def test_grouplasso_overlap():
 
     mdl = GroupLassoOverlap(groups=[[1, 2]]).fit(x, y)
     assert_array_equal(mdl.coef_.size, 9)
+
+
+def test_grouplasso_paspal():
+    """Test function for the module."""
+    x = np.eye(9)
+    y = [0, 0, 0, 1, 1, 1, 2, 2, 2]
+
+    mdl = GroupLassoOverlap(mode="paspal", groups=[[1, 2]]).fit(x, y)
+    assert_array_equal(mdl.coef_.size, 9)
