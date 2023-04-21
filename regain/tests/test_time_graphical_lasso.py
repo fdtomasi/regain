@@ -28,15 +28,16 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Test LatentTimeGraphicalLasso."""
-import numpy as np
 import warnings
+
+import numpy as np
 from numpy.testing import assert_array_equal
 
 from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso
 
 
-def test_ltgl_zero():
-    """Check that LatentTimeGraphicalLasso can handle zero data."""
+def test_tgl_zero():
+    """Check that TimeGraphicalLasso can handle zero data."""
     x = np.zeros((9, 3))
     y = [0, 0, 0, 1, 1, 1, 2, 2, 2]
     with warnings.catch_warnings():
