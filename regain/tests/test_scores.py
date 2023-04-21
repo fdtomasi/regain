@@ -1,7 +1,5 @@
 # BSD 3-Clause License
 
-from regain.scores import log_likelihood_t
-
 # Copyright (c) 2019, regain authors
 # All rights reserved.
 
@@ -36,6 +34,7 @@ from sklearn.utils.extmath import fast_logdet as fast_logdet_sk
 
 from regain import scores
 from regain.math import fast_logdet
+from regain.scores import log_likelihood_t
 
 
 def test_fast_logdet():
