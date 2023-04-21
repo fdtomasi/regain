@@ -1,4 +1,4 @@
 # Optional requirements
 matplotlib
-prox_tv
+prox-tv
 #GPyOpt
