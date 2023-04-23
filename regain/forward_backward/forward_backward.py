@@ -28,7 +28,8 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 import numpy as np
-from regain.prox import soft_thresholding_od, prox_FL
+
+from regain.prox import prox_FL, soft_thresholding_off_diagonal
 from regain.utils import positive_definite
 
 
@@ -76,9 +77,11 @@ def choose_gamma(
     fx = function_f(K=x)
     for i in range(max_iter):
         if laplacian_penalty:
-            prox = soft_thresholding_od(x - gamma * grad, alpha * gamma)
+            prox = soft_thresholding_off_diagonal(x - gamma * grad, alpha * gamma)
         else:
-            prox = prox_FL(x - gamma * grad, beta * gamma, alpha * gamma, p=p, symmetric=True)
+            prox = prox_FL(
+                x - gamma * grad, beta * gamma, alpha * gamma, p=p, symmetric=True
+            )
         if positive_definite(prox) and choose != "gamma":
             break
 

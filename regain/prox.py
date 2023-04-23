@@ -32,18 +32,16 @@
 import warnings
 from functools import partial
 
-import collections
-
 import numpy as np
-from six.moves import range, zip
 from sklearn.utils.extmath import squared_norm
 
+from regain.math import create_from_diagonal, fill_diagonal, get_diagonal
 from regain.update_rules import update_rho
 from regain.utils import convergence
 
 try:
     from prox_tv import tv1_1d, tvp_1d, tvgen, tvp_2d
-except:
+except ImportError:
     # fused lasso prox cannot be used
     pass
 
@@ -53,112 +51,69 @@ def soft_thresholding(a, lamda):
     return np.sign(a) * np.maximum(np.abs(a) - lamda, 0)
 
 
-def _soft_thresholding_od_2d(a, lamda):
-    # this assumes array is 2-dimensional
-    # no check is performed for optimisation
+def soft_thresholding_off_diagonal(a, lamda):
+    """Soft-thresholding."""
     soft = soft_thresholding(a, lamda)
-    np.fill_diagonal(soft, np.diag(a))
+    fill_diagonal(soft, get_diagonal(a))
     return soft
-
-
-def soft_thresholding_od(a, lamda):
-    """Off-diagonal soft-thresholding."""
-    if a.ndim > 2:
-        out = np.empty_like(a)
-        if not isinstance(lamda, collections.Iterable):
-            lamda = np.repeat(lamda, a.shape[0])
-        else:
-            assert lamda.shape[0] == a.shape[0]
-
-        for t in range(a.shape[0]):
-            out[t] = _soft_thresholding_od_2d(a[t], lamda[t])
-    else:
-        out = _soft_thresholding_od_2d(a, lamda)
-    return out
 
 
 def soft_thresholding_vector(a, lamda):
     """Soft-thresholding for vectors."""
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        return np.maximum(1 - lamda / np.linalg.norm(a), 0) * a
-
-
-def _blockwise_soft_thresholding_2d(a, lamda):
-    """Proximal operator for l2 norm, a is two-dimensional."""
-    return np.array([soft_thresholding_vector(aa, lamda) for aa in a.T]).T
+    return np.maximum(1 - lamda / np.linalg.norm(a, axis=-1, keepdims=True), 0) * a
 
 
 def blockwise_soft_thresholding(a, lamda):
-    """Proximal operator for l2 norm."""
-    if a.ndim > 2:
-        out = np.empty_like(a, dtype=float)
-        if not isinstance(lamda, collections.Iterable):
-            lamda = np.repeat(lamda, a.shape[0])
-        else:
-            lamda = lamda.ravel()
-            assert lamda.shape[0] == a.shape[0]
-
-        for t in range(a.shape[0]):
-            out[t] = _blockwise_soft_thresholding_2d(a[t], lamda[t])
-    else:
-        out = _blockwise_soft_thresholding_2d(a, lamda)
+    """Proximal operator for l2 norm column-wise."""
+    out = soft_thresholding_vector(a.swapaxes(-1, -2), lamda).swapaxes(-1, -2)
     return out
 
 
 def blockwise_soft_thresholding_symmetric(a, lamda):
     """Proximal operator for l2 norm, for symmetric matrices (last 2 axes)."""
-    col_norms = np.linalg.norm(a, axis=1)
-    ones_vect = np.ones(a.shape[1])
-
-    if a.ndim > 2:
-        out = np.empty_like(a, dtype=float)
-        if not isinstance(lamda, collections.Iterable):
-            lamda = np.repeat(lamda, a.shape[0])
-        else:
-            lamda = lamda.ravel()
-            assert lamda.shape[0] == a.shape[0]
-
-        out = np.empty_like(a, dtype=float)
-        for t, (x, c_norm) in enumerate(zip(a, col_norms)):
-            out[t] = np.dot(x, np.diag((ones_vect - lamda[t] / c_norm) * (c_norm > lamda[t])))
-
-    else:
-        out = np.dot(a, np.diag((ones_vect - lamda / col_norms) * (col_norms > lamda)))
-
+    col_norms = np.linalg.norm(a, axis=-2)
+    out = np.matmul(
+        a, create_from_diagonal((1 - lamda / col_norms) * (col_norms > lamda))
+    )
     return out
 
 
-# %% Perform prox operator:   min_x (1/2t)||x-w||^2 subject to |x|<=radius
-# function [ z ] = project_1ball( z,radius )
-# %  By Moreau's identity, projection onto 1-norm ball can be computed
-# %  using the proximal of the conjugate problem, which is L-infinity
-# %  minimization.
-#   z = z -  prox_infinityNorm(z,radius);
-# end
-# %% Perform prox operator:   min ||x||_inf + (1/2t)||x-w||^2
-# function [ xk ] = prox_infinityNorm( w,t )
-#     N = length(w);
-#     wabs = abs(w);
-#     ws = (cumsum(sort(wabs,'descend'))- t)./(1:N)';
-#     alphaopt = max(ws);
-#     if alphaopt>0
-#       xk = min(wabs,alphaopt).*sign(w); % truncation step
-#     else
-#       xk = zeros(size(w)); % if t is big, then solution is zero
-#     end
-# end
 def prox_linf_1d(a, lamda):
-    """Proximal operator for the l-inf norm.
+    """Proximal operator for the l-inf norm, defined as:
+
+    min ||x||_inf + (1/2t)||x-w||^2
 
     Since there is no closed-form, we can minimize it with scipy.
+
+    Matlab reference
+    ------
+    %% Perform prox operator:   min_x (1/2t)||x-w||^2 subject to |x|<=radius
+    function [ z ] = project_1ball( z,radius )
+    %  By Moreau's identity, projection onto 1-norm ball can be computed
+    %  using the proximal of the conjugate problem, which is L-infinity
+    %  minimization.
+      z = z -  prox_infinityNorm(z,radius);
+    end
+
+    %% Perform prox operator:   min ||x||_inf + (1/2t)||x-w||^2
+    function [ xk ] = prox_infinityNorm( w,t )
+        N = length(w);
+        wabs = abs(w);
+        ws = (cumsum(sort(wabs,'descend'))- t)./(1:N)';
+        alphaopt = max(ws);
+        if alphaopt>0
+          xk = min(wabs,alphaopt).*sign(w); % truncation step
+        else
+          xk = zeros(size(w)); % if t is big, then solution is zero
+        end
+    end
     """
     from scipy.optimize import minimize
 
-    def _f(x):
-        return lamda * np.linalg.norm(x, np.inf) + 0.5 * np.power(np.linalg.norm(a - x), 2)
+    def f(x):
+        return lamda * np.linalg.norm(x, np.inf) + 0.5 * squared_norm(a - x)
 
-    return minimize(_f, a).x
+    return minimize(f, a).x
 
 
 def prox_linf(a, lamda):
@@ -173,20 +128,35 @@ def prox_logdet(a, lamda):
     """Time-varying latent variable graphical lasso prox."""
     es, Q = np.linalg.eigh(a)
     xi = (-es + np.sqrt(np.square(es) + 4.0 / lamda)) * lamda / 2.0
-    return np.linalg.multi_dot((Q, np.diag(xi), Q.T))
+    # return np.linalg.multi_dot((Q, np.diag(xi), Q.T))
+
+    # support ndim > 2
+    Xi = create_from_diagonal(xi)
+    QXiQt = np.matmul(np.matmul(Q, Xi), np.swapaxes(Q, -1, -2))
+    return QXiQt
 
 
 def prox_logdet_ala_ma(a, lamda):
     es, Q = np.linalg.eigh(a)
     xi = (-es + np.sqrt(np.square(es) + 4.0 * lamda)) / 2.0
-    return np.linalg.multi_dot((Q, np.diag(xi), Q.T))
+    # return np.linalg.multi_dot((Q, np.diag(xi), Q.T))
+
+    # support ndim > 2
+    Xi = create_from_diagonal(xi)
+    QXiQt = np.matmul(np.matmul(Q, Xi), np.swapaxes(Q, -1, -2))
+    return QXiQt
 
 
 def prox_trace_indicator(a, lamda):
     """Time-varying latent variable graphical lasso prox."""
     es, Q = np.linalg.eigh(a)
     xi = np.maximum(es - lamda, 0)
-    return np.linalg.multi_dot((Q, np.diag(xi), Q.T))
+    # return np.linalg.multi_dot((Q, np.diag(xi), Q.T))
+
+    # support ndim > 2
+    Xi = create_from_diagonal(xi)
+    QXiQt = np.matmul(np.matmul(Q, Xi), np.swapaxes(Q, -1, -2))
+    return QXiQt
 
 
 def prox_laplacian(a, lamda):
@@ -215,7 +185,9 @@ def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
     W_old = np.zeros_like(U_1)
 
     for iteration_ in range(max_iter):
-        A = (Y_1 - Y_2 - W - U_1 + (W.transpose(0, 2, 1) - U_2).transpose(0, 2, 1)) / 2.0
+        A = (
+            Y_1 - Y_2 - W - U_1 + (W.transpose(0, 2, 1) - U_2).transpose(0, 2, 1)
+        ) / 2.0
         V = blockwise_soft_thresholding_symmetric(A, lamda=lamda)
 
         A = np.concatenate(((V + U_2).transpose(0, 2, 1), A_12), axis=1)
@@ -234,15 +206,21 @@ def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
 
         # diagnostics
         rnorm = np.sqrt(squared_norm(delta_U_1) + squared_norm(delta_U_2))
-        snorm = rho * np.sqrt(squared_norm(W - W_old) + squared_norm(V + W - V_old - W_old))
+        snorm = rho * np.sqrt(
+            squared_norm(W - W_old) + squared_norm(V + W - V_old - W_old)
+        )
         check = convergence(
             obj=np.nan,
             rnorm=rnorm,
             snorm=snorm,
             e_pri=np.sqrt(2 * V.size) * tol
             + rtol
-            * max(np.sqrt(squared_norm(W) + squared_norm(V + W)), np.sqrt(squared_norm(V) + squared_norm(Y_1 - Y_2))),
-            e_dual=np.sqrt(2 * V.size) * tol + rtol * rho * np.sqrt(squared_norm(U_1) + squared_norm(U_2)),
+            * max(
+                np.sqrt(squared_norm(W) + squared_norm(V + W)),
+                np.sqrt(squared_norm(V) + squared_norm(Y_1 - Y_2)),
+            ),
+            e_dual=np.sqrt(2 * V.size) * tol
+            + rtol * rho * np.sqrt(squared_norm(U_1) + squared_norm(U_2)),
         )
         W_old = W.copy()
         V_old = V.copy()
@@ -290,7 +268,9 @@ def prox_FL(a, beta, lamda, p=1, symmetric=False, use_matlab=False, optimize=Tru
             Z[upper_ind] = [func(row, beta) for row in b[upper_ind]]
 
             e = np.array(np.split(Z, a.shape[1], axis=0)).transpose(2, 0, 1)
-            Y = (e + e.transpose(0, 2, 1)) / (np.array([np.eye(a.shape[1]) for i in range(a.shape[0])]) + 1)
+            Y = (e + e.transpose(0, 2, 1)) / (
+                np.array([np.eye(a.shape[1]) for i in range(a.shape[0])]) + 1
+            )
         else:
             for i in range(np.power(a.shape[1], 2)):
                 solution = func(a.flat[i :: np.power(a.shape[1], 2)], beta)

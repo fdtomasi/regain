@@ -41,7 +41,12 @@ from sklearn.utils.validation import check_X_y
 from tqdm import trange
 
 from regain.bayesian.gaussian_process_ import sample as sample_gp
-from regain.bayesian.sampling import GWP_construct, elliptical_slice, sample_ell, sample_hyper_kernel
+from regain.bayesian.sampling import (
+    GWP_construct,
+    elliptical_slice,
+    sample_ell,
+    sample_hyper_kernel,
+)
 from regain.bayesian.stats import lognstat, t_mvn_logpdf
 from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso
 
@@ -109,7 +114,11 @@ def fit(
 
         # We now do MH for sampling the hyperparameter of the kernel
         theta, accept = sample_hyper_kernel(
-            theta, var_prop, np.vstack(current_state.xx), kern, prior_distr=prior_theta_kernel
+            theta,
+            var_prop,
+            np.vstack(current_state.xx),
+            kern,
+            prior_distr=prior_theta_kernel,
         )
 
         if accept:
@@ -123,15 +132,25 @@ def fit(
                     K += 1e-8 * np.eye(K.shape[0])
 
             current_state["xx"] = umat
-            current_state["log_likelihood"] = likelihood(GWP_construct(umat, current_state["L"]))
+            current_state["log_likelihood"] = likelihood(
+                GWP_construct(umat, current_state["L"])
+            )
 
         # We now do MH for sampling the elements in the matrix L
         # spherical normal prior, element uncorrelated
         if learn_ell:
-            Ltau = sample_ell(Ltau, var_Lprop, current_state.xx, prior_distr=prior_ell, likelihood=likelihood)
+            Ltau = sample_ell(
+                Ltau,
+                var_Lprop,
+                current_state.xx,
+                prior_distr=prior_ell,
+                likelihood=likelihood,
+            )
             L__[np.tril_indices_from(L__)] = Ltau
             current_state["L"] = L__
-            current_state["log_likelihood"] = likelihood(GWP_construct(current_state["xx"], current_state["L"]))
+            current_state["log_likelihood"] = likelihood(
+                GWP_construct(current_state["xx"], current_state["L"])
+            )
 
         samples_u.append(current_state.xx)
         loglikes[i] = current_state.log_likelihood
@@ -237,7 +256,9 @@ class WishartProcess(TimeGraphicalLasso):
         self.learn_ell = learn_ell
 
         mu_prior, sigma_prior = lognstat(mu_prior, var_prior)
-        self.prior_theta_kernel = stats.lognorm(loc=0, s=sigma_prior, scale=np.exp(mu_prior))
+        self.prior_theta_kernel = stats.lognorm(
+            loc=0, s=sigma_prior, scale=np.exp(mu_prior)
+        )
         self.prior_ell = stats.norm(loc=mu_Lprior, scale=np.sqrt(var_Lprior))
 
     def fit(self, X, y):
@@ -251,7 +272,15 @@ class WishartProcess(TimeGraphicalLasso):
             Indicate the temporal belonging of each matrix.
         """
         # Covariance does not make sense for a single feature
-        X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64, order="C", ensure_min_features=2, estimator=self)
+        X, y = check_X_y(
+            X,
+            y,
+            accept_sparse=False,
+            dtype=np.float64,
+            order="C",
+            ensure_min_features=2,
+            estimator=self,
+        )
 
         n_dimensions = X.shape[1]
         self.classes_, n_samples = np.unique(y, return_counts=True)
@@ -264,7 +293,9 @@ class WishartProcess(TimeGraphicalLasso):
             self.location_ = np.array([X[y == cl].mean(0) for cl in self.classes_])
 
         # X = (X - self.location_).transpose(1, 2, 0)  # put time last
-        X_center = [X[y == cl] - self.location_[i] for i, cl in enumerate(self.classes_)]
+        X_center = [
+            X[y == cl] - self.location_[i] for i, cl in enumerate(self.classes_)
+        ]
         if self.kernel is None or self.kernel.lower() == "rbf":
             kern = partial(_rbf_kernel, var=1)
         else:
@@ -346,8 +377,18 @@ class WishartProcess(TimeGraphicalLasso):
 
         """
         # Covariance does not make sense for a single feature
-        X, y = check_X_y(X, y, accept_sparse=False, dtype=np.float64, order="C", ensure_min_features=2, estimator=self)
+        X, y = check_X_y(
+            X,
+            y,
+            accept_sparse=False,
+            dtype=np.float64,
+            order="C",
+            ensure_min_features=2,
+            estimator=self,
+        )
 
-        X_center = np.array([X[y == cl] - self.location_[i] for i, cl in enumerate(self.classes_)])
+        X_center = np.array(
+            [X[y == cl] - self.location_[i] for i, cl in enumerate(self.classes_)]
+        )
         logp = t_mvn_logpdf(X_center, self.D_map)
         return logp

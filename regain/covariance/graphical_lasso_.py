@@ -32,23 +32,19 @@
 More information can be found in the paper linked at:
 http://www.stanford.edu/~boyd/papers/distr_opt_stat_learning_admm.html
 """
-from __future__ import division
-
 import warnings
 
 import numpy as np
 from scipy import linalg
 from six.moves import range
-from sklearn.covariance import GraphicalLasso as GraphLasso
-from sklearn.covariance import empirical_covariance
+from sklearn.covariance import GraphicalLasso as GraphLasso, empirical_covariance
 from sklearn.utils.extmath import fast_logdet
 from sklearn.utils.validation import check_array
 
 from regain.norm import l1_od_norm
-from regain.prox import prox_logdet, soft_thresholding_od
+from regain.prox import prox_logdet, soft_thresholding_off_diagonal
 from regain.update_rules import update_rho
 from regain.utils import convergence
-
 
 
 def logl(emp_cov, precision):
@@ -164,7 +160,7 @@ def graphical_lasso(
 
         # z-update with relaxation
         K_hat = over_relax * K - (1 - over_relax) * Z
-        Z = soft_thresholding_od(K_hat + U, lamda=alpha / rho)
+        Z = soft_thresholding_off_diagonal(K_hat + U, lamda=alpha / rho)
 
         # update residuals
         U += K_hat - Z
@@ -177,19 +173,25 @@ def graphical_lasso(
             obj=obj,
             rnorm=rnorm,
             snorm=snorm,
-            e_pri=np.sqrt(K.size) * tol + rtol * max(np.linalg.norm(K, "fro"), np.linalg.norm(Z, "fro")),
+            e_pri=np.sqrt(K.size) * tol
+            + rtol * max(np.linalg.norm(K, "fro"), np.linalg.norm(Z, "fro")),
             e_dual=np.sqrt(K.size) * tol + rtol * rho * np.linalg.norm(U),
         )
 
         Z_old = Z.copy()
         if verbose:
-            print("obj: %.4f, rnorm: %.4f, snorm: %.4f," "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
+            print(
+                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
+                "eps_pri: %.4f, eps_dual: %.4f" % check[:5]
+            )
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
 
-        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {}))
+        rho_new = update_rho(
+            rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {})
+        )
         # scaled dual variables should be also rescaled
         U *= rho / rho_new
         rho = rho_new
@@ -278,7 +280,12 @@ class GraphicalLasso(GraphLasso):
         init="empirical",
     ):
         super(GraphicalLasso, self).__init__(
-            alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose, assume_centered=assume_centered, mode=mode
+            alpha=alpha,
+            tol=tol,
+            max_iter=max_iter,
+            verbose=verbose,
+            assume_centered=assume_centered,
+            mode=mode,
         )
         self.rho = rho
         self.rtol = rtol

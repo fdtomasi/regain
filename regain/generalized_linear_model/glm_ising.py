@@ -30,15 +30,17 @@
 import warnings
 
 import numpy as np
-
-from sklearn.utils import check_array
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import LogisticRegression
+from sklearn.utils import check_array
 
-from regain.generalized_linear_model.base import GLM_GM, convergence
-from regain.generalized_linear_model.base import build_adjacency_matrix
-from regain.prox import soft_thresholding_od
+from regain.generalized_linear_model.base import (
+    GLM_GM,
+    build_adjacency_matrix,
+    convergence,
+)
 from regain.norm import l1_od_norm
+from regain.prox import soft_thresholding_off_diagonal
 
 
 def loss(X, theta):
@@ -118,13 +120,13 @@ def _fit(
             grad = _gradient_ising(X, theta, n, A, rho, T)
             theta_new = theta - gamma * grad
             theta = (theta_new + theta_new.T) / 2
-            theta = soft_thresholding_od(theta, alpha * gamma)
+            theta = soft_thresholding_off_diagonal(theta, alpha * gamma)
         else:
             while True:
                 grad = _gradient_ising(X, theta, n, A, rho, T)
                 theta_new = theta - gamma * grad
                 theta = (theta_new + theta_new.T) / 2
-                theta = soft_thresholding_od(theta, alpha * gamma)
+                theta = soft_thresholding_off_diagonal(theta, alpha * gamma)
                 print(theta)
                 loss_new = loss(X, theta)
                 loss_old = loss(X, theta_old)
@@ -136,7 +138,7 @@ def _fit(
                 if loss_new > diff or np.isinf(loss_new) or np.isnan(loss_new):
                     gamma = update_gamma * gamma
                     theta = theta_old - gamma * grad
-                    theta = soft_thresholding_od(theta, alpha * gamma)
+                    theta = soft_thresholding_off_diagonal(theta, alpha * gamma)
                     loss_new = loss(X, theta)
                     diff = loss_old - grad_diff + (diff_theta2 / (2 * gamma))
                 else:
@@ -149,12 +151,17 @@ def _fit(
                 iter=iter_,
                 obj=objective(X, theta, alpha),
                 iter_norm=np.linalg.norm(thetas[-2] - thetas[-1]),
-                iter_r_norm=(np.linalg.norm(thetas[-2] - thetas[-1]) / np.linalg.norm(thetas[-1])),
+                iter_r_norm=(
+                    np.linalg.norm(thetas[-2] - thetas[-1]) / np.linalg.norm(thetas[-1])
+                ),
             )
         checks.append(check)
         # if adjust_gamma: # TODO multiply or divide
         if verbose:
-            print("Iter: %d, objective: %.4f, iter_norm %.4f" % (check[0], check[1], check[2]))
+            print(
+                "Iter: %d, objective: %.4f, iter_norm %.4f"
+                % (check[0], check[1], check[2])
+            )
 
         if np.abs(check[2]) < tol:
             break
@@ -239,7 +246,14 @@ class IsingGraphicalModel(GLM_GM, BaseEstimator):
         gamma=1,
     ):
         super(IsingGraphicalModel, self).__init__(
-            alpha, tol, rtol, max_iter, verbose, return_history, return_n_iter, compute_objective
+            alpha,
+            tol,
+            rtol,
+            max_iter,
+            verbose,
+            return_history,
+            return_n_iter,
+            compute_objective,
         )
         self.reconstruction = reconstruction
         self.mode = mode
@@ -259,7 +273,14 @@ class IsingGraphicalModel(GLM_GM, BaseEstimator):
         """
         X = check_array(X)
         if self.mode.lower() == "symmetric_fbs":
-            res = _fit(X, self.alpha, tol=self.tol, gamma=self.gamma, max_iter=self.max_iter, verbose=self.verbose)
+            res = _fit(
+                X,
+                self.alpha,
+                tol=self.tol,
+                gamma=self.gamma,
+                max_iter=self.max_iter,
+                verbose=self.verbose,
+            )
             self.precision_ = res[0]
             self.history = res[1:]
         elif self.mode.lower() == "coordinate_descent":
@@ -283,16 +304,24 @@ class IsingGraphicalModel(GLM_GM, BaseEstimator):
                 print("pd")
                 res = (
                     LogisticRegression(
-                        C=1 / self.alpha, penalty="l1", solver="liblinear", verbose=verbose, random_state=0
+                        C=1 / self.alpha,
+                        penalty="l1",
+                        solver="liblinear",
+                        verbose=verbose,
+                        random_state=0,
                     )
                     .fit(X[:, selector], X[:, ix])
                     .coef_
                 )
                 thetas_pred.append(res)
-            self.precision_ = build_adjacency_matrix(thetas_pred, how=self.reconstruction)
+            self.precision_ = build_adjacency_matrix(
+                thetas_pred, how=self.reconstruction
+            )
         else:
             raise ValueError(
-                "Unknown optimization mode. Found " + self.mode + ". Options are 'coordiante_descent', "
+                "Unknown optimization mode. Found "
+                + self.mode
+                + ". Options are 'coordiante_descent', "
                 "'symmetric_fbs'"
             )
         return self

@@ -27,52 +27,30 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-"""Norm functions."""
+"""Test norm module."""
 import numpy as np
-from scipy.optimize import minimize
+from numpy.testing import assert_array_equal, assert_equal
+
+from regain import norm
 
 
-def vector_p_norm(a, p=1):
-    """Sum of norms for each vector."""
-    b = np.array([b.flatten() for b in a]).T
-    return np.linalg.norm(b, axis=1, ord=p).sum()
+def test_l1_norm():
+    """Test l1_norm function."""
+    # array
+    array = -np.arange(3)
+    output = 3
+    assert_equal(norm.l1_norm(array), output)
 
+    # matrix
+    array = -np.arange(9).reshape(3, 3)
+    output = np.arange(9).sum()
+    assert_equal(norm.l1_norm(array), output)
+    assert_equal(norm.matrix_l1_norm(array), output)
 
-def l1_norm(precision):
-    """L1 norm."""
-    return np.abs(precision).sum()
+    # tensor
+    array = np.array([np.arange(9).reshape(3, 3) for _ in range(2)])
+    output = [np.arange(9).sum(), np.arange(9).sum()]
+    assert_array_equal(norm.matrix_l1_norm(array), output)
 
-
-def matrix_l1_norm(matrix):
-    """Sum components over the last 2 dimensions."""
-    return np.sum(np.abs(matrix), (-1, -2))
-
-
-def l1_od_norm(precision):
-    """L1 norm off-diagonal."""
-    diagonal_sum = np.abs(np.diagonal(precision, axis1=-2, axis2=-1)).sum(-1)
-    return matrix_l1_norm(precision) - diagonal_sum
-
-
-def node_penalty(X):
-    """Node penalty. See Hallac for details."""
-    cons = (
-        {
-            "type": "eq",
-            "fun": lambda x: np.array(
-                (x.reshape(X.shape) + x.reshape(X.shape).T - X).sum()
-            ),
-            "jac": lambda x: np.full(X.size, 2),
-        },
-    )
-    try:
-        res = minimize(
-            lambda x: np.sum(np.linalg.norm(x.reshape(X.shape), axis=0)),
-            np.random.randn(X.size),
-            constraints=cons,
-        ).fun
-    except ValueError:
-        res = np.nan
-
-    return res
+    output = [24, 24]
+    assert_array_equal(norm.l1_od_norm(array), output)
