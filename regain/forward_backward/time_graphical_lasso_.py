@@ -1,5 +1,4 @@
 # BSD 3-Clause License
-import numpy as np
 
 # Copyright (c) 2019, regain authors
 # All rights reserved.
@@ -29,14 +28,11 @@ import numpy as np
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Time graph lasso via forward_backward (for now only in case of l1 norm)."""
-from __future__ import division, print_function
-
 import warnings
 from functools import partial
 
 import numpy as np
 from scipy import linalg
-from six.moves import map, range, zip
 from sklearn.covariance._graph_lasso import alpha_max  # noqa
 from sklearn.utils.extmath import squared_norm
 
