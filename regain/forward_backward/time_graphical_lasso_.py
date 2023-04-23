@@ -1,4 +1,5 @@
 # BSD 3-Clause License
+import numpy as np
 
 # Copyright (c) 2019, regain authors
 # All rights reserved.
@@ -45,7 +46,7 @@ from regain.covariance.time_graphical_lasso_ import (
     loss as loss_tgl,
 )
 from regain.norm import l1_od_norm, vector_p_norm
-from regain.prox import prox_FL, soft_thresholding_od
+from regain.prox import prox_FL, soft_thresholding_off_diagonal
 from regain.utils import convergence
 from .forward_backward import _scalar_product, choose_gamma, choose_lamda, upper_diag_3d
 
@@ -73,9 +74,9 @@ def grad_loss(x, emp_cov, n_samples, x_inv=None, vareps=0):
 def penalty(precision, alpha, beta, psi):
     """Penalty for time-varying graphical lasso."""
     if isinstance(alpha, np.ndarray):
-        obj = sum(a[0][0] * m for a, m in zip(alpha, map(l1_od_norm, precision)))
+        obj = sum(a[0][0] * m for a, m in zip(alpha, l1_od_norm(precision)))
     else:
-        obj = alpha * sum(map(l1_od_norm, precision))
+        obj = alpha * np.sum(l1_od_norm(precision))
     if isinstance(beta, np.ndarray):
         obj += sum(
             b[0][0] * m for b, m in zip(beta, map(psi, precision[1:] - precision[:-1]))
@@ -299,7 +300,7 @@ def tgl_forward_backward(
         x_hat = K - gamma * grad
         if choose not in ["gamma", "both"]:
             if laplacian_penalty:
-                y = soft_thresholding_od(x_hat, alpha * gamma)
+                y = soft_thresholding_off_diagonal(x_hat, alpha * gamma)
             else:
                 y = prox_FL(
                     x_hat, beta * gamma, alpha * gamma, p=time_norm, symmetric=True

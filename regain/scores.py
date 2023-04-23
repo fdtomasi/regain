@@ -30,20 +30,17 @@
 
 import numpy as np
 
-from regain.math import fast_logdet
+from regain.math import batch_logdet
 
 
 def log_likelihood(emp_cov, precision):
     """Gaussian log-likelihood without constant term."""
-    return fast_logdet(precision) - (emp_cov * precision).sum(-1).sum(-1)
+    return batch_logdet(precision) - np.sum(emp_cov * precision, axis=(-1, -2))
 
 
 def log_likelihood_t(emp_cov, precision):
-    """Gaussian log-likelihood without constant term in time"""
-    score = 0
-    for e, p in zip(emp_cov, precision):
-        score += fast_logdet(p) - np.sum(e * p)
-    return score
+    """Gaussian log-likelihood without constant term for batch of matrices."""
+    return log_likelihood(emp_cov, precision).sum()
 
 
 def BIC(emp_cov, precision):
@@ -56,7 +53,7 @@ def BIC(emp_cov, precision):
 def EBIC(emp_cov, precision, n=100, epsilon=0.5):
     """E - Bayesian Information Criterion for Gaussian models.
 
-    It penalizes more then BIC by multplying the degrees of freedom also based
+    It penalizes more than BIC by multplying the degrees of freedom also based
     on sample size.
     """
 
@@ -72,7 +69,7 @@ def EBIC(emp_cov, precision, n=100, epsilon=0.5):
 def EBIC_m(emp_cov, precision, n=100, epsilon=0.5):
     """E - Bayesian Information Criterion for Gaussian models.
 
-    It penalizes more then BIC and E-BIC by multplying the degrees of freedom
+    It penalizes more than BIC and E-BIC by multplying the degrees of freedom
     based on sample size and the number of variables.
     """
     likelihood = log_likelihood(emp_cov, precision)
@@ -97,8 +94,8 @@ def BIC_t(emp_cov, precision):
 def EBIC_t(emp_cov, precision, n=100, epsilon=0.5):
     """E - Bayesian Information Criterion for Gaussian models in time.
 
-    It penalizes more then BIC by multplying the degrees of freedom also based
-    on sample size.
+    It penalizes more than BIC by multiplying the degrees of freedom
+    also based on sample size.
     """
     likelihood = log_likelihood_t(emp_cov, precision)
     n_variables = precision.shape[1] * precision.shape[0]
@@ -112,7 +109,7 @@ def EBIC_t(emp_cov, precision, n=100, epsilon=0.5):
 def EBIC_m_t(emp_cov, precision, n=100, epsilon=0.5):
     """E - Bayesian Information Criterion for Gaussian models in time.
 
-    It penalizes more then BIC and E-BIC by multplying the degrees of freedom
+    It penalizes more than BIC and E-BIC by multiplying the degrees of freedom
     based on sample size and the number of variables.
     """
     likelihood = log_likelihood_t(emp_cov, precision)
