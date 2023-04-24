@@ -31,22 +31,18 @@
 import warnings
 
 import numpy as np
-
 from six.moves import map, range, zip
-
 from sklearn.base import BaseEstimator
-from sklearn.utils.extmath import squared_norm
-from sklearn.utils.validation import check_X_y
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.gaussian_process import kernels
-
-from sklearn.utils.validation import check_is_fitted
+from sklearn.utils.extmath import squared_norm
+from sklearn.utils.validation import check_X_y, check_is_fitted
 
 from regain.covariance.time_graphical_lasso_ import init_precision
 from regain.generalized_linear_model.glm_ising import _fit, loss
 from regain.norm import l1_od_norm
-from regain.utils import convergence
 from regain.update_rules import update_rho
+from regain.utils import convergence
 from regain.validation import check_norm_prox
 
 
@@ -171,8 +167,6 @@ def _fit_time_ising_model(
         A += A.transpose(0, 2, 1)
         A /= 2.0
         # K_new = np.zeros_like(K)
-
-        print(K.shape)
 
         for t in range(n_times):
             K[t, :, :] = _fit(
@@ -509,7 +503,7 @@ class TemporalIsingModel(BaseEstimator):
                         self.classes_[:, None]
                     )
             else:
-                kernel = self.kernel
+                kernel = self.kernel or np.identity(self.classes_.size)
                 if kernel.shape[0] != self.classes_.size:
                     raise ValueError(
                         "Kernel size does not match classes of samples, "
@@ -579,7 +573,6 @@ def precision_similarity(precision, psi=None):
     distances = squareform(
         [l1_od_norm(t1 - t2) for t1, t2 in combinations(precision, 2)]
     )
-    print(distances)
     distances /= np.max(distances)
     return 1 - distances
 
@@ -750,7 +743,6 @@ class SimilarityTemporalIsingModel(TemporalIsingModel):
                 kernel = kernels.RBF(0.0001)(labels_pred[:, None]) + kernels.RBF(
                     self.beta
                 )(np.arange(n_times)[:, None])
-                print(kernel)
                 labels_pred_old = labels_pred
 
             else:

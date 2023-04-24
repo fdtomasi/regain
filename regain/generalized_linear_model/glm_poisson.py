@@ -29,13 +29,16 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import numpy as np
-from sklearn.utils import check_array
 from sklearn.base import BaseEstimator
+from sklearn.utils import check_array
 
-from regain.generalized_linear_model.base import GLM_GM, convergence
-from regain.generalized_linear_model.base import build_adjacency_matrix
-from regain.prox import soft_thresholding
+from regain.generalized_linear_model.base import (
+    GLM_GM,
+    build_adjacency_matrix,
+    convergence,
+)
 from regain.norm import l1_od_norm
+from regain.prox import soft_thresholding
 
 
 def loss_single_variable(X, theta, n, r, selector):
@@ -125,14 +128,17 @@ def fit_each_variable(
                 iter=iter_,
                 obj=objective_single_variable(X, theta, n, ix, selector, alpha),
                 iter_norm=np.linalg.norm(thetas[-2] - thetas[-1]),
-                iter_r_norm=(np.linalg.norm(thetas[-2] - thetas[-1]) / np.linalg.norm(thetas[-2])),
+                iter_r_norm=(
+                    np.linalg.norm(thetas[-2] - thetas[-1]) / np.linalg.norm(thetas[-2])
+                ),
             )
             checks.append(check)
             # if adjust_gamma: # TODO multiply or divide
             if verbose:
                 print(
                     "Iter: %d, objective: %.4f, iter_norm %.4f,"
-                    " iter_norm_normalized: %.4f" % (check[0], check[1], check[2], check[3])
+                    " iter_norm_normalized: %.4f"
+                    % (check[0], check[1], check[2], check[3])
                 )
 
             if np.abs(check[2]) < tol:
@@ -228,7 +234,14 @@ class PoissonGraphicalModel(GLM_GM, BaseEstimator):
         compute_objective=True,
     ):
         super(PoissonGraphicalModel, self).__init__(
-            alpha, tol, rtol, max_iter, verbose, return_history, return_n_iter, compute_objective
+            alpha,
+            tol,
+            rtol,
+            max_iter,
+            verbose,
+            return_history,
+            return_n_iter,
+            compute_objective,
         )
         self.reconstruction = reconstruction
         self.mode = mode
@@ -251,21 +264,26 @@ class PoissonGraphicalModel(GLM_GM, BaseEstimator):
             raise ValueError("Not implemented.")
 
         elif self.mode.lower() == "coordinate_descent":
-            print("sono qui")
             thetas_pred = []
             historys = []
             if self.intercept:
                 X = np.hstack((X, np.ones((X.shape[0], 1))))
             for ix in range(X.shape[1]):
                 verbose = max(0, self.verbose - 1)
-                res = fit_each_variable(X, ix, self.alpha, tol=self.tol, verbose=verbose)
+                res = fit_each_variable(
+                    X, ix, self.alpha, tol=self.tol, verbose=verbose
+                )
                 thetas_pred.append(res[0])
                 historys.append(res[1:])
-            self.precision_ = build_adjacency_matrix(thetas_pred, how=self.reconstruction)
+            self.precision_ = build_adjacency_matrix(
+                thetas_pred, how=self.reconstruction
+            )
             self.history = historys
         else:
             raise ValueError(
-                "Unknown optimization mode. Found " + self.mode + ". Options are 'coordiante_descent', "
+                "Unknown optimization mode. Found "
+                + self.mode
+                + ". Options are 'coordiante_descent', "
                 "'symmetric_fbs'"
             )
         return self
