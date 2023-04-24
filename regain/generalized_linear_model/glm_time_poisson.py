@@ -31,7 +31,6 @@
 import warnings
 
 import numpy as np
-from six.moves import map, range, zip
 from sklearn.base import BaseEstimator
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.gaussian_process import kernels
@@ -58,7 +57,7 @@ def objective(X, K, Z_M, alpha, kernel, psi):
     """Objective function for time-varying poisson model."""
 
     obj = loss_poisson(X, K)
-    obj += alpha * sum(map(l1_od_norm, K))
+    obj += alpha * np.sum(l1_od_norm(K))
 
     for m in range(1, K.shape[0]):
         # all possible non markovians jumps
@@ -501,7 +500,7 @@ class TemporalPoissonModel(BaseEstimator):
                         self.classes_[:, None]
                     )
             else:
-                kernel = self.kernel
+                kernel = self.kernel or np.identity(self.classes_.size)
                 if kernel.shape[0] != self.classes_.size:
                     raise ValueError(
                         "Kernel size does not match classes of samples, "

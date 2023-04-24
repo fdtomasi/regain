@@ -31,37 +31,36 @@
 import warnings
 
 import numpy as np
-
 from six.moves import map, range, zip
-
 from sklearn.base import BaseEstimator
-from sklearn.utils.extmath import squared_norm
-from sklearn.utils.validation import check_X_y
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.gaussian_process import kernels
-
-from sklearn.utils.validation import check_is_fitted
+from sklearn.utils.extmath import squared_norm
+from sklearn.utils.validation import check_X_y, check_is_fitted
 
 from regain.covariance.time_graphical_lasso_ import init_precision
 from regain.generalized_linear_model.glm_ising import _fit, loss
 from regain.norm import l1_od_norm
-from regain.utils import convergence
 from regain.update_rules import update_rho
+from regain.utils import convergence
 from regain.validation import check_norm_prox
 
 
-def loss_ising(X, K, n_samples=None):
+def loss_ising(X, precision, n_samples=None):
     """Loss function for time-varying ising model."""
     if n_samples is None:
-        n_samples = np.ones(X.shape[0])
-    return sum(-ni * loss(x, k) for x, k, ni in zip(X, K, n_samples))
+        # 1 sample for each batch, ie, do not scale.
+        batch_dim = X.shape[0]
+        n_samples = np.ones(batch_dim)
+
+    return sum(-ni * loss(x, k) for x, k, ni in zip(X, precision, n_samples))
 
 
 def objective(X, K, Z_M, alpha, kernel, psi):
     """Objective function for time-varying ising model."""
 
     obj = loss_ising(X, K)
-    obj += alpha * sum(map(l1_od_norm, K))
+    obj += alpha * np.sum(l1_od_norm(K))
 
     for m in range(1, K.shape[0]):
         # all possible non markovians jumps
@@ -171,8 +170,6 @@ def _fit_time_ising_model(
         A += A.transpose(0, 2, 1)
         A /= 2.0
         # K_new = np.zeros_like(K)
-
-        print(K.shape)
 
         for t in range(n_times):
             K[t, :, :] = _fit(
@@ -509,7 +506,7 @@ class TemporalIsingModel(BaseEstimator):
                         self.classes_[:, None]
                     )
             else:
-                kernel = self.kernel
+                kernel = self.kernel or np.identity(self.classes_.size)
                 if kernel.shape[0] != self.classes_.size:
                     raise ValueError(
                         "Kernel size does not match classes of samples, "
@@ -579,7 +576,6 @@ def precision_similarity(precision, psi=None):
     distances = squareform(
         [l1_od_norm(t1 - t2) for t1, t2 in combinations(precision, 2)]
     )
-    print(distances)
     distances /= np.max(distances)
     return 1 - distances
 
@@ -750,7 +746,6 @@ class SimilarityTemporalIsingModel(TemporalIsingModel):
                 kernel = kernels.RBF(0.0001)(labels_pred[:, None]) + kernels.RBF(
                     self.beta
                 )(np.arange(n_times)[:, None])
-                print(kernel)
                 labels_pred_old = labels_pred
 
             else:
