@@ -46,18 +46,21 @@ from regain.utils import convergence
 from regain.validation import check_norm_prox
 
 
-def loss_ising(X, K, n_samples=None):
+def loss_ising(X, precision, n_samples=None):
     """Loss function for time-varying ising model."""
     if n_samples is None:
-        n_samples = np.ones(X.shape[0])
-    return sum(-ni * loss(x, k) for x, k, ni in zip(X, K, n_samples))
+        # 1 sample for each batch, ie, do not scale.
+        batch_dim = X.shape[0]
+        n_samples = np.ones(batch_dim)
+
+    return sum(-ni * loss(x, k) for x, k, ni in zip(X, precision, n_samples))
 
 
 def objective(X, K, Z_M, alpha, kernel, psi):
     """Objective function for time-varying ising model."""
 
     obj = loss_ising(X, K)
-    obj += alpha * sum(map(l1_od_norm, K))
+    obj += alpha * np.sum(l1_od_norm(K))
 
     for m in range(1, K.shape[0]):
         # all possible non markovians jumps

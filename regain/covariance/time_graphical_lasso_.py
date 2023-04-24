@@ -59,9 +59,9 @@ def batch_log_likelihood(emp_cov, precision):
 
 def loss(emp_cov, precision, n_samples=None):
     """Loss function for time-varying graphical lasso."""
-    batch_dim = emp_cov.shape[0]
     if n_samples is None:
         # 1 sample for each batch, ie, do not scale.
+        batch_dim = emp_cov.shape[0]
         n_samples = np.ones(batch_dim)
 
     return np.sum(-n_samples * batch_log_likelihood(emp_cov, precision))
@@ -254,15 +254,15 @@ def time_graphical_lasso(
             rnorm=rnorm,
             snorm=snorm,
             e_pri=np.sqrt(K.size + 2 * Z_1.size) * tol
-            + rtol
-            * max(
+                  + rtol
+                  * max(
                 np.sqrt(squared_norm(Z_0) + squared_norm(Z_1) + squared_norm(Z_2)),
                 np.sqrt(squared_norm(K) + squared_norm(K[:-1]) + squared_norm(K[1:])),
             ),
             e_dual=np.sqrt(K.size + 2 * Z_1.size) * tol
-            + rtol
-            * rho
-            * np.sqrt(squared_norm(U_0) + squared_norm(U_1) + squared_norm(U_2)),
+                   + rtol
+                   * rho
+                   * np.sqrt(squared_norm(U_0) + squared_norm(U_1) + squared_norm(U_2)),
             # precision=Z_0.copy()
         )
         Z_0_old = Z_0.copy()
