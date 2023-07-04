@@ -37,7 +37,6 @@ from __future__ import division
 import warnings
 
 import numpy as np
-from six.moves import range
 
 from regain.covariance.graphical_lasso_ import GraphicalLasso, graphical_lasso, logl
 
@@ -52,7 +51,9 @@ def compute_empirical_covariance(X, K, cs):
                 if np.isnan(X[i, v]) and np.isnan(X[i, s]):
                     nans = np.where(np.isnan(X[i, :]))[0]
                     xxm, yym = np.meshgrid(nans, nans)
-                    inv = np.linalg.pinv(K[xxm, yym])[np.where(nans == v)[0][0], np.where(nans == s)[0][0]]
+                    inv = np.linalg.pinv(K[xxm, yym])[
+                        np.where(nans == v)[0][0], np.where(nans == s)[0][0]
+                    ]
                     emp_cov[i, v, s] = inv + cs[i, v] * cs[i, s]
                 else:
                     emp_cov[i, v, s] = aux[i, v] * aux[i, s]
@@ -176,7 +177,9 @@ def missing_graphical_lasso(
         diff = old_logl - loglik
         checks.append(dict(iteration=iter_, log_likelihood=logl, difference=diff))
         if verbose:
-            print("Iter %d: log-likelihood %.4f, difference: %.4f" % (iter_, loglik, diff))
+            print(
+                "Iter %d: log-likelihood %.4f, difference: %.4f" % (iter_, loglik, diff)
+            )
         if np.abs(diff) < tol:
             break
     else:
@@ -296,7 +299,12 @@ class MissingGraphicalLasso(GraphicalLasso):
         # X = check_array(
         #     X, ensure_min_features=2, ensure_min_samples=2, estimator=self)
 
-        self.precision_, self.covariance_, self.complete_data_matrix_, self.n_iter_ = missing_graphical_lasso(
+        (
+            self.precision_,
+            self.covariance_,
+            self.complete_data_matrix_,
+            self.n_iter_,
+        ) = missing_graphical_lasso(
             X,
             alpha=self.alpha,
             tol=self.tol,

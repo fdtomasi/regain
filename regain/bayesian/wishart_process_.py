@@ -34,9 +34,9 @@ from functools import partial
 import numpy as np
 from scipy import linalg, stats
 from sklearn.covariance import empirical_covariance
-from sklearn.datasets.base import Bunch
 from sklearn.gaussian_process import kernels
 from sklearn.metrics.pairwise import rbf_kernel
+from sklearn.utils import Bunch
 from sklearn.utils.validation import check_X_y
 from tqdm import trange
 
@@ -333,9 +333,9 @@ class WishartProcess(TimeGraphicalLasso):
             samples_u, loglikes, lps = out
 
         # Burn in
-        self.lps_after_burnin = lps[self.burn_in :]
-        self.samples_u_after_burnin = samples_u[self.burn_in :]
-        self.loglikes_after_burnin = loglikes[self.burn_in :]
+        self.lps_after_burnin = lps[self.burn_in:]
+        self.samples_u_after_burnin = samples_u[self.burn_in:]
+        self.loglikes_after_burnin = loglikes[self.burn_in:]
 
         # % Select the best hyperparameters based on the loglikes_after_burnin
         pos = np.argmax(self.loglikes_after_burnin)
@@ -343,7 +343,7 @@ class WishartProcess(TimeGraphicalLasso):
         self.u_map = self.samples_u_after_burnin[pos]
 
         if self.learn_ell:
-            self.Ls_after_burnin = Ls[self.burn_in :]
+            self.Ls_after_burnin = Ls[self.burn_in:]
             self.Lmap = self.Ls_after_burnin[pos]
         else:
             self.Lmap = L

@@ -41,7 +41,7 @@ from regain.covariance.time_graphical_lasso_ import (
 )
 from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
-from regain.utils import convergence
+from regain.utils import Convergence
 from regain.validation import check_norm_prox
 
 
@@ -277,7 +277,7 @@ def latent_time_graphical_lasso(
             else np.nan
         )
 
-        check = convergence(
+        check = Convergence(
             obj=obj,
             rnorm=rnorm,
             snorm=snorm,
@@ -320,10 +320,7 @@ def latent_time_graphical_lasso(
         W_2_old = W_2.copy()
 
         if verbose:
-            print(
-                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                "eps_pri: %.4f, eps_dual: %.4f" % check[:5]
-            )
+            print(check)
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:

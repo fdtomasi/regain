@@ -31,13 +31,13 @@
 """Utils for REGAIN package."""
 from __future__ import division
 
-import collections
 import functools
 import logging
 import os
 import sys
 import warnings
 from contextlib import contextmanager
+from dataclasses import dataclass
 
 import numpy as np
 import six
@@ -48,12 +48,19 @@ from six.moves import cPickle as pkl
 from sklearn.metrics import average_precision_score, matthews_corrcoef
 
 
-def display_topics(H, W, feature_names, documents, n_top_words, n_top_documents, print_docs=True):
+def display_topics(
+    H, W, feature_names, documents, n_top_words, n_top_documents, print_docs=True
+):
     """Display topics of LDA."""
     topics = []
     for topic_idx, topic in enumerate(H):
         topics.append(
-            " ".join([feature_names[i] + " (%.3f)" % topic[i] for i in topic.argsort()[: -n_top_words - 1 : -1]])
+            " ".join(
+                [
+                    feature_names[i] + " (%.3f)" % topic[i]
+                    for i in topic.argsort()[: -n_top_words - 1 : -1]
+                ]
+            )
         )
 
         print("Topic %d: %s" % (topic_idx, topics[-1]))
@@ -67,7 +74,9 @@ def display_topics(H, W, feature_names, documents, n_top_words, n_top_documents,
 def logentropy_normalize(X):
     """Log-entropy normalisation."""
     P = X / X.values.sum(axis=0, keepdims=True)
-    E = 1 + (P * np.log(P)).fillna(0).values.sum(axis=0, keepdims=True) / np.log1p(X.shape[0])
+    E = 1 + (P * np.log(P)).fillna(0).values.sum(axis=0, keepdims=True) / np.log1p(
+        X.shape[0]
+    )
     return E * np.log1p(X)
 
 
@@ -87,18 +96,20 @@ def retain_top_n(arr, n):
     return mask_array
 
 
-def namedtuple_with_defaults(typename, field_names, default_values=()):
-    T = collections.namedtuple(typename, field_names)
-    T.__new__.__defaults__ = (None,) * len(T._fields)
-    if isinstance(default_values, collections.Mapping):
-        prototype = T(**default_values)
-    else:
-        prototype = T(*default_values)
-    T.__new__.__defaults__ = tuple(prototype)
-    return T
+@dataclass
+class Convergence:
+    obj: float = 0
+    rnorm: float = 0
+    snorm: float = 0
+    e_pri: float = 0
+    e_dual: float = 0
+    precision: float = 0
 
-
-convergence = namedtuple_with_defaults("convergence", "obj rnorm snorm e_pri e_dual precision")
+    def __str__(self):
+        return (
+            f"obj: {self.obj:.4f}, rnorm: {self.rnorm:.4f}, snorm: {self.snorm:.4f},"
+            f"eps_pri: {self.e_pri:.4f}, eps_dual: {self.e_dual:.4f}"
+        )
 
 
 @contextmanager
@@ -123,7 +134,11 @@ def _ensure_filename_ending(filename, possible_extensions=".txt"):
     if isinstance(possible_extensions, six.string_types):
         possible_extensions = [possible_extensions]
 
-    return filename + ("" if any(filename.endswith(end) for end in possible_extensions) else possible_extensions[0])
+    return filename + (
+        ""
+        if any(filename.endswith(end) for end in possible_extensions)
+        else possible_extensions[0]
+    )
 
 
 def init_logger(filename, verbose=True):
@@ -141,11 +156,16 @@ def init_logger(filename, verbose=True):
         _.close()
 
     logging.basicConfig(
-        filename=logfile, level=logging.INFO, filemode="w", format="%(levelname)s (%(asctime)-15s): %(message)s"
+        filename=logfile,
+        level=logging.INFO,
+        filemode="w",
+        format="%(levelname)s (%(asctime)-15s): %(message)s",
     )
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(logging.INFO if verbose else logging.ERROR)
-    stream_handler.setFormatter(logging.Formatter("%(levelname)s (%(asctime)-15s): %(message)s"))
+    stream_handler.setFormatter(
+        logging.Formatter("%(levelname)s (%(asctime)-15s): %(message)s")
+    )
 
     root_logger.addHandler(stream_handler)
     return logfile
@@ -170,7 +190,9 @@ def write_network(dataframe, filename):
     dataframe.stack().to_csv(filename)
 
 
-def read_network(filename, threshold=1.0, full_network=True, fill_diagonal=True, delimiter="auto"):
+def read_network(
+    filename, threshold=1.0, full_network=True, fill_diagonal=True, delimiter="auto"
+):
     """Read a network from a list of interactions.
 
     Parameters
@@ -229,7 +251,11 @@ def read_network(filename, threshold=1.0, full_network=True, fill_diagonal=True,
 
 def flatten(lst):
     """Flatten a list."""
-    return [y for l in lst for y in flatten(l)] if isinstance(lst, (list, np.ndarray)) else [lst]
+    return (
+        [y for l in lst for y in flatten(l)]
+        if isinstance(lst, (list, np.ndarray))
+        else [lst]
+    )
 
 
 def upper_to_full(a):
@@ -258,7 +284,11 @@ def convert_data_to_2d(data):
     to the class is encoded in y.
     """
     X = np.vstack(data)
-    y = np.array([np.ones(x.shape[0]) * i for i, x in enumerate(data)]).flatten().astype(int)
+    y = (
+        np.array([np.ones(x.shape[0]) * i for i, x in enumerate(data)])
+        .flatten()
+        .astype(int)
+    )
     return X, y
 
 
@@ -285,7 +315,14 @@ def normalize_matrix(x):
 
 
 def error_norm(
-    cov, comp_cov, norm="frobenius", scaling=True, squared=True, upper_triangular=False, nonzero=False, n=False
+    cov,
+    comp_cov,
+    norm="frobenius",
+    scaling=True,
+    squared=True,
+    upper_triangular=False,
+    nonzero=False,
+    n=False,
 ):
     """Mean Squared Error between two covariance estimators.
 
@@ -334,7 +371,7 @@ def error_norm(
     error = comp_cov - cov
     # compute the error norm
     if norm == "frobenius":
-        squared_norm = np.sum(error ** 2)
+        squared_norm = np.sum(error**2)
     elif norm == "spectral":
         squared_norm = np.amax(np.linalg.svdvals(np.dot(error.T, error)))
     else:
@@ -344,7 +381,10 @@ def error_norm(
         scaling_factor = (
             error.shape[0]
             if len(error.shape) < 3
-            else (np.prod(error.shape[:2]) * ((error.shape[1] - 1) / 2.0 if upper_triangular else error.shape[1]))
+            else (
+                np.prod(error.shape[:2])
+                * ((error.shape[1] - 1) / 2.0 if upper_triangular else error.shape[1])
+            )
         )
         squared_norm = squared_norm / scaling_factor
     # finally get either the squared norm or the norm
@@ -384,7 +424,12 @@ def error_norm_time(cov, comp_cov, norm="frobenius", scaling=True, squared=True)
     `self` and `comp_cov` covariance estimators.
 
     """
-    return np.mean([error_norm(x, y, norm=norm, scaling=scaling, squared=squared) for x, y in zip(cov, comp_cov)])
+    return np.mean(
+        [
+            error_norm(x, y, norm=norm, scaling=scaling, squared=squared)
+            for x, y in zip(cov, comp_cov)
+        ]
+    )
 
 
 def structure_error(true, pred, thresholding=False, eps=1e-2, no_diagonal=False):
@@ -457,12 +502,16 @@ def structure_error(true, pred, thresholding=False, eps=1e-2, no_diagonal=False)
     balanced_accuracy = 0.5 * (recall + specificity)
     false_discovery_rate = FP / (TP + FP) if TP + FP > 0 else 1 - precision
     false_omission_rate = FN / (FN + TN) if FN + TN > 0 else 0
-    negative_predicted_value = TN / (FN + TN) if FN + TN > 0 else 1 - false_omission_rate
+    negative_predicted_value = (
+        TN / (FN + TN) if FN + TN > 0 else 1 - false_omission_rate
+    )
 
     positive_likelihood_ratio = recall / fall_out if fall_out > 0 else 0
     negative_likelihood_ratio = miss_rate / specificity if specificity > 0 else 0
     diagnostic_odds_ratio = (
-        positive_likelihood_ratio / negative_likelihood_ratio if negative_likelihood_ratio > 0 else 0
+        positive_likelihood_ratio / negative_likelihood_ratio
+        if negative_likelihood_ratio > 0
+        else 0
     )
 
     dictionary = dict(

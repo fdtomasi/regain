@@ -39,8 +39,7 @@ from numpy import binary_repr
 from scipy import linalg
 from scipy.optimize import minimize
 from scipy.special import comb
-from sklearn.covariance import empirical_covariance
-from sklearn.covariance.empirical_covariance_ import log_likelihood
+from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.linear_model import LassoLars
 from sklearn.utils import Bunch, check_array
 from sklearn.utils.extmath import fast_logdet
@@ -51,9 +50,11 @@ from regain.covariance.graphical_lasso_ import GraphicalLasso, graphical_lasso
 def mk_all_ugs(n_dim):
     """Utility for generating all possible graphs."""
     nedges = int(comb(n_dim, 2))
-    m = 2 ** nedges
+    m = 2**nedges
 
-    ind = np.array([list(binary_repr(x, width=len(binary_repr(m - 1)))) for x in range(m)]).astype(int)
+    ind = np.array(
+        [list(binary_repr(x, width=len(binary_repr(m - 1)))) for x in range(m)]
+    ).astype(int)
     ord = np.argsort(ind.sum(axis=1))
     ind = ind[ord]
 
@@ -98,7 +99,12 @@ def score_blankets(blankets, X, alphas=(0.01, 0.5, 1)):
                 X_mb = np.zeros((X.shape[0], 1))
 
             y_mb = X[:, i]
-            score = np.sum([LassoLars(alpha=alpha).fit(X_mb, y_mb).score(X_mb, y_mb) for alpha in alphas])
+            score = np.sum(
+                [
+                    LassoLars(alpha=alpha).fit(X_mb, y_mb).score(X_mb, y_mb)
+                    for alpha in alphas
+                ]
+            )
 
             scores.append(score)
         scores_all.append(scores)
@@ -109,7 +115,12 @@ def score_blankets(blankets, X, alphas=(0.01, 0.5, 1)):
 
 
 def _get_graphs(blankets, scores, n_dim, n_resampling=200):
-    idx = np.array([np.random.choice(scores.shape[1], p=scores[i], size=n_resampling) for i in range(n_dim)])
+    idx = np.array(
+        [
+            np.random.choice(scores.shape[1], p=scores[i], size=n_resampling)
+            for i in range(n_dim)
+        ]
+    )
 
     graphs_ = np.array([blankets[i][idx[i]] for i in range(n_dim)]).transpose(1, 0, 2)
     # symmetrise with AND operator -> product
@@ -268,7 +279,11 @@ def compute_score(X, G, P, S, GWprior=None, score_method="bic"):
 
         logdetHdiag = sum(np.log(-diagH))
         lognormconst = dof * np.log(2 * np.pi) / 2 + logh - logdetHdiag / 2.0
-        score = lognormconst - GWprior.lognormconst - n_samples * n_dim * np.log(2 * np.pi) / 2
+        score = (
+            lognormconst
+            - GWprior.lognormconst
+            - n_samples * n_dim * np.log(2 * np.pi) / 2
+        )
         GWpost.lognormconst = lognormconst
 
     elif score_method == "laplace":
@@ -294,7 +309,11 @@ def compute_score(X, G, P, S, GWprior=None, score_method="bic"):
         # neg Hessian will be posdef
         logdetH = 2 * sum(np.log(np.diag(linalg.cholesky(-H))))
         lognormconst = dof * np.log(2 * np.pi) / 2 + logh - logdetH / 2.0
-        score = lognormconst - GWprior.lognormconst - n_samples * n_dim * np.log(2 * np.pi) / 2
+        score = (
+            lognormconst
+            - GWprior.lognormconst
+            - n_samples * n_dim * np.log(2 * np.pi) / 2
+        )
         GWpost.lognormconst = lognormconst
 
     GWpost.score = score
@@ -315,7 +334,9 @@ def GWishartScore(X, G, d0=3, S0=None, score_method="bic", mode="covsel"):
         noData = np.zeros((0, n_dim))
 
         P0, S_noData = GWishartFit(noData, G, GWprior)
-        GWtemp = compute_score(noData, G, P0, S_noData, GWprior=GWprior, score_method=score_method)
+        GWtemp = compute_score(
+            noData, G, P0, S_noData, GWprior=GWprior, score_method=score_method
+        )
         GWprior.lognormconst = GWtemp.lognormconst
 
     # Compute the map precision matrix P
@@ -344,13 +365,17 @@ def bayesian_graphical_lasso(
         alphas = np.logspace(-2, 0, 20)
 
     # get a series of Markov blankets for vaiours alphas
-    mdl = GraphicalLasso(assume_centered=assume_centered, tol=tol, max_iter=max_iter, verbose=False)
+    mdl = GraphicalLasso(
+        assume_centered=assume_centered, tol=tol, max_iter=max_iter, verbose=False
+    )
     precisions = [mdl.set_params(alpha=a).fit(X).precision_ for a in alphas]
     mblankets = markov_blankets(precisions, tol=tol, unique=True)
 
     normalized_scores = score_blankets(mblankets, X=X, alphas=[0.01, 0.5, 1])
 
-    graphs = _get_graphs(mblankets, normalized_scores, n_dim=n_dim, n_resampling=n_resampling)
+    graphs = _get_graphs(
+        mblankets, normalized_scores, n_dim=n_dim, n_resampling=n_resampling
+    )
 
     nonzeros_all = [np.triu(g, 1) + np.eye(n_dim, dtype=bool) for g in graphs]
 
@@ -361,7 +386,10 @@ def bayesian_graphical_lasso(
     # Find non-zero elements of upper triangle of G
     # make sure diagonal is non-zero
     # G = nonzeros_all[1] # probably can discard if all zeros?
-    res = [GWishartScore(X, G, d0=d0, S0=S0, mode=mode, score_method=scoring) for G in nonzeros_all]
+    res = [
+        GWishartScore(X, G, d0=d0, S0=S0, mode=mode, score_method=scoring)
+        for G in nonzeros_all
+    ]
 
     top_n = [x.P for x in sorted(res, key=lambda x: x.score)[::-1][:top_n]]
     return np.mean(top_n, axis=0)
@@ -439,7 +467,12 @@ class BayesianGraphicalLasso(GraphicalLasso):
         top_n=1,
     ):
         super(GraphicalLasso, self).__init__(
-            alpha=alpha, tol=tol, max_iter=max_iter, verbose=verbose, assume_centered=assume_centered, mode=mode
+            alpha=alpha,
+            tol=tol,
+            max_iter=max_iter,
+            verbose=verbose,
+            assume_centered=assume_centered,
+            mode=mode,
         )
         self.alphas = alphas
         self.n_resampling = n_resampling

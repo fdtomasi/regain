@@ -43,8 +43,8 @@ from regain.covariance.time_graphical_lasso_ import (
 )
 from regain.norm import l1_od_norm, vector_p_norm
 from regain.prox import prox_FL, soft_thresholding_off_diagonal
-from regain.utils import convergence
 from .forward_backward import _scalar_product, choose_gamma, choose_lamda, upper_diag_3d
+from ..utils import Convergence
 
 
 def loss(S, K, n_samples=None, vareps=0):
@@ -269,7 +269,7 @@ def tgl_forward_backward(
 
     max_residual = -np.inf
     n_linesearch = 0
-    checks = [convergence(obj=obj_partial(precision=K))]
+    checks = [Convergence(obj=obj_partial(precision=K))]
     for iteration_ in range(max_iter):
         k_previous = K.copy()
         x_inv = np.array([linalg.pinvh(x) for x in K])
@@ -325,7 +325,7 @@ def tgl_forward_backward(
         K = K + min(max(lamda, 0), 1) * (y - K)
         # K, t = fista_step(Y, Y - Y_old, t)
 
-        check = convergence(
+        check = Convergence(
             obj=obj_partial(precision=K),
             rnorm=np.linalg.norm(upper_diag_3d(K) - upper_diag_3d(k_previous)),
             snorm=np.linalg.norm(
@@ -341,10 +341,7 @@ def tgl_forward_backward(
         )
 
         if verbose and iteration_ % (50 if verbose < 2 else 1) == 0:
-            print(
-                "obj: %.4f, rnorm: %.7f, snorm: %.4f,"
-                "eps_pri: %.4f, eps_dual: %.4f" % check[:5]
-            )
+            print(check)
 
         if return_history:
             checks.append(check)

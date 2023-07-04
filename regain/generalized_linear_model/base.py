@@ -1,11 +1,19 @@
-import numpy as np
-
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
+import numpy as np
 from sklearn.base import BaseEstimator
-from regain.utils import namedtuple_with_defaults
 
-convergence = namedtuple_with_defaults("convergence", "iter obj iter_norm iter_r_norm")
+
+@dataclass
+class Convergence:
+    iter: float = 0
+    obj: float = 0
+    iter_norm: float = 0
+    iter_r_norm: float = 0
+
+    def __str__(self):
+        return f"Iter: {self.iter}, objective: {self.obj:.4f}, iter_norm {self.iter_norm:.4f}, iter_norm_normalized: {self.iter_r_norm:.4f}"
 
 
 def build_adjacency_matrix(neighbours, how="union"):

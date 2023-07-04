@@ -50,7 +50,7 @@ from regain.covariance.time_graphical_lasso_ import (
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
-from regain.utils import convergence
+from regain.utils import Convergence
 from regain.validation import check_norm_prox
 
 
@@ -163,7 +163,7 @@ def kernel_time_graphical_lasso(
         n_samples = np.ones(n_times)
 
     checks = [
-        convergence(
+        Convergence(
             obj=objective(n_samples, emp_cov, Z_0, Z_0, Z_M, alpha, kernel, psi)
         )
     ]
@@ -245,7 +245,7 @@ def kernel_time_graphical_lasso(
             else np.nan
         )
 
-        check = convergence(
+        check = Convergence(
             obj=obj,
             rnorm=rnorm,
             snorm=snorm,
@@ -283,10 +283,7 @@ def kernel_time_graphical_lasso(
             Z_M_old[m] = (Z_M[m][0].copy(), Z_M[m][1].copy())
 
         if verbose:
-            print(
-                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                "eps_pri: %.4f, eps_dual: %.4f" % check[:5]
-            )
+            print(check)
 
         checks.append(check)
         if stop_at is not None:
