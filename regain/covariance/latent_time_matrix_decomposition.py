@@ -31,7 +31,6 @@
 from __future__ import division
 
 import warnings
-from functools import partial
 
 import numpy as np
 from six.moves import map, range, zip
@@ -48,8 +47,8 @@ from regain.validation import check_input, check_norm_prox
 def objective(S, R, Z_0, Z_1, Z_2, W_0, W_1, W_2, alpha, tau, beta, eta, psi, phi):
     """Objective for latent variable time-varying matrix decomposition."""
     obj = squared_norm(S - R)
-    obj += alpha * sum(map(l1_od_norm, Z_0))
-    obj += tau * sum(map(partial(np.linalg.norm, ord="nuc"), W_0))
+    obj += alpha * np.sum(l1_od_norm(Z_0))
+    obj += tau * np.sum(np.linalg.norm(W_0, ord="nuc", axis=(-2, -1)))
     obj += beta * sum(map(psi, Z_2 - Z_1))
     obj += eta * sum(map(phi, W_2 - W_1))
     return obj
@@ -179,7 +178,12 @@ def latent_time_matrix_decomposition(
         A += A.transpose(0, 2, 1)
         A /= 2.0
 
-        W_0 = np.array([prox_trace_indicator(a, lamda=tau / (rho * div)) for a, div in zip(A, divisor)])
+        W_0 = np.array(
+            [
+                prox_trace_indicator(a, lamda=tau / (rho * div))
+                for a, div in zip(A, divisor)
+            ]
+        )
 
         # update W_1, W_2
         A_1 = W_0[:-1] + U_1
@@ -223,7 +227,22 @@ def latent_time_matrix_decomposition(
         )
 
         obj = (
-            objective(emp_cov, R, Z_0, Z_1, Z_2, W_0, W_1, W_2, alpha, tau, beta, eta, psi, phi)
+            objective(
+                emp_cov,
+                R,
+                Z_0,
+                Z_1,
+                Z_2,
+                W_0,
+                W_1,
+                W_2,
+                alpha,
+                tau,
+                beta,
+                eta,
+                psi,
+                phi,
+            )
             if compute_objective
             else np.nan
         )
@@ -236,7 +255,11 @@ def latent_time_matrix_decomposition(
             + rtol
             * max(
                 np.sqrt(
-                    squared_norm(R) + squared_norm(Z_1) + squared_norm(Z_2) + squared_norm(W_1) + squared_norm(W_2)
+                    squared_norm(R)
+                    + squared_norm(Z_1)
+                    + squared_norm(Z_2)
+                    + squared_norm(W_1)
+                    + squared_norm(W_2)
                 ),
                 np.sqrt(
                     squared_norm(Z_0 - W_0)
@@ -251,7 +274,11 @@ def latent_time_matrix_decomposition(
             * rho
             * (
                 np.sqrt(
-                    squared_norm(X_0) + squared_norm(X_1) + squared_norm(X_2) + squared_norm(U_1) + squared_norm(U_2)
+                    squared_norm(X_0)
+                    + squared_norm(X_1)
+                    + squared_norm(X_2)
+                    + squared_norm(U_1)
+                    + squared_norm(U_2)
                 )
             ),
         )
@@ -263,13 +290,18 @@ def latent_time_matrix_decomposition(
         W_2_old = W_2.copy()
 
         if verbose:
-            print("obj: %.4f, rnorm: %.4f, snorm: %.4f," "eps_pri: %.4f, eps_dual: %.4f" % check)
+            print(
+                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
+                "eps_pri: %.4f, eps_dual: %.4f" % check
+            )
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
 
-        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {}))
+        rho_new = update_rho(
+            rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {})
+        )
         # scaled dual variables should be also rescaled
         X_0 *= rho / rho_new
         X_1 *= rho / rho_new

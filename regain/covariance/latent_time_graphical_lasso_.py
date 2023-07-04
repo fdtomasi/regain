@@ -28,33 +28,33 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Graphical latent variable models selection over time via ADMM."""
-from __future__ import division
-
 import warnings
-from functools import partial
 
 import numpy as np
 from scipy import linalg
-from six.moves import map, range, zip
 from sklearn.utils.extmath import squared_norm
 
-from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso, init_precision
-from regain.covariance.time_graphical_lasso_ import objective as obj_tgl
+from regain.covariance.time_graphical_lasso_ import (
+    TimeGraphicalLasso,
+    init_precision,
+    objective as obj_tgl,
+)
 from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
 from regain.utils import convergence
 from regain.validation import check_norm_prox
 
 
-def objective(S, n_samples, R, Z_0, Z_1, Z_2, W_0, W_1, W_2, alpha, tau, beta, eta, psi, phi):
+def objective(
+    emp_cov, n_samples, R, Z_0, Z_1, Z_2, W_0, W_1, W_2, alpha, tau, beta, eta, psi, phi
+):
     """Objective function for latent variable time-varying graphical lasso."""
-    # obj = sum(- n * logl(s, r) for s, r, n in zip(S, R, n_samples))
-    obj = obj_tgl(n_samples, S, R, Z_0, Z_1, Z_2, alpha, beta, psi)
+    obj = obj_tgl(n_samples, emp_cov, R, Z_0, Z_1, Z_2, alpha, beta, psi)
 
     if isinstance(tau, np.ndarray):
-        obj += sum(np.linalg.norm(t * w, ord="nuc") for t, w in zip(tau, W_0))
+        obj += np.sum(np.linalg.norm(tau * W_0, ord="nuc", axis=(-2, -1)))
     else:
-        obj += tau * sum(map(partial(np.linalg.norm, ord="nuc"), W_0))
+        obj += tau * np.sum(np.linalg.norm(W_0, ord="nuc", axis=(-2, -1)))
 
     if isinstance(eta, np.ndarray):
         obj += sum(b[0][0] * m for b, m in zip(eta, map(phi, W_2 - W_1)))
@@ -176,15 +176,14 @@ def latent_time_graphical_lasso(
         A += emp_cov
         # A = emp_cov / rho - A
 
-        R = np.array([prox_logdet(a, lamda=ni / rho) for a, ni in zip(A, n_samples)])
+        lamda = np.expand_dims(n_samples / rho, -1)
+        R = prox_logdet(A, lamda=lamda)
 
         # update Z_0
         A = R + W_0 + X_0
         A[:-1] += Z_1 - X_1
         A[1:] += Z_2 - X_2
         A /= divisor[:, None, None]
-        # soft_thresholding_ = partial(soft_thresholding, lamda=alpha / rho)
-        # Z_0 = np.array(map(soft_thresholding_, A))
         Z_0 = soft_thresholding(A, lamda=alpha / (rho * divisor[:, None, None]))
 
         # update Z_1, Z_2
@@ -212,7 +211,8 @@ def latent_time_graphical_lasso(
         A += A.transpose(0, 2, 1)
         A /= 2.0
 
-        W_0 = np.array([prox_trace_indicator(a, lamda=tau / (rho * div)) for a, div in zip(A, divisor)])
+        lamda = np.expand_dims(tau / (rho * divisor), -1)
+        W_0 = prox_trace_indicator(A, lamda)
 
         # update W_1, W_2
         A_1 = W_0[:-1] + U_1
@@ -256,7 +256,23 @@ def latent_time_graphical_lasso(
         )
 
         obj = (
-            objective(emp_cov, n_samples, R, Z_0, Z_1, Z_2, W_0, W_1, W_2, alpha, tau, beta, eta, psi, phi)
+            objective(
+                emp_cov,
+                n_samples,
+                R,
+                Z_0,
+                Z_1,
+                Z_2,
+                W_0,
+                W_1,
+                W_2,
+                alpha,
+                tau,
+                beta,
+                eta,
+                psi,
+                phi,
+            )
             if compute_objective
             else np.nan
         )
@@ -269,7 +285,11 @@ def latent_time_graphical_lasso(
             + rtol
             * max(
                 np.sqrt(
-                    squared_norm(R) + squared_norm(Z_1) + squared_norm(Z_2) + squared_norm(W_1) + squared_norm(W_2)
+                    squared_norm(R)
+                    + squared_norm(Z_1)
+                    + squared_norm(Z_2)
+                    + squared_norm(W_1)
+                    + squared_norm(W_2)
                 ),
                 np.sqrt(
                     squared_norm(Z_0 - W_0)
@@ -284,7 +304,11 @@ def latent_time_graphical_lasso(
             * rho
             * (
                 np.sqrt(
-                    squared_norm(X_0) + squared_norm(X_1) + squared_norm(X_2) + squared_norm(U_1) + squared_norm(U_2)
+                    squared_norm(X_0)
+                    + squared_norm(X_1)
+                    + squared_norm(X_2)
+                    + squared_norm(U_1)
+                    + squared_norm(U_2)
                 )
             ),
         )
@@ -296,13 +320,18 @@ def latent_time_graphical_lasso(
         W_2_old = W_2.copy()
 
         if verbose:
-            print("obj: %.4f, rnorm: %.4f, snorm: %.4f," "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
+            print(
+                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
+                "eps_pri: %.4f, eps_dual: %.4f" % check[:5]
+            )
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
 
-        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {}))
+        rho_new = update_rho(
+            rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {})
+        )
         # scaled dual variables should be also rescaled
         X_0 *= rho / rho_new
         X_1 *= rho / rho_new
@@ -463,7 +492,12 @@ class LatentTimeGraphicalLasso(TimeGraphicalLasso):
             Empirical covariance of data.
 
         """
-        self.precision_, self.latent_, self.covariance_, self.n_iter_ = latent_time_graphical_lasso(
+        (
+            self.precision_,
+            self.latent_,
+            self.covariance_,
+            self.n_iter_,
+        ) = latent_time_graphical_lasso(
             emp_cov,
             n_samples=n_samples,
             alpha=self.alpha,

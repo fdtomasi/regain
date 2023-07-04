@@ -36,7 +36,7 @@ import warnings
 
 import numpy as np
 from scipy import linalg
-from six.moves import map, range, zip
+from six.moves import map, range
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.gaussian_process import kernels
 from sklearn.utils.extmath import squared_norm
@@ -60,10 +60,11 @@ from regain.validation import check_norm_prox
 def objective(n_samples, S, K, Z_0, Z_M, alpha, kernel, psi):
     """Objective function for time-varying graphical lasso."""
     obj = loss(S, K, n_samples=n_samples)
+
     if isinstance(alpha, np.ndarray):
-        obj += sum(l1_od_norm(a * z) for a, z in zip(alpha, Z_0))
+        obj += np.sum(l1_od_norm(alpha * Z_0))
     else:
-        obj += alpha * sum(map(l1_od_norm, Z_0))
+        obj += alpha * np.sum(l1_od_norm(Z_0))
 
     for m in range(1, Z_0.shape[0]):
         # all possible markovians jumps
@@ -182,9 +183,8 @@ def kernel_time_graphical_lasso(
         A *= -rho * n_times / n_samples[:, None, None]
         A += emp_cov
 
-        K = np.array(
-            [prox_logdet(a, lamda=ni / (rho * n_times)) for a, ni in zip(A, n_samples)]
-        )
+        lamda = np.expand_dims(n_samples / (rho * n_times), -1)
+        K = prox_logdet(A, lamda)
 
         # update Z_0
         A = K + U_0

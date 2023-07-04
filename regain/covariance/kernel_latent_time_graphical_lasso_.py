@@ -32,14 +32,10 @@
 This adds the possibility to specify a temporal constraint with a kernel
 function.
 """
-from __future__ import division
-
 import warnings
-from functools import partial
 
 import numpy as np
 from scipy import linalg
-from six.moves import map, range, zip
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.gaussian_process import kernels
 from sklearn.utils.extmath import squared_norm
@@ -62,10 +58,11 @@ def objective(
 ):
     """Objective function for latent variable time-varying graphical lasso."""
     obj = obj_ktgl(n_samples, S, R, Z_0, Z_M, alpha, kernel_psi, psi)
+
     if isinstance(tau, np.ndarray):
-        obj += sum(np.linalg.norm(t * w, ord="nuc") for t, w in zip(tau, W_0))
+        obj += np.sum(np.linalg.norm(tau * W_0, ord="nuc", axis=(-2, -1)))
     else:
-        obj += tau * sum(map(partial(np.linalg.norm, ord="nuc"), W_0))
+        obj += tau * np.sum(np.linalg.norm(W_0, ord="nuc", axis=(-2, -1)))
 
     for m in range(1, W_0.shape[0]):
         # all possible markovians jumps
@@ -191,7 +188,8 @@ def kernel_latent_time_graphical_lasso(
         A += emp_cov
         # A = emp_cov / rho - A
 
-        R = np.array([prox_logdet(a, lamda=ni / rho) for a, ni in zip(A, n_samples)])
+        lamda = np.expand_dims(n_samples / rho, -1)
+        R = prox_logdet(A, lamda=lamda)
 
         # update Z_0
         A = R + W_0 + X_0

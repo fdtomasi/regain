@@ -30,22 +30,22 @@
 """Test scores module."""
 import numpy as np
 from numpy.testing import assert_equal
-from sklearn.utils.extmath import fast_logdet as fast_logdet_sk
+from sklearn.utils.extmath import fast_logdet
 
 from regain import scores
-from regain.math import fast_logdet
+from regain.math import batch_logdet
 from regain.scores import log_likelihood_t
 
 
 def test_fast_logdet():
     """Test fast_logdet"""
     A = np.diag(np.random.rand(3))
-    logdet1 = fast_logdet(A)
-    assert_equal(logdet1, fast_logdet_sk(A))
+    logdet1 = batch_logdet(A)
+    assert_equal(logdet1, fast_logdet(A))
 
     A = np.array([np.diag(np.random.rand(3)), np.diag(np.random.rand(3))])
-    logdet1 = fast_logdet(A)
-    assert_equal(logdet1, [fast_logdet_sk(A[0]), fast_logdet_sk(A[1])])
+    logdet1 = batch_logdet(A)
+    assert_equal(logdet1, [fast_logdet(A[0]), fast_logdet(A[1])])
 
 
 def test_log_likelihood():
