@@ -44,7 +44,7 @@ from sklearn.utils.validation import check_array
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding_off_diagonal
 from regain.update_rules import update_rho
-from regain.utils import convergence
+from regain.utils import Convergence
 
 
 def logl(emp_cov, precision):
@@ -169,7 +169,7 @@ def graphical_lasso(
         obj = objective(emp_cov, K, Z, alpha) if compute_objective else np.nan
         rnorm = np.linalg.norm(K - Z, "fro")
         snorm = rho * np.linalg.norm(Z - Z_old, "fro")
-        check = convergence(
+        check = Convergence(
             obj=obj,
             rnorm=rnorm,
             snorm=snorm,
@@ -180,10 +180,7 @@ def graphical_lasso(
 
         Z_old = Z.copy()
         if verbose:
-            print(
-                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                "eps_pri: %.4f, eps_dual: %.4f" % check[:5]
-            )
+            print(check)
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:

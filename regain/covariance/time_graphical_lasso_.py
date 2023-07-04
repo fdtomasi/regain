@@ -38,7 +38,6 @@ import warnings
 
 import numpy as np
 from scipy import linalg
-from six.moves import map, range, zip
 from sklearn.covariance import empirical_covariance, log_likelihood
 from sklearn.utils.extmath import squared_norm
 from sklearn.utils.validation import check_X_y
@@ -48,7 +47,7 @@ from regain.math import batch_logdet
 from regain.norm import l1_od_norm
 from regain.prox import prox_logdet, soft_thresholding
 from regain.update_rules import update_rho
-from regain.utils import convergence, error_norm_time
+from regain.utils import Convergence, error_norm_time
 from regain.validation import check_norm_prox
 
 
@@ -57,7 +56,7 @@ def batch_log_likelihood(emp_cov, precision):
     return batch_logdet(precision) - np.sum(emp_cov * precision, axis=(-1, -2))
 
 
-def loss(emp_cov, precision, n_samples=None):
+def loss(emp_cov, precision, n_samples: np.ndarray = None) -> float:
     """Loss function for time-varying graphical lasso."""
     if n_samples is None:
         # 1 sample for each batch, ie, do not scale.
@@ -67,9 +66,9 @@ def loss(emp_cov, precision, n_samples=None):
     return np.sum(-n_samples * batch_log_likelihood(emp_cov, precision))
 
 
-def objective(n_samples, emp_cov, K, Z_0, Z_1, Z_2, alpha, beta, psi):
+def objective(n_samples, emp_cov, K, Z_0, Z_1, Z_2, alpha, beta, psi) -> float:
     """Objective function for time-varying graphical lasso."""
-    obj = loss(emp_cov, K, n_samples=n_samples)
+    obj: float = loss(emp_cov, K, n_samples=n_samples)
 
     if isinstance(alpha, np.ndarray):
         obj += np.sum(l1_od_norm(alpha * Z_0))
@@ -177,7 +176,7 @@ def time_graphical_lasso(
         n_samples = np.ones(emp_cov.shape[0])
 
     checks = [
-        convergence(
+        Convergence(
             obj=objective(n_samples, emp_cov, Z_0, Z_0, Z_1, Z_2, alpha, beta, psi)
         )
     ]
@@ -249,7 +248,7 @@ def time_graphical_lasso(
         #     Z_0 = Z_0_old
         #     break
 
-        check = convergence(
+        check = Convergence(
             obj=obj,
             rnorm=rnorm,
             snorm=snorm,
@@ -270,10 +269,7 @@ def time_graphical_lasso(
         Z_2_old = Z_2.copy()
 
         if verbose:
-            print(
-                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                "eps_pri: %.4f, eps_dual: %.4f" % check[:5]
-            )
+            print(check)
 
         checks.append(check)
         if stop_at is not None:

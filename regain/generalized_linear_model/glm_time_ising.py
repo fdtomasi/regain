@@ -31,7 +31,6 @@
 import warnings
 
 import numpy as np
-from six.moves import map, range, zip
 from sklearn.base import BaseEstimator
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.gaussian_process import kernels
@@ -42,7 +41,7 @@ from regain.covariance.time_graphical_lasso_ import init_precision
 from regain.generalized_linear_model.glm_ising import _fit, loss
 from regain.norm import l1_od_norm
 from regain.update_rules import update_rho
-from regain.utils import convergence
+from regain.utils import Convergence
 from regain.validation import check_norm_prox
 
 
@@ -157,7 +156,7 @@ def _fit_time_ising_model(
         Z_R_old = np.zeros_like(Z_R)
         Z_M_old[m] = (Z_L_old, Z_R_old)
 
-    checks = [convergence(obj=objective(X, K, Z_M, alpha, kernel, psi))]
+    checks = [Convergence(obj=objective(X, K, Z_M, alpha, kernel, psi))]
     for iteration_ in range(max_iter):
         # update K
 
@@ -232,7 +231,7 @@ def _fit_time_ising_model(
 
         obj = objective(X, K, Z_M, alpha, kernel, psi) if compute_objective else np.nan
 
-        check = convergence(
+        check = Convergence(
             obj=obj,
             rnorm=rnorm,
             snorm=snorm,
@@ -267,10 +266,7 @@ def _fit_time_ising_model(
             Z_M_old[m] = (Z_M[m][0].copy(), Z_M[m][1].copy())
 
         if verbose:
-            print(
-                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
-                "eps_pri: %.4f, eps_dual: %.4f" % check[:5]
-            )
+            print(check)
 
         checks.append(check)
         if stop_at is not None:

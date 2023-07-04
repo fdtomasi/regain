@@ -37,7 +37,7 @@ from sklearn.utils.extmath import squared_norm
 
 from regain.math import create_from_diagonal, fill_diagonal, get_diagonal
 from regain.update_rules import update_rho
-from regain.utils import convergence
+from regain.utils import Convergence
 
 try:
     from prox_tv import tv1_1d, tvp_1d, tvgen, tvp_2d
@@ -209,7 +209,7 @@ def prox_node_penalty(A_12, lamda, rho=1, tol=1e-4, rtol=1e-2, max_iter=500):
         snorm = rho * np.sqrt(
             squared_norm(W - W_old) + squared_norm(V + W - V_old - W_old)
         )
-        check = convergence(
+        check = Convergence(
             obj=np.nan,
             rnorm=rnorm,
             snorm=snorm,

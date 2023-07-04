@@ -33,9 +33,9 @@ from sklearn.base import BaseEstimator
 from sklearn.utils import check_array
 
 from regain.generalized_linear_model.base import (
+    Convergence,
     GLM_GM,
     build_adjacency_matrix,
-    convergence,
 )
 from regain.norm import l1_od_norm
 from regain.prox import soft_thresholding
@@ -124,7 +124,7 @@ def fit_each_variable(
                 break
         thetas.append(theta)
         if iter_ > 0:
-            check = convergence(
+            check = Convergence(
                 iter=iter_,
                 obj=objective_single_variable(X, theta, n, ix, selector, alpha),
                 iter_norm=np.linalg.norm(thetas[-2] - thetas[-1]),
@@ -135,13 +135,9 @@ def fit_each_variable(
             checks.append(check)
             # if adjust_gamma: # TODO multiply or divide
             if verbose:
-                print(
-                    "Iter: %d, objective: %.4f, iter_norm %.4f,"
-                    " iter_norm_normalized: %.4f"
-                    % (check[0], check[1], check[2], check[3])
-                )
+                print(check)
 
-            if np.abs(check[2]) < tol:
+            if np.abs(check.iter_norm) < tol:
                 break
 
     return_list = [thetas[-1]]

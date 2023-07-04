@@ -34,13 +34,15 @@ import warnings
 
 import numpy as np
 from scipy import linalg
-from six.moves import range
 
-from regain.covariance.graphical_lasso_ import GraphicalLasso, init_precision
-from regain.covariance.graphical_lasso_ import objective as obj_gl
+from regain.covariance.graphical_lasso_ import (
+    GraphicalLasso,
+    init_precision,
+    objective as obj_gl,
+)
 from regain.prox import prox_logdet, prox_trace_indicator, soft_thresholding
 from regain.update_rules import update_rho
-from regain.utils import convergence
+from regain.utils import Convergence
 
 
 def objective(emp_cov, R, K, L, alpha, tau):
@@ -144,24 +146,27 @@ def latent_graphical_lasso(
         obj = objective(emp_cov, R, K, L, alpha, tau) if compute_objective else np.nan
         rnorm = np.linalg.norm(R - K + L)
         snorm = rho * np.linalg.norm(R - R_old)
-        check = convergence(
+        check = Convergence(
             obj=obj,
             rnorm=rnorm,
             snorm=snorm,
-            e_pri=np.sqrt(R.size) * tol + rtol * max(np.linalg.norm(R), np.linalg.norm(K - L)),
+            e_pri=np.sqrt(R.size) * tol
+            + rtol * max(np.linalg.norm(R), np.linalg.norm(K - L)),
             e_dual=np.sqrt(R.size) * tol + rtol * rho * np.linalg.norm(U),
         )
         R_old = R.copy()
 
         if verbose:
-            print("obj: %.4f, rnorm: %.4f, snorm: %.4f," "eps_pri: %.4f, eps_dual: %.4f" % check[:5])
+            print(check)
 
         checks.append(check)
         if check.rnorm <= check.e_pri and check.snorm <= check.e_dual:
             break
         if check.obj == np.inf:
             break
-        rho_new = update_rho(rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {}))
+        rho_new = update_rho(
+            rho, rnorm, snorm, iteration=iteration_, **(update_rho_options or {})
+        )
         # scaled dual variables should be also rescaled
         U *= rho / rho_new
         rho = rho_new
@@ -293,7 +298,12 @@ class LatentGraphicalLasso(GraphicalLasso):
             Empirical covariance of data.
 
         """
-        self.precision_, self.latent_, self.covariance_, self.n_iter_ = latent_graphical_lasso(
+        (
+            self.precision_,
+            self.latent_,
+            self.covariance_,
+            self.n_iter_,
+        ) = latent_graphical_lasso(
             emp_cov,
             alpha=self.alpha,
             tau=self.tau,
