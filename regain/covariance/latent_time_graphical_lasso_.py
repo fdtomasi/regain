@@ -277,40 +277,34 @@ def latent_time_graphical_lasso(
             else np.nan
         )
 
+        c = np.sqrt(R.size + 4 * Z_1.size) * tol
+        e_pri = c + rtol * max(
+            np.sqrt(
+                squared_norm(R)
+                + squared_norm(Z_1)
+                + squared_norm(Z_2)
+                + squared_norm(W_1)
+                + squared_norm(W_2)
+            ),
+            np.sqrt(
+                squared_norm(Z_0 - W_0)
+                + squared_norm(Z_0[:-1])
+                + squared_norm(Z_0[1:])
+                + squared_norm(W_0[:-1])
+                + squared_norm(W_0[1:])
+            ),
+        )
+        e_dual = c + rtol * rho * (
+            np.sqrt(
+                squared_norm(X_0)
+                + squared_norm(X_1)
+                + squared_norm(X_2)
+                + squared_norm(U_1)
+                + squared_norm(U_2)
+            )
+        )
         check = Convergence(
-            obj=obj,
-            rnorm=rnorm,
-            snorm=snorm,
-            e_pri=np.sqrt(R.size + 4 * Z_1.size) * tol
-            + rtol
-            * max(
-                np.sqrt(
-                    squared_norm(R)
-                    + squared_norm(Z_1)
-                    + squared_norm(Z_2)
-                    + squared_norm(W_1)
-                    + squared_norm(W_2)
-                ),
-                np.sqrt(
-                    squared_norm(Z_0 - W_0)
-                    + squared_norm(Z_0[:-1])
-                    + squared_norm(Z_0[1:])
-                    + squared_norm(W_0[:-1])
-                    + squared_norm(W_0[1:])
-                ),
-            ),
-            e_dual=np.sqrt(R.size + 4 * Z_1.size) * tol
-            + rtol
-            * rho
-            * (
-                np.sqrt(
-                    squared_norm(X_0)
-                    + squared_norm(X_1)
-                    + squared_norm(X_2)
-                    + squared_norm(U_1)
-                    + squared_norm(U_2)
-                )
-            ),
+            obj=obj, rnorm=rnorm, snorm=snorm, e_pri=e_pri, e_dual=e_dual
         )
 
         R_old = R.copy()

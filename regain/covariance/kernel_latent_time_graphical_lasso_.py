@@ -153,27 +153,16 @@ def kernel_latent_time_graphical_lasso(
     for m in range(1, n_times):
         Z_L = Z_0.copy()[:-m]
         Z_R = Z_0.copy()[m:]
-        Z_M[m] = (Z_L, Z_R)
 
-        W_L = np.zeros_like(Z_L)
-        W_R = np.zeros_like(Z_R)
-        W_M[m] = (W_L, W_R)
+        # Dims: 2 T-m D D
+        Z_M[m] = np.array((Z_L, Z_R))
+        W_M[m] = np.zeros_like(Z_M[m])
 
-        Y_L = np.zeros_like(Z_L)
-        Y_R = np.zeros_like(Z_R)
-        Y_M[m] = (Y_L, Y_R)
+        Y_M[m] = np.zeros_like(Z_M[m])
+        U_M[m] = np.zeros_like(W_M[m])
 
-        U_L = np.zeros_like(W_L)
-        U_R = np.zeros_like(W_R)
-        U_M[m] = (U_L, U_R)
-
-        Z_L_old = np.zeros_like(Z_L)
-        Z_R_old = np.zeros_like(Z_R)
-        Z_M_old[m] = (Z_L_old, Z_R_old)
-
-        W_L_old = np.zeros_like(W_L)
-        W_R_old = np.zeros_like(W_R)
-        W_M_old[m] = (W_L_old, W_R_old)
+        Z_M_old[m] = np.zeros_like(Z_M[m])
+        W_M_old[m] = np.zeros_like(W_M[m])
 
     if n_samples is None:
         n_samples = np.ones(n_times)
@@ -237,7 +226,7 @@ def kernel_latent_time_graphical_lasso(
                     rtol=rtol,
                     max_iter=max_iter,
                 )
-            Z_M[m] = (Z_L, Z_R)
+            Z_M[m] = np.array((Z_L, Z_R))
 
             # update other residuals
             Y_L += Z_0[:-m] - Z_L
@@ -262,7 +251,7 @@ def kernel_latent_time_graphical_lasso(
                     rtol=rtol,
                     max_iter=max_iter,
                 )
-            W_M[m] = (W_L, W_R)
+            W_M[m] = np.array((W_L, W_R))
 
             # update other residuals
             U_L += W_0[:-m] - W_L
@@ -283,10 +272,7 @@ def kernel_latent_time_graphical_lasso(
         snorm = rho * np.sqrt(
             squared_norm(R - R_old)
             + sum(
-                squared_norm(Z_M[m][0] - Z_M_old[m][0])
-                + squared_norm(Z_M[m][1] - Z_M_old[m][1])
-                + squared_norm(W_M[m][0] - W_M_old[m][0])
-                + squared_norm(W_M[m][1] - W_M_old[m][1])
+                squared_norm(Z_M[m] - Z_M_old[m]) + squared_norm(W_M[m] - W_M_old[m])
                 for m in range(1, n_times)
             )
         )
@@ -311,53 +297,40 @@ def kernel_latent_time_graphical_lasso(
             else np.nan
         )
 
-        check = Convergence(
-            obj=obj,
-            rnorm=rnorm,
-            snorm=snorm,
-            e_pri=n_features * np.sqrt(n_times * (2 * n_times - 1)) * tol
-            + rtol
-            * max(
-                np.sqrt(
-                    squared_norm(R)
-                    + sum(
-                        squared_norm(Z_M[m][0])
-                        + squared_norm(Z_M[m][1])
-                        + squared_norm(W_M[m][0])
-                        + squared_norm(W_M[m][1])
-                        for m in range(1, n_times)
-                    )
-                ),
-                np.sqrt(
-                    squared_norm(Z_0 - W_0)
-                    + sum(
-                        squared_norm(Z_0[:-m])
-                        + squared_norm(Z_0[m:])
-                        + squared_norm(W_0[:-m])
-                        + squared_norm(W_0[m:])
-                        for m in range(1, n_times)
-                    )
-                ),
-            ),
-            e_dual=n_features * np.sqrt(n_times * (2 * n_times - 1)) * tol
-            + rtol
-            * rho
-            * np.sqrt(
-                squared_norm(X_0)
+        c = n_features * np.sqrt(n_times * (2 * n_times - 1)) * tol
+        e_pri = c + rtol * max(
+            np.sqrt(
+                squared_norm(R)
                 + sum(
-                    squared_norm(Y_M[m][0])
-                    + squared_norm(Y_M[m][1])
-                    + squared_norm(U_M[m][0])
-                    + squared_norm(U_M[m][1])
+                    squared_norm(Z_M[m]) + squared_norm(W_M[m])
+                    for m in range(1, n_times)
+                )
+            ),
+            np.sqrt(
+                squared_norm(Z_0 - W_0)
+                + sum(
+                    squared_norm(Z_0[:-m])
+                    + squared_norm(Z_0[m:])
+                    + squared_norm(W_0[:-m])
+                    + squared_norm(W_0[m:])
                     for m in range(1, n_times)
                 )
             ),
         )
+        e_dual = c + rtol * rho * np.sqrt(
+            squared_norm(X_0)
+            + sum(
+                squared_norm(Y_M[m]) + squared_norm(U_M[m]) for m in range(1, n_times)
+            )
+        )
+        check = Convergence(
+            obj=obj, rnorm=rnorm, snorm=snorm, e_pri=e_pri, e_dual=e_dual
+        )
 
         R_old = R.copy()
         for m in range(1, n_times):
-            Z_M_old[m] = (Z_M[m][0].copy(), Z_M[m][1].copy())
-            W_M_old[m] = (W_M[m][0].copy(), W_M[m][1].copy())
+            Z_M_old[m] = Z_M[m].copy()
+            W_M_old[m] = W_M[m].copy()
 
         if verbose:
             print(check)
@@ -372,13 +345,8 @@ def kernel_latent_time_graphical_lasso(
         # scaled dual variables should be also rescaled
         X_0 *= rho / rho_new
         for m in range(1, n_times):
-            Y_L, Y_R = Y_M[m]
-            Y_L *= rho / rho_new
-            Y_R *= rho / rho_new
-
-            U_L, U_R = U_M[m]
-            U_L *= rho / rho_new
-            U_R *= rho / rho_new
+            Y_M[m] *= rho / rho_new
+            U_M[m] *= rho / rho_new
         rho = rho_new
     else:
         warnings.warn("Objective did not converge.")
