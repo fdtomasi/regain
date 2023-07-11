@@ -180,6 +180,17 @@ def time_graphical_lasso(
             obj=objective(n_samples, emp_cov, Z_0, Z_0, Z_1, Z_2, alpha, beta, psi)
         )
     ]
+
+    # Convergence criterion for TGL.
+    # The number of auxiliary variables, Z_0, Z_1, Z_2 are:
+    # d^2 T + 2 d^2 (T-1)
+    # so
+    # c = tol * [d^2 T + 2 d^2 (T-1)]^(1/2)
+    # c = tol * d [T + 2 (T-1)]^(1/2)
+    # c = tol * d [T + 2T - 2]^(1/2)
+    # c = tol * d [3T - 2]^(1/2)
+    c = np.sqrt(Z_0.size + 2 * Z_1.size) * tol
+
     for iteration_ in range(max_iter):
         # update K
         A = Z_0 - U_0
@@ -244,7 +255,6 @@ def time_graphical_lasso(
             else np.nan
         )
 
-        c = np.sqrt(K.size + 2 * Z_1.size) * tol
         e_pri = c + rtol * max(
             np.sqrt(squared_norm(Z_0) + squared_norm(Z_1) + squared_norm(Z_2)),
             np.sqrt(squared_norm(K) + squared_norm(K[:-1]) + squared_norm(K[1:])),

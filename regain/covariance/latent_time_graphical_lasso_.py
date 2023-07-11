@@ -167,6 +167,16 @@ def latent_time_graphical_lasso(
         n_samples = np.ones(emp_cov.shape[0])
 
     checks = []
+    # Convergence criterion for LTGL.
+    # The number of auxiliary variables, Z_0, Z_1, Z_2, W_1, W_2 are:
+    # d^2 T + 4 d^2 (T-1)
+    # so
+    # c = tol * [d^2 T + 4 d^2 (T-1)]^(1/2)
+    # c = tol * d [T + 4 (T-1)]^(1/2)
+    # c = tol * d [T + 4T - 4]^(1/2)
+    # c = tol * d [5T - 4]^(1/2)
+    c = np.sqrt(Z_0.size + 4 * Z_1.size) * tol
+
     for iteration_ in range(max_iter):
         # update R
         A = Z_0 - W_0 - X_0
@@ -277,7 +287,6 @@ def latent_time_graphical_lasso(
             else np.nan
         )
 
-        c = np.sqrt(R.size + 4 * Z_1.size) * tol
         e_pri = c + rtol * max(
             np.sqrt(
                 squared_norm(R)

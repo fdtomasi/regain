@@ -168,6 +168,16 @@ def kernel_latent_time_graphical_lasso(
         n_samples = np.ones(n_times)
 
     checks = []
+    # Convergence criterion for KLTGL.
+    # The number of auxiliary variables, Z_0, Z_M and U_M are:
+    # d^2 T + 2 d^2 T(T-1) / 2 + 2 d^2 T(T-1) / 2
+    # so:
+    # c = tol * [d^2 T + 4 d^2 T(T-1) / 2]^(1/2)
+    # = tol * d [T + 2 T(T-1)]^(1/2)
+    # = tol * d [T + 2T^2 - 2T]^(1/2)
+    # = tol * d [2T^2 - T]^(1/2)
+    # = tol * d [T (2T - 1)]^(1/2)
+    c = n_features * np.sqrt(n_times * (2 * n_times - 1)) * tol
     for iteration_ in range(max_iter):
         # update R
         A = Z_0 - W_0 - X_0
@@ -297,7 +307,6 @@ def kernel_latent_time_graphical_lasso(
             else np.nan
         )
 
-        c = n_features * np.sqrt(n_times * (2 * n_times - 1)) * tol
         e_pri = c + rtol * max(
             np.sqrt(
                 squared_norm(R)

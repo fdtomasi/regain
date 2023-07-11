@@ -161,6 +161,17 @@ def kernel_time_graphical_lasso(
             obj=objective(n_samples, emp_cov, Z_0, Z_0, Z_M, alpha, kernel, psi)
         )
     ]
+
+    # Convergence criterion for KLTGL.
+    # The number of auxiliary variables, Z_0, Z_M are:
+    # d^2 T + 2 d^2 T(T-1) / 2
+    # so:
+    # c = tol * [d^2 T + 2 d^2 T(T-1) / 2]^(1/2)
+    # = tol * d [T + T(T-1)]^(1/2)
+    # = tol * d [T + T^2 - T]^(1/2)
+    # = tol * d [T^2]^(1/2)
+    # = tol * d T
+    c = n_features * n_times * tol
     for iteration_ in range(max_iter):
         # update K
         A = Z_0 - U_0
@@ -235,7 +246,6 @@ def kernel_time_graphical_lasso(
             else np.nan
         )
 
-        c = n_features * n_times * tol
         # We use: squared_norm(Z_M[m]) == squared_norm(Z_M[m][0]) + squared_norm(Z_M[m][1])
         e_pri = c + rtol * max(
             np.sqrt(
