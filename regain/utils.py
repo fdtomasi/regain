@@ -103,7 +103,6 @@ class Convergence:
     snorm: float = 0
     e_pri: float = 0
     e_dual: float = 0
-    precision: float = 0
 
     def __str__(self):
         return (

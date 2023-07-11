@@ -180,6 +180,17 @@ def time_graphical_lasso(
             obj=objective(n_samples, emp_cov, Z_0, Z_0, Z_1, Z_2, alpha, beta, psi)
         )
     ]
+
+    # Convergence criterion for TGL.
+    # The number of auxiliary variables, Z_0, Z_1, Z_2 are:
+    # d^2 T + 2 d^2 (T-1)
+    # so
+    # c = tol * [d^2 T + 2 d^2 (T-1)]^(1/2)
+    # c = tol * d [T + 2 (T-1)]^(1/2)
+    # c = tol * d [T + 2T - 2]^(1/2)
+    # c = tol * d [3T - 2]^(1/2)
+    c = np.sqrt(Z_0.size + 2 * Z_1.size) * tol
+
     for iteration_ in range(max_iter):
         # update K
         A = Z_0 - U_0
@@ -244,25 +255,15 @@ def time_graphical_lasso(
             else np.nan
         )
 
-        # if np.isinf(obj):
-        #     Z_0 = Z_0_old
-        #     break
-
+        e_pri = c + rtol * max(
+            np.sqrt(squared_norm(Z_0) + squared_norm(Z_1) + squared_norm(Z_2)),
+            np.sqrt(squared_norm(K) + squared_norm(K[:-1]) + squared_norm(K[1:])),
+        )
+        e_dual = c + rtol * rho * np.sqrt(
+            squared_norm(U_0) + squared_norm(U_1) + squared_norm(U_2)
+        )
         check = Convergence(
-            obj=obj,
-            rnorm=rnorm,
-            snorm=snorm,
-            e_pri=np.sqrt(K.size + 2 * Z_1.size) * tol
-            + rtol
-            * max(
-                np.sqrt(squared_norm(Z_0) + squared_norm(Z_1) + squared_norm(Z_2)),
-                np.sqrt(squared_norm(K) + squared_norm(K[:-1]) + squared_norm(K[1:])),
-            ),
-            e_dual=np.sqrt(K.size + 2 * Z_1.size) * tol
-            + rtol
-            * rho
-            * np.sqrt(squared_norm(U_0) + squared_norm(U_1) + squared_norm(U_2)),
-            # precision=Z_0.copy()
+            obj=obj, rnorm=rnorm, snorm=snorm, e_pri=e_pri, e_dual=e_dual
         )
         Z_0_old = Z_0.copy()
         Z_1_old = Z_1.copy()
@@ -287,8 +288,6 @@ def time_graphical_lasso(
         U_1 *= rho / rho_new
         U_2 *= rho / rho_new
         rho = rho_new
-
-        # assert is_pos_def(Z_0)
     else:
         warnings.warn("Objective did not converge.")
 
