@@ -1,6 +1,6 @@
 codecov
 nose
-numpy>=1.11
+numpy>=2.4.4
 scipy>=0.16.1,>=1.0.0
 scikit_learn>=1.0
 setuptools
