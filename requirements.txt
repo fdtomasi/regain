@@ -1,5 +1,5 @@
 codecov
-numpy>=1.26
+numpy>=2.2.6
 scipy>=1.11
 scikit-learn>=1.7.2
 setuptools
