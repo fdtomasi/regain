@@ -7,7 +7,11 @@ leaked credential in a committed file, an unsafe deserialisation path,
 or a dependency advisory that affects users), please **do not open a
 public GitHub issue**.
 
-Instead, email **fdtomasi@gmail.com** with:
+Instead, report it privately via GitHub Security Advisories:
+
+https://github.com/fdtomasi/regain/security/advisories/new
+
+Include:
 
 - A short description of the issue.
 - Steps to reproduce, or a pointer to the affected file/commit.

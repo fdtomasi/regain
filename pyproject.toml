@@ -10,10 +10,10 @@ requires-python = ">=3.10"
 license = { text = "BSD-3-Clause" }
 keywords = ["graph inference", "latent variables", "graphical lasso", "covariance"]
 authors = [
-    { name = "Federico Tomasi", email = "fdtomasi@gmail.com" },
+    { name = "Federico Tomasi" },
 ]
 maintainers = [
-    { name = "Federico Tomasi", email = "fdtomasi@gmail.com" },
+    { name = "Federico Tomasi" },
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
