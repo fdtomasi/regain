@@ -5,6 +5,7 @@
 import numpy as np
 import pytest
 import scipy.sparse as sp
+from numpy.testing import assert_equal
 
 from regain import validation
 
@@ -75,3 +76,13 @@ def test_check_input_rejects_y_not_none():
     X = np.zeros((3, 10, 4))
     with pytest.raises(ValueError, match="y cannot be"):
         validation.check_input(X, y=np.zeros(10))
+
+
+def test_check_input_passthrough_3d():
+    """End-to-end shape check on the canonical 3D input path."""
+    X = np.random.randn(3, 2, 4)
+    X_new, n_samples, n_dimensions, n_times = validation.check_input(X)
+    assert_equal(X, X_new)
+    assert_equal(n_samples, np.array([2, 2, 2]))
+    assert_equal(n_dimensions, 4)
+    assert_equal(n_times, 3)
