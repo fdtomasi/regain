@@ -2,43 +2,40 @@
 [![codecov](https://codecov.io/gh/fdtomasi/regain/branch/master/graph/badge.svg?token=1eLrec0OsI)](https://codecov.io/gh/fdtomasi/regain) [![licence](https://img.shields.io/badge/licence-BSD-blue.svg)](http://opensource.org/licenses/BSD-3-Clause) [![PyPI](https://img.shields.io/pypi/v/regain.svg)](https://pypi.python.org/pypi/regain) [![Conda](https://img.shields.io/conda/v/fdtomasi/regain.svg)](https://anaconda.org/fdtomasi/regain)
 
 # regain
+
 Regularised graph inference across multiple time stamps, considering the influence of latent variables.
 It inherits functionalities from the [scikit-learn](https://github.com/scikit-learn/scikit-learn) package.
 
 ## Getting started
-### Dependencies
-`REGAIN` requires:
-- Python (>= 3.6)
-- NumPy (>= 1.8.2)
-- scikit-learn (>= 0.17)
-
-You can install (required) dependencies by running:
-```bash
-pip install -r requirements.txt
-```
-
-To use the parameter selection via gaussian process optimisation, [skopt](https://scikit-optimize.github.io/) is required.
 
 ### Installation
+
 The simplest way to install regain is using pip
+
 ```bash
 pip install regain
 ```
+
 or `conda`
 
 ```bash
 conda install -c fdtomasi regain
 ```
 
-If you'd like to install from source, or want to contribute to the project (e.g. by sending pull requests via github), read on. Clone the repository in GitHub and add it to your $PYTHONPATH.
+To install from source (for development or to contribute via pull requests):
+
 ```bash
 git clone https://github.com/fdtomasi/regain.git
 cd regain
-python setup.py develop
+pip install -e .
 ```
 
+For Gaussian-process based parameter selection, [skopt](https://scikit-optimize.github.io/) is also required.
+
 ## Quickstart
+
 A simple example for how to use LTGL.
+
 ```python
 import numpy as np
 from regain.covariance import LatentTimeGraphicalLasso
@@ -54,10 +51,10 @@ theta = data.thetas
 mdl = LatentTimeGraphicalLasso(max_iter=50).fit(X, y)
 print("Error: %.2f" % error_norm_time(theta, mdl.precision_))
 ```
+
 **IMPORTANT**
 We moved the API to be more consistent with `scikit-learn`.
 Now the input of `LatentTimeGraphicalLasso` is a two-dimensional matrix `X` with shape `(n_samples, n_dimensions)`, where the belonging of samples to a different index (for example, a different time point) is indicated in `y`.
-
 
 ## Citation
 
@@ -81,7 +78,7 @@ For the `LatentTimeGraphicalLasso` please use
  publisher = {ACM},
  address = {New York, NY, USA},
  keywords = {convex optimization, graphical models, latent variables, network inference, time-series},
-} 
+}
 ```
 
 and for the `TimeGraphicalLassoForwardBackward` plase use
