@@ -1,5 +1,5 @@
 ![build](https://github.com/fdtomasi/regain/actions/workflows/python-package.yml/badge.svg)
-[![codecov](https://codecov.io/gh/fdtomasi/regain/branch/master/graph/badge.svg?token=1eLrec0OsI)](https://codecov.io/gh/fdtomasi/regain) [![licence](https://img.shields.io/badge/licence-BSD-blue.svg)](http://opensource.org/licenses/BSD-3-Clause) [![PyPI](https://img.shields.io/pypi/v/regain.svg)](https://pypi.python.org/pypi/regain) [![Conda](https://img.shields.io/conda/v/fdtomasi/regain.svg)](https://anaconda.org/fdtomasi/regain)
+[![licence](https://img.shields.io/badge/licence-BSD-blue.svg)](http://opensource.org/licenses/BSD-3-Clause) [![PyPI](https://img.shields.io/pypi/v/regain.svg)](https://pypi.python.org/pypi/regain) [![Conda](https://img.shields.io/conda/v/fdtomasi/regain.svg)](https://anaconda.org/fdtomasi/regain)
 
 # regain
 

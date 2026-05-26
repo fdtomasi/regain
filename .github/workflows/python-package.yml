@@ -40,6 +40,19 @@ jobs:
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
       - name: Test with pytest
         run: |
-          pytest --cov=regain --cov-report=xml
-      - name: Upload coverage reports to Codecov with GitHub Action
-        uses: codecov/codecov-action@v4
+          pytest --cov=regain --cov-report=term --cov-report=html --cov-report=xml
+      - name: Coverage summary
+        if: always()
+        run: |
+          {
+            echo "### Coverage (Python ${{ matrix.python-version }})"
+            echo ""
+            coverage report --format=markdown
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload HTML coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html-py${{ matrix.python-version }}
+          path: htmlcov/
+          retention-days: 14
