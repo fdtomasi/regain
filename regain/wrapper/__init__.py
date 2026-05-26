@@ -79,7 +79,6 @@ def lvglasso(emp_cov, alpha, tau, rho=1, verbose=False, use_octave=True):
         octave.addpath(lvglasso_path, nout=0)
         result = octave.LVGLASSO(emp_cov, alpha, tau, rho)
     else:
-        global matlab_engine
         check_matlab_engine(verbose=verbose)
         matlab_engine.addpath(lvglasso_path, nargout=0)
         result = matlab_engine.LVGLASSO(
@@ -89,7 +88,6 @@ def lvglasso(emp_cov, alpha, tau, rho=1, verbose=False, use_octave=True):
 
 
 def total_variation_condat(y, lamda, verbose=False):
-    global matlab_engine
     check_matlab_engine(verbose=verbose)
 
     tv_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "tv_condat")
@@ -127,7 +125,6 @@ def group_lasso_overlap_paspal(X, y, groups=(), lamda=0.1, verbose=False, **kwar
         Coefficient of the Lasso algorithm for each feature.
 
     """
-    global matlab_engine
     check_matlab_engine(verbose=verbose)
 
     glopridu_path = os.path.join(

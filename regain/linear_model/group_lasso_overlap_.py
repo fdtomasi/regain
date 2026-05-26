@@ -32,11 +32,9 @@ from __future__ import division, print_function
 import warnings
 
 import numpy as np
-import six
 from scipy import sparse
-from six.moves import range
 from sklearn.base import RegressorMixin
-from sklearn.linear_model._base import LinearClassifierMixin, LinearModel, _pre_fit # noqa
+from sklearn.linear_model._base import LinearClassifierMixin, LinearModel, _pre_fit  # noqa
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.utils import check_array, check_X_y, deprecated
 from sklearn.utils.extmath import safe_sparse_dot
@@ -79,7 +77,7 @@ def P_star_x_bar_function(x, d, groups):
         count = 0
         for g, group in enumerate(groups):
             if dim in group:
-                idx = np.argwhere(np.array(group) == dim)[0]
+                idx = group.index(dim)
                 ss += x[g][idx]
                 count += 1
         if count > 0:
@@ -88,7 +86,17 @@ def P_star_x_bar_function(x, d, groups):
     return P_star_x_bar
 
 
-def group_lasso_overlap(A, b, lamda=1.0, groups=None, rho=1.0, max_iter=100, tol=1e-4, verbose=False, rtol=1e-2):
+def group_lasso_overlap(
+    A,
+    b,
+    lamda=1.0,
+    groups=None,
+    rho=1.0,
+    max_iter=100,
+    tol=1e-4,
+    verbose=False,
+    rtol=1e-2,
+):
     r"""Group Lasso with Overlap solver.
 
     Solves the following problem via ADMM
@@ -160,13 +168,17 @@ def group_lasso_overlap(A, b, lamda=1.0, groups=None, rho=1.0, max_iter=100, tol
             objective(A, b, lamda, x, z),  # objective
             np.linalg.norm(x_consensus - z),  # rnorm
             np.linalg.norm(-rho * (z - zold)),  # snorm
-            np.sqrt(d) * tol + rtol * max(np.linalg.norm(x_consensus), np.linalg.norm(-z)),  # eps primal
-            np.sqrt(d) * tol + rtol * np.linalg.norm(rho * y_consensus)
+            np.sqrt(d) * tol
+            + rtol * max(np.linalg.norm(x_consensus), np.linalg.norm(-z)),  # eps primal
+            np.sqrt(d) * tol + rtol * np.linalg.norm(rho * y_consensus),
             # eps dual
         )
 
         if verbose:
-            print("obj: %.4f, rnorm: %.4f, snorm: %.4f," "eps_pri: %.4f, eps_dual: %.4f" % history)
+            print(
+                "obj: %.4f, rnorm: %.4f, snorm: %.4f,"
+                "eps_pri: %.4f, eps_dual: %.4f" % history
+            )
 
         hist.append(history)
         if history[1] < history[3] and history[2] < history[4]:
@@ -191,7 +203,6 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
         tol=1e-4,
         verbose=False,
         rtol=1e-2,
-        normalize=False,
         precompute=False,
         max_iter=1000,
         copy_X=True,
@@ -218,7 +229,6 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
         self.groups = groups or []
         self.rho = rho
         self.verbose = verbose
-        self.normalize = normalize
         self.precompute = precompute
         self.max_iter = max_iter
         self.copy_X = copy_X
@@ -234,7 +244,9 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
 
         self.mode = mode
         if mode == "paspal-matlab" and not _MATLAB_FOUND_:
-            raise ValueError("Cannot use Matlab implementation. Use `mode='admm'` or `mode='paspal'`.")
+            raise ValueError(
+                "Cannot use Matlab implementation. Use `mode='admm'` or `mode='paspal'`."
+            )
 
     def fit(self, X, y, check_input=True):
         """Fit model with coordinate descent.
@@ -270,8 +282,11 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
                 stacklevel=2,
             )
 
-        if isinstance(self.precompute, six.string_types):
-            raise ValueError("precompute should be one of True, False or" " array-like. Got %r" % self.precompute)
+        if isinstance(self.precompute, str):
+            raise ValueError(
+                "precompute should be one of True, False or"
+                " array-like. Got %r" % self.precompute
+            )
 
         # We expect X and y to be float64 or float32 Fortran ordered arrays
         # when bypassing checks
@@ -286,10 +301,12 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
                 multi_output=True,
                 y_numeric=True,
             )
-            y = check_array(y, order="F", copy=False, dtype=X.dtype.type, ensure_2d=False)
+            y = check_array(
+                y, order="F", copy=False, dtype=X.dtype.type, ensure_2d=False
+            )
 
         X, y, X_offset, y_offset, X_scale, precompute, Xy = _pre_fit(
-            X, y, None, self.precompute, self.normalize, self.fit_intercept, copy=False
+            X, y, None, self.precompute, self.fit_intercept, copy=False
         )
 
         if y.ndim == 1:
@@ -429,7 +446,7 @@ class GroupLassoOverlap(LinearModel, RegressorMixin):
 
     @property
     def sparse_coef_(self):
-        """ sparse representation of the fitted ``coef_`` """
+        """sparse representation of the fitted ``coef_``"""
         return sparse.csr_matrix(self.coef_)
 
     @deprecated(" and will be removed in 0.19")
@@ -474,7 +491,10 @@ class GroupLassoOverlapClassifier(LinearClassifierMixin, GroupLassoOverlap):
         Y = self._label_binarizer.fit_transform(y)
         if self._label_binarizer.y_type_.startswith("multilabel"):
             # we don't (yet) support multi-label classification in ENet
-            raise ValueError("%s doesn't support multi-label classification" % (self.__class__.__name__))
+            raise ValueError(
+                "%s doesn't support multi-label classification"
+                % (self.__class__.__name__)
+            )
 
         # Y = column_or_1d(Y, warn=True)
         super(GroupLassoOverlapClassifier, self).fit(X, Y)
@@ -491,7 +511,9 @@ class GroupLassoOverlapClassifier(LinearClassifierMixin, GroupLassoOverlap):
         return self._label_binarizer.classes_
 
 
-def _overlapping_group_lasso(A, b, lamda=1.0, groups=None, rho=1.0, alpha=1.0, max_iter=100, tol=1e-4):
+def _overlapping_group_lasso(
+    A, b, lamda=1.0, groups=None, rho=1.0, alpha=1.0, max_iter=100, tol=1e-4
+):
     # % solves the following problem via ADMM:
     # %   minimize 1/2*|| Ax - b ||_2^2 + \lambda sum(norm(x_i))
     # %
@@ -523,7 +545,9 @@ def _overlapping_group_lasso(A, b, lamda=1.0, groups=None, rho=1.0, alpha=1.0, m
         P_star_xk_bar = P_star_x_bar_function(x)
         for i, g in enumerate(groups):
             # x update; update each local x
-            x[i] = soft_thresholding(x[i] + (z - P_star_xk_bar - y / rho)[g], lamda / rho)
+            x[i] = soft_thresholding(
+                x[i] + (z - P_star_xk_bar - y / rho)[g], lamda / rho
+            )
 
         P_star_xk1_bar = P_star_x_bar_function(x)
         z = inverse.dot(Atb + rho * P_star_xk1_bar + y)

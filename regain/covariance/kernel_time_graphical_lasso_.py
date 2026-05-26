@@ -32,11 +32,11 @@
 This adds the possibility to specify a temporal constraint with a kernel
 function.
 """
+
 import warnings
 
 import numpy as np
 from scipy import linalg
-from six.moves import map, range
 from sklearn.cluster import AgglomerativeClustering
 from sklearn.gaussian_process import kernels
 from sklearn.utils.extmath import squared_norm

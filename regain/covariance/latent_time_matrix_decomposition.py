@@ -28,12 +28,12 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Latent variable time-varying matrix decomposition using ADMM."""
+
 from __future__ import division
 
 import warnings
 
 import numpy as np
-from six.moves import map, range, zip
 from sklearn.utils.extmath import squared_norm
 
 from regain.covariance.latent_time_graphical_lasso_ import LatentTimeGraphicalLasso

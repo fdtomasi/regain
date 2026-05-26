@@ -98,7 +98,7 @@ setup(
     maintainer="Federico Tomasi",
     maintainer_email="fdtomasi@gmail.com",
     url="https://github.com/fdtomasi/regain",
-    download_url="https://github.com/fdtomasi/regain/archive/" "v%s.tar.gz" % version,
+    download_url="https://github.com/fdtomasi/regain/archive/v%s.tar.gz" % version,
     keywords=["graph inference", "latent variables"],
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -118,6 +118,7 @@ setup(
     license="FreeBSD",
     packages=PACKAGES,
     include_package_data=True,
+    python_requires=">=3.10",
     # install_requires=read_requirements("requirements.txt"),
     # extras_require=dict(
     #     dev=read_requirements("requirements-optional.txt"),

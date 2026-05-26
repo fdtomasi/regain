@@ -29,6 +29,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 """Utils for REGAIN package."""
+
 from __future__ import division
 
 import functools
@@ -39,12 +40,12 @@ import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass
 
+import pickle as pkl
+
 import numpy as np
-import six
-from numpy.linalg.linalg import LinAlgError
+from numpy.linalg import LinAlgError
 from scipy import stats
 from scipy.spatial.distance import squareform
-from six.moves import cPickle as pkl
 from sklearn.metrics import average_precision_score, matthews_corrcoef
 
 
@@ -131,7 +132,7 @@ def suppress_stdout():
 
 
 def _ensure_filename_ending(filename, possible_extensions=".txt"):
-    if isinstance(possible_extensions, six.string_types):
+    if isinstance(possible_extensions, str):
         possible_extensions = [possible_extensions]
 
     return filename + (

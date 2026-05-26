@@ -32,13 +32,23 @@
 More information can be found in the paper linked at:
 http://www.stanford.edu/~boyd/papers/distr_opt_stat_learning_admm.html
 """
+
 import numpy as np
-from six.moves import range
 
 from regain.prox import soft_thresholding
 
 
-def lasso(A, b, lamda=1.0, rho=1.0, alpha=1.0, max_iter=1000, tol=1e-4, rtol=1e-2, return_history=False):
+def lasso(
+    A,
+    b,
+    lamda=1.0,
+    rho=1.0,
+    alpha=1.0,
+    max_iter=1000,
+    tol=1e-4,
+    rtol=1e-2,
+    return_history=False,
+):
     r"""Solves the following problem via ADMM:
 
         minimize 1/2*|| Ax - b ||_2^2 + \lambda || x ||_1
@@ -93,7 +103,10 @@ def lasso(A, b, lamda=1.0, rho=1.0, alpha=1.0, max_iter=1000, tol=1e-4, rtol=1e-
         if n_samples >= n_features:
             x = np.linalg.lstsq(U, np.linalg.lstsq(L, q)[0])[0]
         else:
-            x = q - A.T.dot(np.linalg.lstsq(U, np.linalg.lstsq(L, A.dot(q))[0])[0]) / rho
+            x = (
+                q
+                - A.T.dot(np.linalg.lstsq(U, np.linalg.lstsq(L, A.dot(q))[0])[0]) / rho
+            )
             x /= rho
 
         # % z-update with relaxation
@@ -109,7 +122,8 @@ def lasso(A, b, lamda=1.0, rho=1.0, alpha=1.0, max_iter=1000, tol=1e-4, rtol=1e-
             objective(A, b, lamda, x, z),  # obj
             np.linalg.norm(x - z),  # r norm
             np.linalg.norm(-rho * (z - zold)),  # s norm
-            np.sqrt(n_features) * tol + rtol * max(np.linalg.norm(x), np.linalg.norm(-z)),  # eps pri
+            np.sqrt(n_features) * tol
+            + rtol * max(np.linalg.norm(x), np.linalg.norm(-z)),  # eps pri
             np.sqrt(n_features) * tol + rtol * np.linalg.norm(rho * u),  # eps dual
         )
 

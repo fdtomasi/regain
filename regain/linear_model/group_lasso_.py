@@ -32,8 +32,8 @@
 More information can be found in the paper linked at:
 http://www.stanford.edu/~boyd/papers/distr_opt_stat_learning_admm.html
 """
+
 import numpy as np
-from six.moves import range
 
 from regain.linear_model.lasso_ import lu_factor
 from regain.prox import soft_thresholding
@@ -41,7 +41,16 @@ from regain.utils import flatten
 
 
 def group_lasso(
-    A, b, lamda=1.0, groups=None, rho=1.0, alpha=1.0, max_iter=1000, tol=1e-4, rtol=1e-2, return_history=False
+    A,
+    b,
+    lamda=1.0,
+    groups=None,
+    rho=1.0,
+    alpha=1.0,
+    max_iter=1000,
+    tol=1e-4,
+    rtol=1e-2,
+    return_history=False,
 ):
     r"""Group Lasso solver.
 
@@ -89,7 +98,9 @@ def group_lasso(
     # check valid partition
     if not np.allclose(flatten(groups), np.arange(n_features)):
         raise ValueError(
-            "Invalid partition in groups. " "Groups must be non-overlapping and each variables " "must be selected"
+            "Invalid partition in groups. "
+            "Groups must be non-overlapping and each variables "
+            "must be selected"
         )
 
     # % save a matrix-vector multiply
@@ -110,7 +121,10 @@ def group_lasso(
         if n_samples >= n_features:
             x = np.linalg.lstsq(U, np.linalg.lstsq(L, q)[0])[0]
         else:
-            x = q - A.T.dot(np.linalg.lstsq(U, np.linalg.lstsq(L, A.dot(q))[0])[0]) / rho
+            x = (
+                q
+                - A.T.dot(np.linalg.lstsq(U, np.linalg.lstsq(L, A.dot(q))[0])[0]) / rho
+            )
             x /= rho
 
         # % z-update with relaxation
@@ -127,7 +141,8 @@ def group_lasso(
             objective(A, b, lamda, groups, x, z),  # obj
             np.linalg.norm(x - z),  # r norm
             np.linalg.norm(-rho * (z - zold)),  # s norm
-            np.sqrt(n_features) * tol + rtol * max(np.linalg.norm(x), np.linalg.norm(-z)),  # eps pri
+            np.sqrt(n_features) * tol
+            + rtol * max(np.linalg.norm(x), np.linalg.norm(-z)),  # eps pri
             np.sqrt(n_features) * tol + rtol * np.linalg.norm(rho * u),  # eps dual
         )
 
