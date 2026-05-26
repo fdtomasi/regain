@@ -28,13 +28,13 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Graphical latent variable model selection via ADMM."""
+
 from __future__ import division
 
 import warnings
 
 import numpy as np
 from scipy import linalg
-from six.moves import range
 from sklearn.utils.extmath import squared_norm
 
 from regain.norm import l1_od_norm

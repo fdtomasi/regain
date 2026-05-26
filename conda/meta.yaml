@@ -11,12 +11,7 @@ source:
 requirements:
   build:
     - python
-    - nose
     - setuptools
-    # - numpy
-    # - scipy
-    # - scikit-learn
-    # - six
 
   run:
     - python

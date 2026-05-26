@@ -32,11 +32,11 @@
 More information can be found in the paper linked at:
 http://www.stanford.edu/~boyd/papers/distr_opt_stat_learning_admm.html
 """
+
 import warnings
 
 import numpy as np
 from scipy import linalg
-from six.moves import range
 from sklearn.covariance import GraphicalLasso as GraphLasso, empirical_covariance
 from sklearn.utils.extmath import fast_logdet
 from sklearn.utils.validation import check_array

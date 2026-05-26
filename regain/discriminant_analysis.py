@@ -32,7 +32,6 @@
 
 import numpy as np
 from scipy import linalg
-from six.moves import range
 from sklearn.base import BaseEstimator
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.utils import check_array, check_X_y, deprecated
@@ -110,7 +109,10 @@ class DiscriminantAnalysis(QuadraticDiscriminantAnalysis):
         n_samples, n_features = X.shape
         n_classes = len(self.classes_)
         if n_classes < 2:
-            raise ValueError("The number of classes has to be greater than" " one; got %d class" % (n_classes))
+            raise ValueError(
+                "The number of classes has to be greater than"
+                " one; got %d class" % (n_classes)
+            )
         if self.priors is None:
             self.priors_ = np.bincount(y) / float(n_samples)
         else:
@@ -122,7 +124,8 @@ class DiscriminantAnalysis(QuadraticDiscriminantAnalysis):
             # means.append(meang)
             if len(Xg) == 1:
                 raise ValueError(
-                    "y has only 1 sample in class %s, covariance " "is ill defined." % str(self.classes_[ind])
+                    "y has only 1 sample in class %s, covariance "
+                    "is ill defined." % str(self.classes_[ind])
                 )
             # data.append(Xg)
 

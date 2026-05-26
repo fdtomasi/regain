@@ -28,9 +28,11 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Test LatentTimeGraphicalLasso."""
+
 import warnings
 
 import numpy as np
+import pytest
 from numpy.testing import assert_array_equal
 
 from regain.covariance.time_graphical_lasso_ import TimeGraphicalLasso
@@ -57,6 +59,7 @@ def test_tgl_zero():
 
 def test_tglfb_zero():
     """Check that TimeGraphicalLasso can handle zero data."""
+    pytest.importorskip("prox_tv")
     x = np.zeros((9, 3))
     y = [0, 0, 0, 1, 1, 1, 2, 2, 2]
     with warnings.catch_warnings():

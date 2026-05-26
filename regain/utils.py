@@ -29,6 +29,7 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 """Utils for REGAIN package."""
+
 from __future__ import division
 
 import functools
@@ -39,12 +40,12 @@ import warnings
 from contextlib import contextmanager
 from dataclasses import dataclass
 
+import pickle as pkl
+
 import numpy as np
-import six
-from numpy.linalg.linalg import LinAlgError
+from numpy.linalg import LinAlgError
 from scipy import stats
 from scipy.spatial.distance import squareform
-from six.moves import cPickle as pkl
 from sklearn.metrics import average_precision_score, matthews_corrcoef
 
 
@@ -103,7 +104,6 @@ class Convergence:
     snorm: float = 0
     e_pri: float = 0
     e_dual: float = 0
-    precision: float = 0
 
     def __str__(self):
         return (
@@ -131,7 +131,7 @@ def suppress_stdout():
 
 
 def _ensure_filename_ending(filename, possible_extensions=".txt"):
-    if isinstance(possible_extensions, six.string_types):
+    if isinstance(possible_extensions, str):
         possible_extensions = [possible_extensions]
 
     return filename + (
@@ -284,11 +284,7 @@ def convert_data_to_2d(data):
     to the class is encoded in y.
     """
     X = np.vstack(data)
-    y = (
-        np.array([np.ones(x.shape[0]) * i for i, x in enumerate(data)])
-        .flatten()
-        .astype(int)
-    )
+    y = np.concatenate([np.full(x.shape[0], i, dtype=int) for i, x in enumerate(data)])
     return X, y
 
 
