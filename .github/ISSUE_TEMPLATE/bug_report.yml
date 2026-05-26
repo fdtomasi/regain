@@ -1,0 +1,64 @@
+name: Bug report
+description: Report unexpected behaviour, a crash, or a numerical issue in regain.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please fill in the fields below — the more reproducible the report, the faster it can be fixed.
+
+  - type: input
+    id: regain-version
+    attributes:
+      label: regain version
+      description: "Output of `python -c 'import regain; print(regain.__version__)'`"
+      placeholder: "0.4.1"
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      placeholder: "3.12.7"
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system
+      placeholder: "macOS 14.5 / Ubuntu 24.04 / Windows 11"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the unexpected behaviour. What did you expect, what did you get?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Minimal reproducer
+      description: A small, self-contained Python snippet that triggers the issue. Includes any data generation (e.g. via `regain.datasets`) needed to run it.
+      render: python
+    validations:
+      required: true
+
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Traceback or output
+      description: The full traceback (if any) or the observed numerical output.
+      render: shell
+
+  - type: textarea
+    id: env
+    attributes:
+      label: Dependency versions
+      description: "Versions of numpy, scipy, scikit-learn, etc. — `pip list | grep -iE 'numpy|scipy|sklearn|pandas|networkx'` is fine."
+      render: text

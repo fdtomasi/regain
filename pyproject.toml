@@ -1,0 +1,138 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "regain"
+description = "REGAIN — Regularised Graph Inference across multiple time stamps, considering the influence of latent variables."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "BSD-3-Clause" }
+keywords = ["graph inference", "latent variables", "graphical lasso", "covariance"]
+authors = [
+    { name = "Federico Tomasi" },
+]
+maintainers = [
+    { name = "Federico Tomasi" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Natural Language :: English",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX",
+    "Operating System :: Unix",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Software Development",
+]
+dependencies = [
+    "numpy>=2.2.6",
+    "scipy>=1.15.3",
+    "scikit-learn>=1.7.2",
+    "pandas",
+    "networkx",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+plot = ["matplotlib"]
+fused-lasso = ["prox-tv"]
+bayes-opt = ["scikit-optimize"]
+dev = [
+    "pytest>=7",
+    "pytest-cov",
+    "ruff>=0.6",
+    "bump-my-version",
+]
+
+[project.urls]
+Homepage = "https://github.com/fdtomasi/regain"
+Source = "https://github.com/fdtomasi/regain"
+Issues = "https://github.com/fdtomasi/regain/issues"
+Changelog = "https://github.com/fdtomasi/regain/releases"
+
+[tool.setuptools.dynamic]
+version = { attr = "regain.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["regain*"]
+exclude = ["regain.tests*", "*.__old"]
+
+[tool.setuptools.package-data]
+regain = ["py.typed"]
+
+[tool.bumpversion]
+current_version = "0.4.1"
+commit = true
+tag = true
+allow_dirty = false
+
+[[tool.bumpversion.files]]
+filename = "regain/__init__.py"
+search = '__version__ = "{current_version}"'
+replace = '__version__ = "{new_version}"'
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = 'current_version = "{current_version}"'
+replace = 'current_version = "{new_version}"'
+
+# -----------------------------------------------------------------------------
+# ruff: combines flake8 + isort + pyupgrade
+# -----------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 127
+target-version = "py310"
+extend-exclude = [
+    "regain/wrapper/paspal/matlab",
+    "regain.egg-info",
+]
+
+[tool.ruff.lint]
+# Match the previous flake8 blocking-set: syntax errors, undefined names,
+# and broken format strings. Broader cleanups (pyupgrade, unused imports,
+# import ordering) can be enabled later in a dedicated pass — keeping the
+# scope narrow here means CI doesn't break on pre-existing style debt.
+select = [
+    "E9",   # syntax errors
+    "F63",  # invalid comparisons
+    "F7",   # syntax-like issues (e.g. break/return outside loop)
+    "F82",  # undefined name
+]
+
+# -----------------------------------------------------------------------------
+# pytest
+# -----------------------------------------------------------------------------
+
+[tool.pytest.ini_options]
+testpaths = ["regain/tests"]
+addopts = "--strict-markers"
+
+# -----------------------------------------------------------------------------
+# coverage
+# -----------------------------------------------------------------------------
+
+[tool.coverage.run]
+source = ["regain"]
+omit = [
+    "regain/tests/*",
+    "regain/wrapper/*",  # matlab bridges, not unit-testable
+    "regain/plotting/*",  # matplotlib-heavy, requires display
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
