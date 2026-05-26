@@ -150,7 +150,9 @@ def group_lasso(
         if history[1] < history[3] and history[2] < history[4]:
             break
 
-    return z, hist if return_history else z
+    if return_history:
+        return z, hist
+    return z
 
 
 def objective(A, b, alpha, groups, x, z):

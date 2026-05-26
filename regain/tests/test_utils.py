@@ -28,8 +28,10 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """Test utils module."""
+
 import numpy as np
-from numpy.testing import assert_array_equal, assert_equal
+import pytest
+from numpy.testing import assert_allclose, assert_array_equal, assert_equal
 
 from regain import utils
 
@@ -136,3 +138,121 @@ def test_structure_error():
     }
 
     assert_equal(utils.structure_error(a, b, thresholding=True, eps=1e-2), result)
+
+
+def test_is_pos_def_accepts_identity_and_rejects_zero():
+    assert utils.is_pos_def(np.eye(3))
+    assert not utils.is_pos_def(np.zeros((3, 3)))
+
+
+def test_is_pos_def_eigvals_path_matches_cholesky_path():
+    A = np.diag([2.0, 1.0, 0.5])
+    assert utils.is_pos_def(A, chol=True)
+    assert utils.is_pos_def(A, chol=False)
+
+
+def test_is_pos_semidef_includes_zero_eigenvalues():
+    A = np.diag([1.0, 0.0, 2.0])
+    assert utils.is_pos_semidef(A)
+    assert not utils.is_pos_def(A)
+
+
+def test_positive_definite_handles_3d_stack():
+    stack = np.array([np.eye(3), 2 * np.eye(3)])
+    assert utils.positive_definite(stack)
+    bad = stack.copy()
+    bad[0] = np.zeros((3, 3))
+    assert not utils.positive_definite(bad)
+
+
+def test_ensure_posdef_makes_matrix_invertible_in_place():
+    rng = np.random.default_rng(0)
+    A = rng.standard_normal((4, 4))
+    A = (A + A.T) / 2  # symmetric, generally indefinite
+    utils.ensure_posdef(A)
+    assert utils.is_pos_def(A)
+
+
+def test_ensure_posdef_3d_stack():
+    rng = np.random.default_rng(0)
+    stack = np.array([rng.standard_normal((3, 3)) for _ in range(2)])
+    stack = (stack + stack.transpose(0, 2, 1)) / 2
+    utils.ensure_posdef(stack)
+    for m in stack:
+        assert utils.is_pos_def(m)
+
+
+def test_ensure_posdef_inplace_false_raises():
+    A = np.eye(3) - 2  # not posdef
+    with pytest.raises(NotImplementedError):
+        utils.ensure_posdef(A, inplace=False)
+
+
+def test_threshold_zeros_values_below_threshmin():
+    a = np.array([-1.0, 0.5, 1.5, 3.0])
+    out = utils.threshold(a, threshmin=1.0)
+    assert_array_equal(np.asarray(out), [0.0, 0.0, 1.5, 3.0])
+
+
+def test_threshold_clips_values_above_threshmax():
+    a = np.array([-1.0, 0.5, 1.5, 3.0])
+    out = utils.threshold(a, threshmax=1.0, newval=-99.0)
+    assert_array_equal(np.asarray(out), [-1.0, 0.5, -99.0, -99.0])
+
+
+def test_normalize_matrix_puts_ones_on_diagonal():
+    rng = np.random.default_rng(0)
+    M = rng.standard_normal((4, 4))
+    M = M @ M.T  # symmetric posdef
+    utils.normalize_matrix(M)
+    assert_allclose(np.diag(M), np.ones(4))
+
+
+def test_compose_applies_right_to_left():
+    f = utils.compose(lambda x: x + 1, lambda x: x * 2)  # f(x) = 2x + 1
+    assert f(3) == 7
+    assert utils.compose()(42) == 42  # empty compose is identity
+
+
+def test_convert_data_to_2d_stacks_and_labels():
+    rng = np.random.default_rng(0)
+    data = [rng.standard_normal((3, 2)), rng.standard_normal((5, 2))]
+    X, y = utils.convert_data_to_2d(data)
+    assert X.shape == (8, 2)
+    assert_array_equal(y, [0, 0, 0, 1, 1, 1, 1, 1])
+
+
+def test_alpha_heuristic_returns_positive_for_2d_covariance():
+    rng = np.random.default_rng(0)
+    cov = rng.standard_normal((10, 5))
+    cov = cov.T @ cov
+    alpha = utils.alpha_heuristic(cov, n_samples=100)
+    assert alpha > 0
+
+
+def test_alpha_heuristic_handles_3d_covariance_stack():
+    rng = np.random.default_rng(0)
+    cov = np.array([rng.standard_normal((10, 5)) for _ in range(3)])
+    cov = np.einsum("tij,tkj->tik", cov, cov)  # batch of T outer products
+    alpha = utils.alpha_heuristic(cov, n_samples=100)
+    assert alpha > 0
+
+
+def test_compose_chained_three_functions():
+    f = utils.compose(str, lambda x: x + 10, lambda x: x * 2)
+    assert f(3) == "16"  # ((3 * 2) + 10) = 16 → str
+
+
+def test_save_and_load_pickle_roundtrip(tmp_path):
+    obj = {"a": np.arange(5), "b": [1, 2, 3]}
+    path = tmp_path / "obj"  # save_pickle appends .pkl automatically
+    utils.save_pickle(obj, str(path))
+    loaded = utils.load_pickle(str(path) + ".pkl")
+    assert_array_equal(loaded["a"], obj["a"])
+    assert loaded["b"] == obj["b"]
+
+
+def test_ensure_filename_ending_idempotent():
+    assert utils._ensure_filename_ending("foo.txt") == "foo.txt"
+    assert utils._ensure_filename_ending("foo") == "foo.txt"
+    assert utils._ensure_filename_ending("foo", [".bin", ".pkl"]) == "foo.bin"

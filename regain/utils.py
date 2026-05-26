@@ -285,11 +285,7 @@ def convert_data_to_2d(data):
     to the class is encoded in y.
     """
     X = np.vstack(data)
-    y = (
-        np.array([np.ones(x.shape[0]) * i for i, x in enumerate(data)])
-        .flatten()
-        .astype(int)
-    )
+    y = np.concatenate([np.full(x.shape[0], i, dtype=int) for i, x in enumerate(data)])
     return X, y
 
 
