@@ -47,7 +47,7 @@ plot = ["matplotlib"]
 fused-lasso = ["prox-tv"]
 bayes-opt = ["scikit-optimize"]
 dev = [
-    "pytest>=9.0.3",
+    "pytest>=9.1.1",
     "pytest-cov",
     "ruff>=0.15.14",
     "bump-my-version",
