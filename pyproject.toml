@@ -49,7 +49,7 @@ bayes-opt = ["scikit-optimize"]
 dev = [
     "pytest>=9.0.3",
     "pytest-cov",
-    "ruff>=0.15.14",
+    "ruff>=0.16.4",
     "bump-my-version",
 ]
 
